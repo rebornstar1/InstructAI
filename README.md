@@ -1,4 +1,4 @@
-# AI Tutor
+# Instruct AI
 
 **AI Tutor** is an interactive educational platform that combines an AI-driven chat interface with multimedia visual aids, real-time speech recognition, and interactive quizzes. It is designed to provide a comprehensive learning experience by dynamically adjusting content based on user feedback and confusion levels.
 
