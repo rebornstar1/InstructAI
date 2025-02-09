@@ -6,7 +6,7 @@ const page = () => {
   return (
     <div>
         <DashboardComponent/>
-        </div>
+    </div>
   )
 }
 
