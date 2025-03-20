@@ -311,6 +311,7 @@ export function DashboardComponent() {
   // Calculate total XP (1 minute = 1 XP)
   const totalXP = learningData.reduce((sum, day) => sum + day.minutes, 0);
 
+
   return (
     (<div
       className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
@@ -522,287 +523,96 @@ export function DashboardComponent() {
             
             {/* Course Content Tab */}
             <TabsContent value="course" className="space-y-6">
-              {generatedCourse && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                  className="max-w-5xl mx-auto">
-                  {!selectedModule ? (
-                    <>
-                      <div className="text-center mb-8">
-                        <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-                          {generatedCourse.courseStructure?.courseMetadata?.title}
-                        </h1>
-                        <p className="mt-3 text-gray-500 dark:text-gray-400 max-w-[700px] mx-auto">
-                          {generatedCourse.courseStructure?.courseMetadata?.description}
-                        </p>
-                        <div className="flex flex-wrap gap-2 justify-center mt-4">
-                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                            {generatedCourse.courseStructure?.courseMetadata?.difficultyLevel}
-                          </div>
-                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
-                            <Layers className="h-4 w-4 mr-1" />
-                            {generatedCourse.courseStructure?.modules?.length} Modules
-                          </div>
+            {generatedCourse && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="max-w-5xl mx-auto"
+              >
+                {!selectedModule ? (
+                  <>
+                    {/* Course Header */}
+                    <div className="text-center mb-8">
+                      <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">
+                        {generatedCourse.courseMetadata?.title || "Course Title Not Available"}
+                      </h1>
+                      <p className="mt-3 text-gray-500 dark:text-gray-400 max-w-[700px] mx-auto">
+                        {generatedCourse.courseMetadata?.description || "Course description not available."}
+                      </p>
+                      <div className="flex flex-wrap gap-2 justify-center mt-4">
+                        <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                          {generatedCourse.courseMetadata?.difficultyLevel || "N/A"}
+                        </div>
+                        <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+                          <Layers className="h-4 w-4 mr-1" />
+                          {generatedCourse.modules?.length} Modules
                         </div>
                       </div>
-                      
-                      <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b">
-                          <h2 className="text-xl font-semibold">Prerequisites</h2>
-                        </div>
-                        <div className="p-5">
-                          <ul className="space-y-2">
-                            {generatedCourse.courseStructure?.courseMetadata?.prerequisites.map((prereq, index) => (
-                              <li key={index} className="flex items-start">
-                                <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0 mt-0.5" />
-                                <span>{prereq}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                    </div>
+
+                    {/* Prerequisites */}
+                    <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800 mb-8">
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b">
+                        <h2 className="text-xl font-semibold">Prerequisites</h2>
                       </div>
-                      
-                      <h2 className="text-2xl font-bold mt-8 mb-4">Course Modules</h2>
-                      <div className="space-y-4">
-                        {generatedCourse.courseStructure?.modules?.map((module) => (
-                          <Card key={module.moduleId} className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary">
-                            <CardContent className="p-0">
-                              <div className="p-5">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <h3 className="text-xl font-semibold">{module.title}</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{module.duration}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
-                                      Module {module.moduleId}
-                                    </span>
-                                  </div>
+                      <div className="p-5">
+                        <ul className="space-y-2">
+                          {generatedCourse.courseMetadata?.prerequisites?.map((prereq, index) => (
+                            <li key={index} className="flex items-center">
+                              <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
+                              <span>{prereq}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Modules */}
+                    <h2 className="text-2xl font-bold mt-8 mb-4">Course Modules</h2>
+                    <div className="space-y-4">
+                      {generatedCourse.modules?.map((module, idx) => (
+                        <Card key={module.moduleId} className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary">
+                          <CardContent className="p-0">
+                            <div className="p-5">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <h3 className="text-xl font-semibold">{module.title}</h3>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{module.duration}</p>
                                 </div>
-                                <p className="mt-3">{module.description}</p>
-                                <div className="mt-4">
-                                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Learning Objectives:</h4>
-                                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-y-1 gap-x-4">
-                                    {module.learningObjectives.map((objective, idx) => (
-                                      <li key={idx} className="flex items-start text-sm">
-                                        <Award className="h-4 w-4 mr-2 text-primary shrink-0 mt-0.5" />
-                                        <span>{objective}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
-                              <div className="border-t p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
-                                <div className="text-sm text-gray-500">
-                                  <span className="inline-flex items-center">
-                                    <Clock className="h-4 w-4 mr-1" />
-                                    Reading time: {module.content.readingSection.estimatedReadingTime}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+                                    Module {module.moduleId}
                                   </span>
                                 </div>
-                                <Button 
-                                  onClick={() => handleModuleSelect(module)}
-                                  className="flex items-center gap-2">
-                                  Start Learning <PlayCircle className="h-4 w-4" />
-                                </Button>
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    // Selected Module Content with Learning Resources
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <Button 
-                          variant="outline" 
-                          className="mb-4"
-                          onClick={handleBackToCourse}>
-                          ← Back to Course Overview
-                        </Button>
-                        
-                        {!learningResource && (
-                          <Button 
-                            variant="secondary"
-                            onClick={handleGenerateModuleResources}
-                            disabled={isLoadingResource}
-                            className="flex items-center gap-2 mb-4">
-                            {isLoadingResource ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Generating Resources...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-4 w-4" />
-                                Generate Comprehensive Guide
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {/* Module Header */}
-                      <div className="border-b pb-6 mb-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium">
-                            {selectedModule.moduleId}
-                          </div>
-                          <h1 className="text-3xl font-bold">{selectedModule.title}</h1>
-                        </div>
-                        <p className="text-gray-500">{selectedModule.description}</p>
-                      </div>
-                      
-                      {/* Display Learning Resource if available */}
-                      {learningResource ? (
-                        <div className="space-y-6">
-                          <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold">Detailed Learning Resources</h2>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="outline"
-                                onClick={() => setLearningResource(null)}
-                                className="flex items-center gap-2">
-                                <ChevronRight className="h-4 w-4" />
-                                Back to Module Overview
-                              </Button>
-                              <Button 
-                                variant="secondary"
-                                className="flex items-center gap-2">
-                                <Download className="h-4 w-4" />
-                                Save as PDF
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                className="flex items-center gap-2">
-                                <BookmarkPlus className="h-4 w-4" />
-                                Bookmark
-                              </Button>
+                              <p className="mt-3">{module.description}</p>
+                              <div className="mt-4">
+                                <h4 className="text-sm font-semibold text-gray-500 mb-2">Learning Objectives:</h4>
+                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-y-1 gap-x-4">
+                                  {module.learningObjectives?.map((objective, idx) => (
+                                    <li key={idx} className="flex items-start text-sm">
+                                      <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
+                                      <span>{objective}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             </div>
-                          </div>
-                          
-                          <Card className="p-0 overflow-hidden">
-                            <CardContent className="p-0">
-                              <div 
-                                ref={resourceRef}
-                                className="prose dark:prose-invert max-w-none p-8 overflow-y-auto max-h-[70vh]">
-                                  <CustomMarkdownRenderer content={learningResource.content}/>
-                                
-
-                              </div>
-                            </CardContent>
-                            <CardFooter className="border-t p-4 bg-slate-50 dark:bg-slate-800/50">
-                              <div className="text-sm text-gray-500 mr-auto">
-                                <span className="inline-flex items-center">
-                                  <Clock className="h-4 w-4 mr-1" />
-                                  Estimated reading time: 15 minutes
-                                </span>
-                              </div>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                  const blob = new Blob([learningResource.content], { type: 'text/markdown' });
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `${learningResource.conceptTitle || learningResource.moduleTitle}.md`;
-                                  a.click();
-                                }}
-                                className="flex items-center gap-2">
-                                <Download className="h-4 w-4" />
-                                Download Markdown
-                              </Button>
-                            </CardFooter>
-                          </Card>
-                        </div>
-                      ) : (
-                        // Show regular module content if no learning resource is selected
-                        <>
-                          <Card>
-                            <CardContent className="p-6">
-                              <div className="space-y-4">
-                                <div className="flex items-center space-x-2">
-                                  <BookOpen className="h-6 w-6 text-primary" />
-                                  <h2 className="text-xl font-semibold">{selectedModule.content.readingSection.title}</h2>
-                                </div>
-                                <div className="prose dark:prose-invert max-w-none">
-                                  <p>{selectedModule.content.readingSection.content}</p>
-                                </div>
-                                <div className="mt-6 pt-6 border-t">
-                                  <h3 className="font-semibold mb-2">Key Takeaways:</h3>
-                                  <ul className="space-y-2">
-                                    {selectedModule.content.readingSection.keyTakeaways.map((takeaway, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0 mt-0.5" />
-                                        {takeaway}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          
-                          <h2 className="text-2xl font-bold mt-8 mb-4">Key Concepts</h2>
-                          <div className="space-y-6">
-                            {selectedModule.content.conceptExplanations.map((concept, idx) => (
-                              <Card key={idx} className="overflow-hidden hover:shadow-md transition-all">
-                                <CardContent className="p-0">
-                                  <div className="p-5">
-                                    <h3 className="text-xl font-semibold mb-3">{concept.conceptTitle}</h3>
-                                    <p className="mb-4">{concept.explanation}</p>
-                                    <div className="mt-4 pt-4 border-t">
-                                      <h4 className="font-semibold mb-2">Key Points:</h4>
-                                      <ul className="space-y-1">
-                                        {concept.keyPoints.map((point, i) => (
-                                          <li key={i} className="flex items-start">
-                                            <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0 mt-0.5" />
-                                            {point}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="border-t p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end">
-                                    <Button 
-                                      variant="outline"
-                                      className="flex items-center gap-2"
-                                      onClick={() => handleGenerateLearningResource(concept)}
-                                      disabled={isLoadingResource}>
-                                      {isLoadingResource ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                          Generating...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="h-4 w-4" />
-                                          Generate Detailed Resources
-                                        </>
-                                      )}
-                                    </Button>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                          
-                          <div className="mt-8 p-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
-                            <h3 className="text-xl font-semibold mb-3">Ready to test your knowledge?</h3>
-                            <p className="mb-4">Complete this module by taking a short quiz to reinforce what you've learned.</p>
-                            <Button className="mt-2">
-                              <Play className="h-4 w-4 mr-2" /> Take Module Quiz
-                            </Button>
-                          </div>
-                        </>
-                      )}
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
-                  )}
-                </motion.div>
-              )}
+                  </>
+                ) : (
+                  // Selected Module view goes here
+                  <div>
+                    {/* Your selected module content and resource rendering */}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
               
               {!generatedCourse && (
                 <div className="text-center py-20">
