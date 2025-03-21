@@ -5,10 +5,6 @@ import { Button } from "@/components/ui/button";
 import { CardContent, Card, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { 
   Brain, 
@@ -27,7 +23,8 @@ import {
   PlayCircle,
   Sparkles,
   Download,
-  BookmarkPlus
+  BookmarkPlus,
+  X
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -44,6 +41,8 @@ export function DashboardComponent() {
   const [selectedModule, setSelectedModule] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [learningResource, setLearningResource] = useState(null);
+  const [showArticleModal, setShowArticleModal] = useState(false);
+  const [activeArticle, setActiveArticle] = useState({ title: '', content: '' });
   const [messages, setMessages] = useState([
     {
       role: "ai",
@@ -139,6 +138,12 @@ export function DashboardComponent() {
   const handleModuleSelect = (module) => {
     setSelectedModule(module);
     setLearningResource(null);
+    
+    console.log(`Selected module: ${module.title}`);
+    
+    // You might want to automatically fetch the learning resource when a module is selected
+    // Uncomment the following line to do so:
+    // handleGenerateModuleResources(module);
   };
 
   // Clear selected module
@@ -147,7 +152,7 @@ export function DashboardComponent() {
     setLearningResource(null);
   };
 
-  // Generate detailed learning resources for a concept
+  // Generate learning resource for a specific concept within a module
   const handleGenerateLearningResource = async (concept) => {
     if (!selectedModule) return;
     
@@ -156,11 +161,10 @@ export function DashboardComponent() {
     try {
       // Prepare the request
       const request = {
-        topic: generatedCourse.courseStructure.courseMetadata.title,
         moduleTitle: selectedModule.title,
-        conceptTitle: concept.conceptTitle,
+        conceptTitle: concept, // This can be a string or an object with conceptTitle property
         format: "markdown",
-        contentType: "technical", // You can make this dynamic based on the concept
+        contentType: "technical", 
         detailLevel: 4,
         specificRequirements: [
           "Include detailed explanations with examples",
@@ -170,6 +174,15 @@ export function DashboardComponent() {
         ]
       };
       
+      // Add topic from course metadata if available
+      if (generatedCourse?.courseStructure?.courseMetadata?.title) {
+        request.topic = generatedCourse.courseStructure.courseMetadata.title;
+      } else if (generatedCourse?.courseMetadata?.title) {
+        request.topic = generatedCourse.courseMetadata.title;
+      }
+      
+      console.log("Generating learning resource with request:", request);
+      
       // Make API call to generate learning resource
       const response = await fetch('http://localhost:8007/api/learning-resources/generate', {
         method: 'POST',
@@ -178,6 +191,10 @@ export function DashboardComponent() {
         },
         body: JSON.stringify(request),
       });
+      
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
       
       const data = await response.json();
       console.log("Generated Learning Resource:", data);
@@ -190,11 +207,11 @@ export function DashboardComponent() {
         ...messages,
         {
           role: "user",
-          content: `Generate detailed resources for "${concept.conceptTitle}"`,
+          content: `Generate detailed resources for "${typeof concept === 'string' ? concept : concept.conceptTitle}"`,
         },
         {
           role: "ai",
-          content: `I've created comprehensive learning materials for "${concept.conceptTitle}". You can view them in the course tab.`,
+          content: `I've created comprehensive learning materials for "${typeof concept === 'string' ? concept : concept.conceptTitle}". You can view them in the course tab.`,
         },
       ]);
       
@@ -205,7 +222,7 @@ export function DashboardComponent() {
         ...messages,
         {
           role: "user",
-          content: `Generate detailed resources for "${concept.conceptTitle}"`,
+          content: `Generate detailed resources for "${typeof concept === 'string' ? concept : concept.conceptTitle}"`,
         },
         {
           role: "ai",
@@ -224,26 +241,50 @@ export function DashboardComponent() {
     setIsLoadingResource(true);
     
     try {
+      // Prepare request with proper data structure
+      const request = {
+        moduleTitle: selectedModule.title,
+        format: "markdown",
+        contentType: "comprehensive",
+        detailLevel: 5
+      };
+      
+      // Add topic from course metadata if available
+      if (generatedCourse?.courseStructure?.courseMetadata?.title) {
+        request.topic = generatedCourse.courseStructure.courseMetadata.title;
+      } else if (generatedCourse?.courseMetadata?.title) {
+        request.topic = generatedCourse.courseMetadata.title;
+      }
+      
+      // Add specific requirements based on module data
+      request.specificRequirements = [
+        `Create a comprehensive guide for the module: ${selectedModule.title}`,
+        "Include detailed explanations with examples, diagrams, and code samples where appropriate",
+        "Structure content with clear sections, learning objectives, and summaries",
+        "Provide practical exercises and applications",
+      ];
+      
+      // If module has learning objectives, add them to specific requirements
+      if (selectedModule.learningObjectives && selectedModule.learningObjectives.length > 0) {
+        request.specificRequirements.push(
+          `Address the following learning objectives: ${selectedModule.learningObjectives.join(', ')}`
+        );
+      }
+      
+      console.log("Generating module resources with request:", request);
+      
       // Make API call to generate all resources for this module
       const response = await fetch('http://localhost:8007/api/learning-resources/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          topic: generatedCourse.courseStructure.courseMetadata.title,
-          moduleTitle: selectedModule.title,
-          format: "markdown",
-          contentType: "comprehensive",
-          detailLevel: 5,
-          specificRequirements: [
-            "Create a comprehensive guide covering all concepts in the module",
-            "Include tables, diagrams, and examples",
-            "Add practical exercises and applications",
-            "Include reference materials and further reading"
-          ]
-        }),
+        body: JSON.stringify(request),
       });
+      
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
       
       const data = await response.json();
       console.log("Generated Module Resources:", data);
@@ -281,6 +322,31 @@ export function DashboardComponent() {
     } finally {
       setIsLoadingResource(false);
     }
+  };
+
+  // Opens article modal with content
+  const handleOpenArticle = (subModule) => {
+    // Record this interaction in the conversation
+    setMessages([
+      ...messages,
+      {
+        role: "user",
+        content: `Show me content for "${subModule.subModuleTitle}"`,
+      },
+      {
+        role: "ai",
+        content: `Here's the content for "${subModule.subModuleTitle}". I've displayed it below.`,
+      },
+    ]);
+    
+    // Set the article content in state
+    setActiveArticle({
+      title: subModule.subModuleTitle,
+      content: subModule.article
+    });
+    
+    // Show the modal
+    setShowArticleModal(true);
   };
 
   // Mock data for previous classes
@@ -523,97 +589,269 @@ export function DashboardComponent() {
             
             {/* Course Content Tab */}
             <TabsContent value="course" className="space-y-6">
-            {generatedCourse && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="max-w-5xl mx-auto"
-              >
-                {!selectedModule ? (
-                  <>
-                    {/* Course Header */}
-                    <div className="text-center mb-8">
-                      <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-                        {generatedCourse.courseMetadata?.title || "Course Title Not Available"}
-                      </h1>
-                      <p className="mt-3 text-gray-500 dark:text-gray-400 max-w-[700px] mx-auto">
-                        {generatedCourse.courseMetadata?.description || "Course description not available."}
-                      </p>
-                      <div className="flex flex-wrap gap-2 justify-center mt-4">
-                        <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                          {generatedCourse.courseMetadata?.difficultyLevel || "N/A"}
-                        </div>
-                        <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
-                          <Layers className="h-4 w-4 mr-1" />
-                          {generatedCourse.modules?.length} Modules
+              {generatedCourse && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="max-w-5xl mx-auto"
+                >
+                  {!selectedModule ? (
+                    <>
+                      {/* Course Header */}
+                      <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">
+                          {generatedCourse.courseStructure?.courseMetadata?.title || generatedCourse.courseMetadata?.title || "Course Title Not Available"}
+                        </h1>
+                        <p className="mt-3 text-gray-500 dark:text-gray-400 max-w-[700px] mx-auto">
+                          {generatedCourse.courseStructure?.courseMetadata?.description || generatedCourse.courseMetadata?.description || "Course description not available."}
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center mt-4">
+                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                            {generatedCourse.courseStructure?.courseMetadata?.difficultyLevel || generatedCourse.courseMetadata?.difficultyLevel || "N/A"}
+                          </div>
+                          <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+                            <Layers className="h-4 w-4 mr-1" />
+                            {(generatedCourse.courseStructure?.modules?.length || generatedCourse.modules?.length || 0)} Modules
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Prerequisites */}
-                    <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800 mb-8">
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b">
-                        <h2 className="text-xl font-semibold">Prerequisites</h2>
+                      {/* Prerequisites */}
+                      <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800 mb-8">
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800 border-b">
+                          <h2 className="text-xl font-semibold">Prerequisites</h2>
+                        </div>
+                        <div className="p-5">
+                          <ul className="space-y-2">
+                            {(generatedCourse.courseStructure?.courseMetadata?.prerequisites || 
+                              generatedCourse.courseMetadata?.prerequisites || []).map((prereq, index) => (
+                              <li key={index} className="flex items-center">
+                                <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
+                                <span>{prereq}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
-                      <div className="p-5">
-                        <ul className="space-y-2">
-                          {generatedCourse.courseMetadata?.prerequisites?.map((prereq, index) => (
-                            <li key={index} className="flex items-center">
-                              <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
-                              <span>{prereq}</span>
+
+                      {/* Modules */}
+                      <h2 className="text-2xl font-bold mt-8 mb-4">Course Modules</h2>
+                      <div className="space-y-4">
+                        {(generatedCourse.courseStructure?.modules || generatedCourse.modules || []).map((module, idx) => (
+                          <Card 
+                            key={module.moduleId} 
+                            className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary cursor-pointer"
+                            onClick={() => handleModuleSelect(module)}
+                          >
+                            <CardContent className="p-0">
+                              <div className="p-5">
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <h3 className="text-xl font-semibold">{module.title}</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{module.duration}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+                                      Module {module.moduleId}
+                                    </span>
+                                  </div>
+                                </div>
+                                <p className="mt-3">{module.description}</p>
+                                <div className="mt-4">
+                                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Learning Objectives:</h4>
+                                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-y-1 gap-x-4">
+                                    {module.learningObjectives?.map((objective, idx) => (
+                                      <li key={idx} className="flex items-start text-sm">
+                                        <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
+                                        <span>{objective}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    // Selected Module View
+                    <div ref={resourceRef} className="space-y-6">
+                      {/* Module Navigation */}
+                      <div className="flex items-center space-x-2 mb-6">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleBackToCourse}
+                          className="flex items-center gap-2"
+                        >
+                          <ChevronRight className="h-4 w-4 rotate-180" />
+                          Back to Course
+                        </Button>
+                        
+                        <div className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+                          Module {selectedModule.moduleId}
+                        </div>
+                      </div>
+                      
+                      {/* Module Header */}
+                      <div className="border-b pb-6 mb-6">
+                        <h1 className="text-3xl font-bold tracking-tighter">{selectedModule.title}</h1>
+                        <p className="mt-2 text-gray-500 dark:text-gray-400">
+                          {selectedModule.description}
+                        </p>
+                        <div className="flex items-center mt-4 text-sm text-gray-500">
+                          <Clock className="h-4 w-4 mr-1" />
+                          <span>{selectedModule.duration}</span>
+                        </div>
+                      </div>
+
+                      {/* Module Learning Objectives */}
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <h2 className="text-lg font-semibold mb-2 flex items-center">
+                          <Award className="h-5 w-5 mr-2 text-primary" />
+                          Learning Objectives
+                        </h2>
+                        <ul className="space-y-2 pl-8">
+                          {selectedModule.learningObjectives?.map((objective, idx) => (
+                            <li key={idx} className="list-disc text-gray-700 dark:text-gray-300">
+                              {objective}
                             </li>
                           ))}
                         </ul>
                       </div>
-                    </div>
 
-                    {/* Modules */}
-                    <h2 className="text-2xl font-bold mt-8 mb-4">Course Modules</h2>
-                    <div className="space-y-4">
-                      {generatedCourse.modules?.map((module, idx) => (
-                        <Card key={module.moduleId} className="overflow-hidden hover:shadow-md transition-shadow border-l-4 border-l-primary">
-                          <CardContent className="p-0">
-                            <div className="p-5">
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <h3 className="text-xl font-semibold">{module.title}</h3>
-                                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{module.duration}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
-                                    Module {module.moduleId}
-                                  </span>
-                                </div>
+                      {/* Generate Full Module Resources Button */}
+                      {!learningResource && !isLoadingResource && (
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg mt-6">
+                          <h2 className="text-lg font-semibold mb-2 flex items-center">
+                            <Sparkles className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
+                            Generate Learning Materials
+                          </h2>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Generate comprehensive materials for this entire module to start learning.
+                          </p>
+                          <Button 
+                            onClick={handleGenerateModuleResources}
+                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            <Brain className="h-4 w-4" />
+                            Generate Module Resources
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Loading Indicator */}
+                      {isLoadingResource && (
+                        <div className="flex flex-col items-center justify-center py-12">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                          <p className="text-gray-500 dark:text-gray-400">
+                            Generating comprehensive learning materials...
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Learning Resource Content */}
+                      {learningResource && (
+                        <div className="space-y-8">
+                          {/* Main Content */}
+                          <Card className="overflow-hidden">
+                            <CardContent className="p-6">
+                              <div className="prose dark:prose-invert max-w-full">
+                                <CustomMarkdownRenderer markdown={learningResource.content} />
                               </div>
-                              <p className="mt-3">{module.description}</p>
-                              <div className="mt-4">
-                                <h4 className="text-sm font-semibold text-gray-500 mb-2">Learning Objectives:</h4>
-                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-y-1 gap-x-4">
-                                  {module.learningObjectives?.map((objective, idx) => (
-                                    <li key={idx} className="flex items-start text-sm">
-                                      <ChevronRight className="h-5 w-5 mr-2 text-primary shrink-0" />
-                                      <span>{objective}</span>
-                                    </li>
-                                  ))}
-                                </ul>
+                            </CardContent>
+                          </Card>
+
+                          {/* Submodules */}
+                          {learningResource.subModules && learningResource.subModules.length > 0 && (
+                            <div className="space-y-6">
+                              <h2 className="text-2xl font-bold">Detailed Learning Materials</h2>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {learningResource.subModules.map((subModule, index) => (
+                                  <Card key={index} className="hover:shadow-md transition-shadow">
+                                    <CardContent className="p-6">
+                                      <h3 className="text-lg font-semibold mb-2">{subModule.subModuleTitle}</h3>
+                                      <div className="flex items-center text-sm text-gray-500 mb-3">
+                                        <Clock className="h-4 w-4 mr-1" />
+                                        <span>{subModule.readingTime}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 mb-4">
+                                        {subModule.tags?.map((tag, idx) => (
+                                          <span 
+                                            key={idx} 
+                                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-full"
+                                          >
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <Button 
+                                        variant="outline" 
+                                        className="w-full mt-2"
+                                        onClick={() => handleOpenArticle(subModule)}
+                                      >
+                                        Read Article
+                                      </Button>
+                                    </CardContent>
+                                  </Card>
+                                ))}
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  // Selected Module view goes here
-                  <div>
-                    {/* Your selected module content and resource rendering */}
-                  </div>
-                )}
-              </motion.div>
-            )}
+                          )}
 
-              
+                          {/* Video Content if available */}
+                          {learningResource.videoUrl && (
+                            <Card className="overflow-hidden">
+                              <CardContent className="p-6">
+                                <h2 className="text-2xl font-bold mb-4 flex items-center">
+                                  <PlayCircle className="h-6 w-6 mr-2 text-primary" />
+                                  Video Lecture
+                                </h2>
+                                <div className="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mb-4">
+                                  <div className="text-center">
+                                    <Play className="h-12 w-12 text-primary mx-auto mb-2" />
+                                    <p className="text-gray-500">Click to play video lecture</p>
+                                  </div>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                                  <h3 className="font-semibold mb-2">Transcript</h3>
+                                  <div className="max-h-48 overflow-y-auto text-sm">
+                                    <CustomMarkdownRenderer markdown={learningResource.transcript} />
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+
+                          {/* Additional Resources */}
+                          <Card>
+                            <CardContent className="p-6">
+                              <h2 className="text-xl font-bold mb-4 flex items-center">
+                                <FileText className="h-5 w-5 mr-2 text-primary" />
+                                Additional Resources
+                              </h2>
+                              <div className="space-y-3">
+                                <Button variant="outline" className="w-full justify-start">
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Download Full Materials
+                                </Button>
+                                <Button variant="outline" className="w-full justify-start">
+                                  <BookmarkPlus className="h-4 w-4 mr-2" />
+                                  Save to My Library
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
               {!generatedCourse && (
                 <div className="text-center py-20">
                   <Book className="h-16 w-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
@@ -749,6 +987,24 @@ export function DashboardComponent() {
           </Link>
         </nav>
       </footer>
+
+      {/* Article Modal - This is the key addition for your requirement */}
+      {showArticleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[85vh] overflow-auto p-6 relative">
+            <button 
+              className="absolute top-4 right-4 bg-gray-200 dark:bg-gray-700 rounded-full p-2"
+              onClick={() => setShowArticleModal(false)}
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h2 className="text-2xl font-bold mb-4">{activeArticle.title}</h2>
+            <div className="prose dark:prose-invert max-w-full">
+              <CustomMarkdownRenderer markdown={activeArticle.content} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>)
   );
 }

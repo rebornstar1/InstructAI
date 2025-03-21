@@ -5,7 +5,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
-const CustomMarkdownRenderer = ({ content }) => {
+const CustomMarkdownRenderer = ({ markdown }) => {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <ReactMarkdown
@@ -98,7 +98,7 @@ const CustomMarkdownRenderer = ({ content }) => {
           )
         }}
       >
-        {content}
+        {markdown}
       </ReactMarkdown>
     </div>
   );

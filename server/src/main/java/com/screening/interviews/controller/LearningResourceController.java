@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/learning-resources")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class LearningResourceController {
 
