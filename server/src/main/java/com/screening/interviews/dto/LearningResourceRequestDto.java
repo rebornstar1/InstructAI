@@ -1,7 +1,6 @@
 package com.screening.interviews.dto;
 
 import lombok.Data;
-
 import java.util.List;
 
 @Data
