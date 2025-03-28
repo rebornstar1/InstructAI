@@ -6,6 +6,7 @@ import java.util.List;
 @Data
 public class LearningResourceRequestDto {
     private String topic;
+    private Long moduleId;
     private String moduleTitle;
     private String conceptTitle; // Optional: if generating resource for a particular concept
     private String format;       // e.g., "markdown"

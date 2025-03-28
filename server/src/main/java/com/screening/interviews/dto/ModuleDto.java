@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 @Builder
 public class ModuleDto {
+    private Long id;
     private String moduleId;
     private String title;
     private String description;

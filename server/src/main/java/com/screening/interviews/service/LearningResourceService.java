@@ -3,10 +3,17 @@ package com.screening.interviews.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.screening.interviews.dto.LearningResourceRequestDto;
+import com.screening.interviews.model.Module;
 import com.screening.interviews.dto.LearningResourceDto;
 import com.screening.interviews.dto.SubModuleDto;
 import com.screening.interviews.dto.QuizDto;
 import com.screening.interviews.dto.QuestionDto;
+import com.screening.interviews.model.Quiz;
+import com.screening.interviews.model.QuizQuestion;
+import com.screening.interviews.model.SubModule;
+import com.screening.interviews.repo.CourseRepository;
+import com.screening.interviews.repo.ModuleRepository;
+import com.screening.interviews.repo.QuizRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,12 +21,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
+import com.screening.interviews.repo.SubModuleRepository;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +38,9 @@ public class LearningResourceService {
 
     private final @Qualifier("geminiWebClient") WebClient geminiWebClient;
     private final ObjectMapper objectMapper;
+    private final SubModuleRepository subModuleRepository;
+    private final ModuleRepository moduleRepository;
+    private final QuizRepository quizRepository;
 
     private static final String YOUTUBE_API_KEY = "AIzaSyCItvhHeCz5v3eQRp3SziAvHk-2XUUKg1Q";
 
@@ -36,84 +48,86 @@ public class LearningResourceService {
     // but for simplicity, we define it here:
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
-    /**
-     * Generates a comprehensive learning resource based on the user's request by sending enhanced
-     * educational prompts to Gemini, plus searching for a relevant YouTube video link.
-     *
-     * @param request LearningResourceRequestDto containing conceptTitle, moduleTitle, etc.
-     * @return a LearningResourceDto with main content, submodules, quizzes, transcript, and a YouTube video URL
-     */
     public LearningResourceDto generateLearningResource(LearningResourceRequestDto request) {
         String conceptTitle = request.getConceptTitle() != null ? request.getConceptTitle() : request.getModuleTitle();
         String moduleTitle = request.getModuleTitle();
+        Long moduleId = request.getModuleId();
 
         logger.info("Starting learning resource generation for concept: {}, module: {}", conceptTitle, moduleTitle);
 
         // 1) Generate main content using Gemini
         String mainContentPrompt = String.format(
-                "Create a comprehensive learning resource about '%s' in markdown format for module '%s'. "
-                        + "The content should be approximately 400-500 words or about 5-7 minutes of reading time. "
-
-                        + "Follow this educational structure: "
-                        + "1. Start with clear learning objectives that state exactly what the reader will learn "
-                        + "2. Write an engaging introduction that provides context and explains why this topic matters "
-                        + "3. Include conceptual definitions for all key terms to build a solid foundation "
-                        + "4. Break down complex ideas with detailed step-by-step explanations "
-                        + "5. Illustrate with at least 2 real-world examples or case studies "
-                        + "6. Describe visual aids that would enhance understanding (in markdown, describe what the image would show) "
-                        + "7. Add 2-3 reflective questions that encourage readers to apply the concepts "
-                        + "8. End with a concise summary that reinforces key points "
-                        + "9. Include a mini-glossary of 3-5 essential terms "
-
-                        + "Use proper markdown formatting with headings (##, ###), bullet points, numbered lists, *emphasis*, "
-                        + "**strong emphasis**, `code blocks` when applicable, and > blockquotes for important points.",
+                "Create a comprehensive learning resource about '%s' in markdown format for module '%s'. " +
+                        "The content should be approximately 400-500 words or about 5-7 minutes of reading time. " +
+                        "Follow this educational structure: " +
+                        "1. Start with clear learning objectives that state exactly what the reader will learn " +
+                        "2. Write an engaging introduction that provides context and explains why this topic matters " +
+                        "3. Include conceptual definitions for all key terms to build a solid foundation " +
+                        "4. Break down complex ideas with detailed step-by-step explanations " +
+                        "5. Illustrate with at least 2 real-world examples or case studies " +
+                        "6. Describe visual aids that would enhance understanding (in markdown, describe what the image would show) " +
+                        "7. Add 2-3 reflective questions that encourage readers to apply the concepts " +
+                        "8. End with a concise summary that reinforces key points " +
+                        "9. Include a mini-glossary of 3-5 essential terms " +
+                        "Use proper markdown formatting with headings (##, ###), bullet points, numbered lists, *emphasis*, " +
+                        "**strong emphasis**, `code blocks` when applicable, and > blockquotes for important points.",
                 conceptTitle, moduleTitle
         );
-
         String mainContent = callGeminiApi(mainContentPrompt);
 
         // 2) Generate transcript for video content
         logger.info("Generating video transcript for concept: {}", conceptTitle);
         String transcriptPrompt = String.format(
-                "Create a transcript for a 3-5 minute educational video about '%s'. "
-
-                        + "The transcript should follow this educational narrative structure: "
-                        + "1. Start with an attention-grabbing hook or question (10-15 seconds) "
-                        + "2. Introduce yourself and the learning objectives (20-30 seconds) "
-                        + "3. Provide a brief overview using a relatable analogy (30 seconds) "
-                        + "4. Explain core concepts clearly with pauses for emphasis (1-2 minutes) "
-                        + "5. Walk through a visual example, describing what viewers would see (1 minute) "
-                        + "6. Address a common misconception or challenge (30 seconds) "
-                        + "7. Summarize key points with clear takeaways (30 seconds) "
-                        + "8. End with a call to action and preview of related topics (15-20 seconds) "
-
-                        + "Use a conversational, engaging tone suitable for narration. Include natural transitions "
-                        + "between sections and occasional rhetorical questions to maintain engagement. "
-                        + "Format the transcript with speaker cues and [Action] descriptions for visual elements.",
+                "Create a transcript for a 3-5 minute educational video about '%s'. " +
+                        "The transcript should follow this educational narrative structure: " +
+                        "1. Start with an attention-grabbing hook or question (10-15 seconds) " +
+                        "2. Introduce yourself and the learning objectives (20-30 seconds) " +
+                        "3. Provide a brief overview using a relatable analogy (30 seconds) " +
+                        "4. Explain core concepts clearly with pauses for emphasis (1-2 minutes) " +
+                        "5. Walk through a visual example, describing what viewers would see (1 minute) " +
+                        "6. Address a common misconception or challenge (30 seconds) " +
+                        "7. Summarize key points with clear takeaways (30 seconds) " +
+                        "8. End with a call to action and preview of related topics (15-20 seconds) " +
+                        "Use a conversational, engaging tone suitable for narration. Include natural transitions " +
+                        "between sections and occasional rhetorical questions to maintain engagement. " +
+                        "Format the transcript with speaker cues and [Action] descriptions for visual elements.",
                 conceptTitle
         );
         String transcript = callGeminiApi(transcriptPrompt);
 
-        // 3) Generate submodules
-        List<SubModuleDto> subModules = generateSubModules(conceptTitle, moduleTitle);
+        // 3) Generate submodules as DTOs
+        List<SubModuleDto> subModuleDtos = generateSubModules(conceptTitle, moduleTitle);
+
+        // Persist each submodule into the database and rebuild the list of DTOs based on the saved entities
+        List<SubModuleDto> persistedSubModules = new ArrayList<>();
+        for (SubModuleDto dto : subModuleDtos) {
+            dto.setModuleId(moduleId);
+            SubModule entity = convertToSubModule(dto);
+            SubModule savedEntity = subModuleRepository.save(entity);
+            persistedSubModules.add(convertToSubModuleDto(savedEntity));
+        }
 
         // 4) Generate quizzes
         List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
+        // Persist quizzes into the database and convert back to DTOs:
+        List<QuizDto> persistedQuizzes = new ArrayList<>();
+        for (QuizDto dto : quizzes) {
+            Quiz quizEntity = convertToQuiz(dto, moduleId);
+            Quiz savedQuiz = quizRepository.save(quizEntity);
+            persistedQuizzes.add(convertToQuizDto(savedQuiz));
+        }
 
         // 5) Find relevant YouTube video
         String youTubeVideoUrl = findRelevantYouTubeVideo(conceptTitle);
 
-        // 6) Build the final learning resource
+        // 6) Build the final learning resource DTO
         LearningResourceDto result = LearningResourceDto.builder()
                 .conceptTitle(conceptTitle)
                 .moduleTitle(moduleTitle)
                 .content(mainContent)
                 .transcript(transcript)
-                // If you want to keep the old placeholder, you could do something like:
-                // .videoUrl( youTubeVideoUrl != null ? youTubeVideoUrl :
-                //      "http://example.com/videos/" + conceptTitle.replaceAll("\\s+", "-").toLowerCase())
                 .videoUrl(youTubeVideoUrl)
-                .subModules(subModules)
+                .subModules(persistedSubModules)
                 .quizzes(quizzes)
                 .build();
 
@@ -121,16 +135,85 @@ public class LearningResourceService {
         return result;
     }
 
-    // ================================
-    //  YOUTUBE DATA API INTEGRATION
-    // ================================
-    /**
-     * Finds the most relevant YouTube video for the given topic (conceptTitle).
-     * This uses the YouTube Data API v3 Search endpoint, requesting 1 result.
-     *
-     * @param topic The topic or concept to search for
-     * @return A YouTube watch URL if found, or null if no video found
-     */
+    private Quiz convertToQuiz(QuizDto dto, Long moduleId) {
+        Quiz quiz = new Quiz();
+        quiz.setQuizTitle(dto.getQuizTitle());
+        quiz.setDescription(dto.getDescription());
+        quiz.setDifficulty(dto.getDifficulty());
+        quiz.setTimeLimit(dto.getTimeLimit());
+        quiz.setPassingScore(dto.getPassingScore());
+
+        if (moduleId != null) {
+            Module module = moduleRepository.findById(moduleId)
+                    .orElseThrow(() -> new RuntimeException("Module not found with ID: " + moduleId));
+            quiz.setModule(module);
+        }
+
+        // Convert questions
+        if (dto.getQuestions() != null) {
+            List<QuizQuestion> questions = dto.getQuestions().stream().map(qdto -> {
+                QuizQuestion question = new QuizQuestion();
+                question.setQuestion(qdto.getQuestion());
+                question.setOptions(qdto.getOptions());
+                question.setCorrectAnswer(qdto.getCorrectAnswer());
+                question.setExplanation(qdto.getExplanation());
+                question.setQuiz(quiz);
+                return question;
+            }).collect(Collectors.toList());
+            quiz.setQuestions(questions);
+        }
+        return quiz;
+    }
+
+    // Convert a Quiz entity back to a QuizDto.
+    private QuizDto convertToQuizDto(Quiz quiz) {
+        List<QuestionDto> questionDtos = quiz.getQuestions() != null ? quiz.getQuestions().stream().map(q ->
+                QuestionDto.builder()
+                        .question(q.getQuestion())
+                        .options(q.getOptions())
+                        .correctAnswer(q.getCorrectAnswer())
+                        .explanation(q.getExplanation())
+                        .build()
+        ).collect(Collectors.toList()) : new ArrayList<>();
+
+        return QuizDto.builder()
+                .quizTitle(quiz.getQuizTitle())
+                .description(quiz.getDescription())
+                .difficulty(quiz.getDifficulty())
+                .timeLimit(quiz.getTimeLimit())
+                .passingScore(quiz.getPassingScore())
+                .questions(questionDtos)
+                .build();
+    }
+
+
+    private SubModule convertToSubModule(SubModuleDto dto) {
+        SubModule subModule = new SubModule();
+        subModule.setSubModuleTitle(dto.getSubModuleTitle());
+        subModule.setArticle(dto.getArticle());
+        subModule.setReadingTime(dto.getReadingTime());
+        subModule.setTags(dto.getTags());
+        subModule.setKeywords(dto.getKeywords());
+        // If you need to set the Module association, do it here.
+          if (dto.getModuleId() != null) {
+                   Module module = moduleRepository.findById(dto.getModuleId())
+                           .orElseThrow(() -> new RuntimeException("Module not found with ID: " + dto.getModuleId()));
+                   subModule.setModule(module);
+            }
+        return subModule;
+    }
+
+    private SubModuleDto convertToSubModuleDto(SubModule entity) {
+        return SubModuleDto.builder()
+                .moduleId(entity.getModule() != null ? entity.getModule().getId() : null)
+                .subModuleTitle(entity.getSubModuleTitle())
+                .article(entity.getArticle())
+                .readingTime(entity.getReadingTime())
+                .tags(entity.getTags())
+                .keywords(entity.getKeywords())
+                .build();
+    }
+
     private String findRelevantYouTubeVideo(String topic) {
         try {
             // Construct the search query; you could refine or add "tutorial" etc. if you want
@@ -178,97 +261,6 @@ public class LearningResourceService {
         }
     }
 
-    /**
-     * Generates a comprehensive learning resource based on the user's request by sending enhanced
-     * educational prompts to Gemini.
-     *
-     * @param request LearningResourceRequestDto containing conceptTitle, moduleTitle, etc.
-     * @return a LearningResourceDto with main content, submodules, quizzes, and transcript
-     */
-//    public LearningResourceDto generateLearningResource(LearningResourceRequestDto request) {
-//        String conceptTitle = request.getConceptTitle() != null ? request.getConceptTitle() : request.getModuleTitle();
-//        String moduleTitle = request.getModuleTitle();
-//
-//        logger.info("Starting learning resource generation for concept: {}, module: {}", conceptTitle, moduleTitle);
-//
-//        // Generate main content with Gemini using an enhanced educational prompt
-//        String mainContentPrompt = String.format(
-//                "Create a comprehensive learning resource about '%s' in markdown format for module '%s'. " +
-//                        "The content should be approximately 400-500 words or about 5-7 minutes of reading time. " +
-//
-//                        "Follow this educational structure: " +
-//                        "1. Start with clear learning objectives that state exactly what the reader will learn " +
-//                        "2. Write an engaging introduction that provides context and explains why this topic matters " +
-//                        "3. Include conceptual definitions for all key terms to build a solid foundation " +
-//                        "4. Break down complex ideas with detailed step-by-step explanations " +
-//                        "5. Illustrate with at least 2 real-world examples or case studies " +
-//                        "6. Describe visual aids that would enhance understanding (in markdown, describe what the image would show) " +
-//                        "7. Add 2-3 reflective questions that encourage readers to apply the concepts " +
-//                        "8. End with a concise summary that reinforces key points " +
-//                        "9. Include a mini-glossary of 3-5 essential terms " +
-//
-//                        "Use proper markdown formatting with headings (##, ###), bullet points, numbered lists, *emphasis*, " +
-//                        "**strong emphasis**, `code blocks` when applicable, and > blockquotes for important points.",
-//                conceptTitle, moduleTitle
-//        );
-//
-//        if (logger.isDebugEnabled()) {
-//            logger.debug("Main content prompt (truncated if long): {}",
-//                    mainContentPrompt.length() > 500 ? mainContentPrompt.substring(0, 500) + "... [truncated]" : mainContentPrompt);
-//        }
-//
-//        String mainContent = callGeminiApi(mainContentPrompt);
-//
-//        // Generate transcript for video content
-//        logger.info("Generating video transcript for concept: {}", conceptTitle);
-//        String transcriptPrompt = String.format(
-//                "Create a transcript for a 3-5 minute educational video about '%s'. " +
-//
-//                        "The transcript should follow this educational narrative structure: " +
-//                        "1. Start with an attention-grabbing hook or question (10-15 seconds) " +
-//                        "2. Introduce yourself and the learning objectives (20-30 seconds) " +
-//                        "3. Provide a brief overview using a relatable analogy (30 seconds) " +
-//                        "4. Explain core concepts clearly with pauses for emphasis (1-2 minutes) " +
-//                        "5. Walk through a visual example, describing what viewers would see (1 minute) " +
-//                        "6. Address a common misconception or challenge (30 seconds) " +
-//                        "7. Summarize key points with clear takeaways (30 seconds) " +
-//                        "8. End with a call to action and preview of related topics (15-20 seconds) " +
-//
-//                        "Use a conversational, engaging tone suitable for narration. Include natural transitions " +
-//                        "between sections and occasional rhetorical questions to maintain engagement. " +
-//                        "Format the transcript with speaker cues and [Action] descriptions for visual elements.",
-//                conceptTitle
-//        );
-//
-//        String transcript = callGeminiApi(transcriptPrompt);
-//
-//        // Generate submodules with appropriate article length
-//        List<SubModuleDto> subModules = generateSubModules(conceptTitle, moduleTitle);
-//
-//        // Generate quizzes for the learning module
-//        List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
-//
-//        LearningResourceDto result = LearningResourceDto.builder()
-//                .conceptTitle(conceptTitle)
-//                .moduleTitle(moduleTitle)
-//                .content(mainContent)
-//                .transcript(transcript)
-//                .videoUrl("http://example.com/videos/" + conceptTitle.replaceAll("\\s+", "-").toLowerCase())
-//                .subModules(subModules)
-//                .quizzes(quizzes)
-//                .build();
-//
-//        logger.info("Successfully generated learning resource for concept: {}", conceptTitle);
-//        return result;
-//    }
-
-    /**
-     * Generates submodules for the learning resource with introduction, advanced, and practical implementation sections.
-     *
-     * @param conceptTitle The concept or topic title
-     * @param moduleTitle The module title
-     * @return List of SubModuleDto objects
-     */
     private List<SubModuleDto> generateSubModules(String conceptTitle, String moduleTitle) {
         List<SubModuleDto> subModules = new ArrayList<>();
 
@@ -377,14 +369,6 @@ public class LearningResourceService {
         return subModules;
     }
 
-    /**
-     * Generates quizzes for the learning resource to test comprehension and knowledge retention.
-     * Creates multiple quiz types: basic understanding, advanced concepts, and practical application.
-     *
-     * @param conceptTitle The concept or topic title
-     * @param moduleTitle The module title
-     * @return List of QuizDto objects
-     */
     private List<QuizDto> generateQuizzes(String conceptTitle, String moduleTitle) {
         List<QuizDto> quizzes = new ArrayList<>();
 
@@ -507,18 +491,6 @@ public class LearningResourceService {
         return quizzes;
     }
 
-    /**
-     * Parse the JSON response from quiz generation to extract questions
-     *
-     * @param quizJson JSON string containing quiz questions
-     * @return List of QuestionDto objects
-     */
-    /**
-     * Parse the JSON response from quiz generation to extract questions with enhanced error handling
-     *
-     * @param quizJson JSON string containing quiz questions
-     * @return List of QuestionDto objects
-     */
     private List<QuestionDto> parseQuizQuestions(String quizJson) {
         List<QuestionDto> questions = new ArrayList<>();
 
@@ -566,18 +538,11 @@ public class LearningResourceService {
         return questions;
     }
 
-
-    /**
-     * Safely extract string value from JSON node
-     */
     private String extractStringValue(JsonNode node, String fieldName) {
         JsonNode fieldNode = node.path(fieldName);
         return fieldNode.isTextual() ? fieldNode.asText() : "";
     }
 
-    /**
-     * Safely extract options from JSON node
-     */
     private List<String> extractOptions(JsonNode questionNode) {
         List<String> options = new ArrayList<>();
         JsonNode optionsNode = questionNode.path("options");
@@ -593,9 +558,6 @@ public class LearningResourceService {
         return options;
     }
 
-    /**
-     * Create a default question when parsing fails
-     */
     private QuestionDto createDefaultQuestion() {
         return QuestionDto.builder()
                 .question("What is the main focus of this topic?")
@@ -609,12 +571,6 @@ public class LearningResourceService {
                 .build();
     }
 
-    /**
-     * Calls the Gemini API with the given prompt and extracts the generated text from the response.
-     *
-     * @param prompt The detailed prompt for content generation
-     * @return The text content generated by Gemini
-     */
     private String callGeminiApi(String prompt) {
         // Construct the payload for Gemini API
         String payload = String.format("""

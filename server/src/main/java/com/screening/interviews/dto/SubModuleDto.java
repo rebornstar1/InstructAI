@@ -7,6 +7,7 @@ import java.util.List;
 @Data
 @Builder
 public class SubModuleDto {
+    private Long moduleId;
     private String subModuleTitle;  // Title for the submodule (e.g., "Introduction to Encapsulation")
     private String article;         // The generated text article for the submodule
     private List<String> tags;      // Relevant tags for quick filtering/search

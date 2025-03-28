@@ -193,6 +193,7 @@ public class CourseService {
 
         List<ModuleDto> moduleDtos = course.getModules().stream()
                 .map(module -> ModuleDto.builder()
+                        .id(module.getId())
                         .moduleId(module.getModuleId())
                         .title(module.getTitle())
                         .description(module.getDescription())
