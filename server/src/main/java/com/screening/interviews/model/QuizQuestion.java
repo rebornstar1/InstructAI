@@ -21,7 +21,7 @@ public class QuizQuestion {
     // Store options as a collection of strings.
     @ElementCollection
     @CollectionTable(name = "quiz_question_options", joinColumns = @JoinColumn(name = "quiz_question_id"))
-    @Column(name = "option_text")
+    @Column(name = "option_text", columnDefinition = "text")
     private List<String> options;
 
     private String correctAnswer;

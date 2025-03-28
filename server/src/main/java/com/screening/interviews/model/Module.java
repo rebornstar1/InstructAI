@@ -41,6 +41,15 @@ public class Module {
     @JoinColumn(name = "course_id")
     private Course course;
 
+    // New fields for improved gradation and organization
+    private String complexityLevel;  // Foundational, Basic, Intermediate, Advanced, Expert
+
+    @ElementCollection
+    private List<String> keyTerms;  // Important terms or concepts in this module
+
+    @ElementCollection
+    private List<String> prerequisiteModules;  // Modules that should be completed before this one
+
     // One Module can have many Submodules.
     @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SubModule> subModules;

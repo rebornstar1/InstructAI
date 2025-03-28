@@ -614,7 +614,7 @@ export default function CourseContentComponent({ generatedCourse, setMessages })
               )}
 
               {/* Video Section */}
-              {learningResource.videoUrl && (
+              {learningResource.videoUrls && learningResource.videoUrls.length > 0 && (
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={isLoaded ? { opacity: 1, y: 0 } : {}}
@@ -624,21 +624,25 @@ export default function CourseContentComponent({ generatedCourse, setMessages })
                     <div className="bg-gradient-to-r from-blue-600 to-indigo-600 py-4 px-6">
                       <h2 className="text-xl font-bold text-white flex items-center">
                         <PlayCircle className="h-6 w-6 mr-2" />
-                        Video Lecture
+                        Video Lectures
                       </h2>
                     </div>
                     <CardContent className="p-6">
-                      <div className="aspect-video mb-4 overflow-hidden rounded-lg shadow-md">
-                        <iframe
-                          title="Video Lecture"
-                          className="w-full h-full"
-                          src={convertToEmbedUrl(learningResource.videoUrl)}
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        ></iframe>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {learningResource.videoUrls.map((videoUrl, index) => (
+                          <div key={index} className="aspect-video overflow-hidden rounded-lg shadow-md">
+                            <iframe
+                              title={`Video Lecture ${index + 1}`}
+                              className="w-full h-full"
+                              src={convertToEmbedUrl(videoUrl)}
+                              frameBorder="0"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            ></iframe>
+                          </div>
+                        ))}
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mt-4">
                         <div className="flex items-center justify-between mb-2">
                           <h3 className="font-semibold text-gray-800">Transcript</h3>
                           <Button variant="outline" size="sm" className="text-xs" aria-label="Download transcript">
@@ -654,6 +658,7 @@ export default function CourseContentComponent({ generatedCourse, setMessages })
                   </Card>
                 </motion.div>
               )}
+
 
               {/* Quizzes Section */}
               {learningResource.quizzes && learningResource.quizzes.length > 0 && (

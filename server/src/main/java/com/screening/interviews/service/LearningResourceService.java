@@ -11,7 +11,6 @@ import com.screening.interviews.dto.QuestionDto;
 import com.screening.interviews.model.Quiz;
 import com.screening.interviews.model.QuizQuestion;
 import com.screening.interviews.model.SubModule;
-import com.screening.interviews.repo.CourseRepository;
 import com.screening.interviews.repo.ModuleRepository;
 import com.screening.interviews.repo.QuizRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +27,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,9 +44,6 @@ public class LearningResourceService {
     private final QuizRepository quizRepository;
 
     private static final String YOUTUBE_API_KEY = "AIzaSyCItvhHeCz5v3eQRp3SziAvHk-2XUUKg1Q";
-
-    // Optionally, you could store your base URL in application.properties
-    // but for simplicity, we define it here:
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
     public LearningResourceDto generateLearningResource(LearningResourceRequestDto request) {
@@ -56,6 +54,55 @@ public class LearningResourceService {
         logger.info("Starting learning resource generation for concept: {}, module: {}", conceptTitle, moduleTitle);
 
         // 1) Generate main content using Gemini
+        String mainContent = generateMainContent(conceptTitle, moduleTitle);
+
+        // 2) Generate transcript for video content
+        logger.info("Generating video transcript for concept: {}", conceptTitle);
+        String transcript = generateTranscript(conceptTitle);
+
+        // 3) Analyze the topic complexity and identify key terms for submodules
+        Map<String, String> keyTerms = analyzeTopicAndExtractKeyTerms(conceptTitle, moduleTitle);
+
+        // 4) Generate dynamic submodules based on complexity analysis
+        List<SubModuleDto> subModuleDtos = generateDynamicSubModules(conceptTitle, moduleTitle, keyTerms, moduleId);
+
+        // 5) Persist submodules to database
+        List<SubModuleDto> persistedSubModules = persistSubModules(subModuleDtos, moduleId);
+
+        // 6) Generate quizzes
+        List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
+        List<QuizDto> persistedQuizzes = persistQuizzes(quizzes, moduleId);
+
+        // 7) Find relevant YouTube videos for main concept and key terms
+        Map<String, List<String>> allVideos = new HashMap<>();
+        List<String> mainConceptVideos = findRelevantYouTubeVideos(conceptTitle, 3);
+        allVideos.put(conceptTitle, mainConceptVideos);
+
+        // Find definition videos for each key term
+        keyTerms.forEach((term, definition) -> {
+            List<String> termVideos = findDefinitionVideos(term);
+            if (!termVideos.isEmpty()) {
+                allVideos.put(term, termVideos);
+            }
+        });
+
+        // 8) Build the final learning resource DTO
+        LearningResourceDto result = LearningResourceDto.builder()
+                .conceptTitle(conceptTitle)
+                .moduleTitle(moduleTitle)
+                .content(mainContent)
+                .transcript(transcript)
+                .videoUrls(mainConceptVideos)
+                .subModules(persistedSubModules)
+                .quizzes(persistedQuizzes)
+                .build();
+
+        logger.info("Successfully generated learning resource for concept: {}", conceptTitle);
+        return result;
+    }
+
+    private String generateMainContent(String conceptTitle, String moduleTitle) {
+        logger.info("Generating main content for concept: {}", conceptTitle);
         String mainContentPrompt = String.format(
                 "Create a comprehensive learning resource about '%s' in markdown format for module '%s'. " +
                         "The content should be approximately 400-500 words or about 5-7 minutes of reading time. " +
@@ -73,10 +120,10 @@ public class LearningResourceService {
                         "**strong emphasis**, `code blocks` when applicable, and > blockquotes for important points.",
                 conceptTitle, moduleTitle
         );
-        String mainContent = callGeminiApi(mainContentPrompt);
+        return callGeminiApi(mainContentPrompt);
+    }
 
-        // 2) Generate transcript for video content
-        logger.info("Generating video transcript for concept: {}", conceptTitle);
+    private String generateTranscript(String conceptTitle) {
         String transcriptPrompt = String.format(
                 "Create a transcript for a 3-5 minute educational video about '%s'. " +
                         "The transcript should follow this educational narrative structure: " +
@@ -93,12 +140,176 @@ public class LearningResourceService {
                         "Format the transcript with speaker cues and [Action] descriptions for visual elements.",
                 conceptTitle
         );
-        String transcript = callGeminiApi(transcriptPrompt);
+        return callGeminiApi(transcriptPrompt);
+    }
 
-        // 3) Generate submodules as DTOs
-        List<SubModuleDto> subModuleDtos = generateSubModules(conceptTitle, moduleTitle);
+    private Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
+        logger.info("Analyzing topic complexity and extracting key terms for: {}", conceptTitle);
 
-        // Persist each submodule into the database and rebuild the list of DTOs based on the saved entities
+        String analysisPrompt = String.format(
+                "Analyze the topic '%s' in the context of module '%s' and identify 5-10 key terms or concepts " +
+                        "that would benefit from detailed explanation. For each term, provide a short 1-2 sentence definition. " +
+                        "Format your response as a JSON object with the term as key and definition as value: " +
+                        "{ " +
+                        "  \"term1\": \"definition1\", " +
+                        "  \"term2\": \"definition2\" " +
+                        "} " +
+                        "Focus on identifying terms that are: " +
+                        "1. Foundational to understanding the topic " +
+                        "2. Potentially unfamiliar to beginners " +
+                        "3. Technical or domain-specific " +
+                        "4. Frequently referenced when discussing this topic " +
+                        "5. Important for practical implementation",
+                conceptTitle, moduleTitle
+        );
+
+        String analysisResult = callGeminiApi(analysisPrompt);
+
+        // Parse the JSON response to extract key terms and definitions
+        Map<String, String> keyTerms = new HashMap<>();
+        try {
+            // Clean up the response to ensure it's valid JSON
+            analysisResult = analysisResult.replaceAll("```(json)?", "")
+                    .replaceAll("```", "")
+                    .trim();
+
+            JsonNode termsNode = objectMapper.readTree(analysisResult);
+
+            termsNode.fields().forEachRemaining(entry -> {
+                keyTerms.put(entry.getKey(), entry.getValue().asText());
+            });
+
+            logger.info("Extracted {} key terms for topic: {}", keyTerms.size(), conceptTitle);
+        } catch (Exception e) {
+            logger.error("Error parsing key terms JSON: {}", e.getMessage());
+            // Provide some default terms if parsing fails
+            keyTerms.put(conceptTitle + " basics", "Fundamental concepts of " + conceptTitle);
+            keyTerms.put(conceptTitle + " implementation", "How to implement " + conceptTitle + " in practice");
+        }
+
+        return keyTerms;
+    }
+
+    private List<SubModuleDto> generateDynamicSubModules(String conceptTitle, String moduleTitle,
+                                                         Map<String, String> keyTerms, Long moduleId) {
+        List<SubModuleDto> subModules = new ArrayList<>();
+
+        // 1. Always create an introduction submodule
+        logger.info("Generating introduction submodule for concept: {}", conceptTitle);
+        SubModuleDto introModule = createIntroductionSubModule(conceptTitle);
+        subModules.add(introModule);
+
+        // 2. Generate term-specific submodules based on the key terms
+        for (Map.Entry<String, String> entry : keyTerms.entrySet()) {
+            String term = entry.getKey();
+            String definition = entry.getValue();
+
+            logger.info("Generating submodule for key term: {}", term);
+            SubModuleDto termModule = createTermSubModule(term, definition, conceptTitle);
+            subModules.add(termModule);
+        }
+
+        // 3. Add an advanced application module
+        logger.info("Generating advanced application submodule for concept: {}", conceptTitle);
+        SubModuleDto advancedModule = createAdvancedApplicationSubModule(conceptTitle, keyTerms);
+        subModules.add(advancedModule);
+
+        return subModules;
+    }
+
+    private SubModuleDto createIntroductionSubModule(String conceptTitle) {
+        String introPrompt = String.format(
+                "Create an introductory article about '%s' in markdown format. " +
+                        "The article should be approximately 400-500 words or 5 minutes reading time. " +
+                        "Structure the article following these educational best practices: " +
+                        "1. Begin with 3-4 specific learning objectives in a bulleted list (what readers will learn) " +
+                        "2. Write an engaging introduction that hooks the reader with a relevant analogy or question " +
+                        "3. Define all fundamental concepts in a clear, accessible way " +
+                        "4. Use a step-by-step approach for explaining basics with numbered lists " +
+                        "5. Include 1-2 beginner-friendly examples that illustrate the concepts " +
+                        "6. Suggest a simple visualization that would help beginners understand (describe what an image would show) " +
+                        "7. Add 2 reflection questions that check basic understanding " +
+                        "8. Include a 'Key Takeaways' section that summarizes essential points " +
+                        "9. Close with a brief preview of more advanced topics " +
+                        "Ensure all explanations are beginner-friendly and avoid jargon without explanation. " +
+                        "Use markdown formatting effectively with ## headings, ### subheadings, **bold** for important terms, " +
+                        "and `code examples` if relevant.",
+                conceptTitle
+        );
+
+        String introArticle = callGeminiApi(introPrompt);
+
+        return SubModuleDto.builder()
+                .subModuleTitle("Introduction to " + conceptTitle)
+                .article(introArticle)
+                .tags(Arrays.asList("introduction", "basics", "fundamentals"))
+                .keywords(Arrays.asList("concept", "introduction", "basics", conceptTitle.toLowerCase()))
+                .readingTime("5 minutes")
+                .build();
+    }
+
+    private SubModuleDto createTermSubModule(String term, String definition, String conceptTitle) {
+        String termPrompt = String.format(
+                "Create a focused educational article about '%s' in the context of %s. " +
+                        "The article should be approximately 300-400 words or 3-4 minutes reading time. " +
+                        "Begin with this definition as your starting point: '%s' " +
+                        "Then structure the article as follows: " +
+                        "1. Expand on the definition with more detail and context " +
+                        "2. Explain why this term/concept is important in understanding %s " +
+                        "3. Provide at least one clear, concrete example of this term/concept in action " +
+                        "4. Describe how this term/concept relates to other key ideas in %s " +
+                        "5. Include a simple diagram or visual description that would help illustrate this concept " +
+                        "6. Add 1-2 practice exercises or reflection questions related to this term " +
+                        "Use clear, accessible language and markdown formatting with appropriate headings, " +
+                        "emphasis, and code blocks if relevant.",
+                term, conceptTitle, definition, conceptTitle, conceptTitle
+        );
+
+        String termArticle = callGeminiApi(termPrompt);
+
+        return SubModuleDto.builder()
+                .subModuleTitle(term)
+                .article(termArticle)
+                .tags(Arrays.asList("definition", "concept", "terminology"))
+                .keywords(Arrays.asList(term.toLowerCase(), conceptTitle.toLowerCase(), "definition"))
+                .readingTime("4 minutes")
+                .build();
+    }
+
+    private SubModuleDto createAdvancedApplicationSubModule(String conceptTitle, Map<String, String> keyTerms) {
+        // Join key terms for context
+        String termsList = String.join(", ", keyTerms.keySet());
+
+        String advancedPrompt = String.format(
+                "Create an advanced application article about '%s' that integrates these key terms: %s. " +
+                        "The article should be approximately 500-600 words or 6 minutes reading time. " +
+                        "Structure the article following these educational best practices: " +
+                        "1. Begin with 3-4 advanced learning objectives that build on foundational knowledge " +
+                        "2. Present a complex, real-world scenario where %s is applied " +
+                        "3. Walk through a step-by-step solution that demonstrates how to apply multiple concepts together " +
+                        "4. Highlight how the key terms/concepts interact with each other in this scenario " +
+                        "5. Discuss common pitfalls or challenges in advanced applications " +
+                        "6. Provide troubleshooting tips or best practices " +
+                        "7. Include a section on emerging trends or future developments " +
+                        "8. Add 2-3 advanced practice exercises that require integrating multiple concepts " +
+                        "Use appropriate technical language with explanations where needed. " +
+                        "Format with markdown using proper headings, code blocks for technical examples, " +
+                        "and emphasized text for important points.",
+                conceptTitle, termsList, conceptTitle
+        );
+
+        String advancedArticle = callGeminiApi(advancedPrompt);
+
+        return SubModuleDto.builder()
+                .subModuleTitle("Advanced Applications of " + conceptTitle)
+                .article(advancedArticle)
+                .tags(Arrays.asList("advanced", "applications", "integration", "case-study"))
+                .keywords(Arrays.asList("advanced", "application", "implementation", conceptTitle.toLowerCase()))
+                .readingTime("6 minutes")
+                .build();
+    }
+
+    private List<SubModuleDto> persistSubModules(List<SubModuleDto> subModuleDtos, Long moduleId) {
         List<SubModuleDto> persistedSubModules = new ArrayList<>();
         for (SubModuleDto dto : subModuleDtos) {
             dto.setModuleId(moduleId);
@@ -106,33 +317,70 @@ public class LearningResourceService {
             SubModule savedEntity = subModuleRepository.save(entity);
             persistedSubModules.add(convertToSubModuleDto(savedEntity));
         }
+        return persistedSubModules;
+    }
 
-        // 4) Generate quizzes
-        List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
-        // Persist quizzes into the database and convert back to DTOs:
+    private List<QuizDto> persistQuizzes(List<QuizDto> quizzes, Long moduleId) {
         List<QuizDto> persistedQuizzes = new ArrayList<>();
         for (QuizDto dto : quizzes) {
             Quiz quizEntity = convertToQuiz(dto, moduleId);
             Quiz savedQuiz = quizRepository.save(quizEntity);
             persistedQuizzes.add(convertToQuizDto(savedQuiz));
         }
+        return persistedQuizzes;
+    }
 
-        // 5) Find relevant YouTube video
-        String youTubeVideoUrl = findRelevantYouTubeVideo(conceptTitle);
+    private List<String> findDefinitionVideos(String term) {
+        logger.info("Searching for definition videos for term: {}", term);
+        // Search for definition-style videos for key terms
+        String searchQuery = term + " definition explained";
+        return findRelevantYouTubeVideos(searchQuery, 2);
+    }
 
-        // 6) Build the final learning resource DTO
-        LearningResourceDto result = LearningResourceDto.builder()
-                .conceptTitle(conceptTitle)
-                .moduleTitle(moduleTitle)
-                .content(mainContent)
-                .transcript(transcript)
-                .videoUrl(youTubeVideoUrl)
-                .subModules(persistedSubModules)
-                .quizzes(quizzes)
-                .build();
+    private List<String> findRelevantYouTubeVideos(String topic, int maxResults) {
+        List<String> videoUrls = new ArrayList<>();
+        try {
+            String searchQuery = URLEncoder.encode(topic, StandardCharsets.UTF_8);
+            String url = String.format(
+                    "%s?part=snippet&maxResults=%d&type=video&key=%s&q=%s",
+                    YOUTUBE_SEARCH_URL,
+                    maxResults,
+                    YOUTUBE_API_KEY,
+                    searchQuery
+            );
 
-        logger.info("Successfully generated learning resource for concept: {}", conceptTitle);
-        return result;
+            WebClient localClient = WebClient.create();
+            String rawResponse = localClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (rawResponse == null) {
+                logger.warn("YouTube API returned null response for searchQuery: {}", searchQuery);
+                return videoUrls;
+            }
+
+            JsonNode root = objectMapper.readTree(rawResponse);
+            JsonNode items = root.path("items");
+
+            if (items.isArray()) {
+                for (JsonNode item : items) {
+                    JsonNode idNode = item.path("id");
+                    String videoId = idNode.path("videoId").asText();
+                    if (StringUtils.hasText(videoId)) {
+                        videoUrls.add("https://www.youtube.com/watch?v=" + videoId);
+                    }
+                }
+            }
+
+            if (videoUrls.isEmpty()) {
+                logger.warn("No video results found for topic: {}", topic);
+            }
+        } catch (Exception e) {
+            logger.error("Error calling YouTube Data API: {}", e.getMessage(), e);
+        }
+        return videoUrls;
     }
 
     private Quiz convertToQuiz(QuizDto dto, Long moduleId) {
@@ -165,7 +413,6 @@ public class LearningResourceService {
         return quiz;
     }
 
-    // Convert a Quiz entity back to a QuizDto.
     private QuizDto convertToQuizDto(Quiz quiz) {
         List<QuestionDto> questionDtos = quiz.getQuestions() != null ? quiz.getQuestions().stream().map(q ->
                 QuestionDto.builder()
@@ -186,7 +433,6 @@ public class LearningResourceService {
                 .build();
     }
 
-
     private SubModule convertToSubModule(SubModuleDto dto) {
         SubModule subModule = new SubModule();
         subModule.setSubModuleTitle(dto.getSubModuleTitle());
@@ -194,12 +440,12 @@ public class LearningResourceService {
         subModule.setReadingTime(dto.getReadingTime());
         subModule.setTags(dto.getTags());
         subModule.setKeywords(dto.getKeywords());
-        // If you need to set the Module association, do it here.
-          if (dto.getModuleId() != null) {
-                   Module module = moduleRepository.findById(dto.getModuleId())
-                           .orElseThrow(() -> new RuntimeException("Module not found with ID: " + dto.getModuleId()));
-                   subModule.setModule(module);
-            }
+
+        if (dto.getModuleId() != null) {
+            Module module = moduleRepository.findById(dto.getModuleId())
+                    .orElseThrow(() -> new RuntimeException("Module not found with ID: " + dto.getModuleId()));
+            subModule.setModule(module);
+        }
         return subModule;
     }
 
@@ -214,164 +460,8 @@ public class LearningResourceService {
                 .build();
     }
 
-    private String findRelevantYouTubeVideo(String topic) {
-        try {
-            // Construct the search query; you could refine or add "tutorial" etc. if you want
-            String query = URLEncoder.encode(topic, StandardCharsets.UTF_8);
-            // Build the final URL
-            String url = String.format(
-                    "%s?part=snippet&maxResults=1&type=video&key=%s&q=%s",
-                    YOUTUBE_SEARCH_URL,
-                    YOUTUBE_API_KEY,
-                    query
-            );
-
-            // For convenience, create a local WebClient to talk to YouTube
-            WebClient localClient = WebClient.create();
-
-            String rawResponse = localClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            if (rawResponse == null) {
-                logger.warn("YouTube API returned null response for topic: {}", topic);
-                return null;
-            }
-
-            // Parse JSON to get videoId
-            JsonNode root = objectMapper.readTree(rawResponse);
-            JsonNode items = root.path("items");
-            if (items.isArray() && items.size() > 0) {
-                JsonNode firstItem = items.get(0);
-                JsonNode idNode = firstItem.path("id");
-                String videoId = idNode.path("videoId").asText();
-                if (StringUtils.hasText(videoId)) {
-                    return "https://www.youtube.com/watch?v=" + videoId;
-                }
-            }
-
-            logger.warn("No video results found for topic: {}", topic);
-            return null;
-
-        } catch (Exception e) {
-            logger.error("Error calling YouTube Data API: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    private List<SubModuleDto> generateSubModules(String conceptTitle, String moduleTitle) {
-        List<SubModuleDto> subModules = new ArrayList<>();
-
-        logger.info("Generating introduction submodule for concept: {}", conceptTitle);
-        // Introduction submodule with enhanced educational structure
-        String introPrompt = String.format(
-                "Create an introductory article about '%s' in markdown format. " +
-                        "The article should be approximately 400-500 words or 5 minutes reading time. " +
-
-                        "Structure the article following these educational best practices: " +
-                        "1. Begin with 3-4 specific learning objectives in a bulleted list (what readers will learn) " +
-                        "2. Write an engaging introduction that hooks the reader with a relevant analogy or question " +
-                        "3. Define all fundamental concepts in a clear, accessible way " +
-                        "4. Use a step-by-step approach for explaining basics with numbered lists " +
-                        "5. Include 1-2 beginner-friendly examples that illustrate the concepts " +
-                        "6. Suggest a simple visualization that would help beginners understand (describe what an image would show) " +
-                        "7. Add 2 reflection questions that check basic understanding " +
-                        "8. Include a 'Key Takeaways' section that summarizes essential points " +
-                        "9. Close with a brief preview of more advanced topics " +
-
-                        "Ensure all explanations are beginner-friendly and avoid jargon without explanation. " +
-                        "Use markdown formatting effectively with ## headings, ### subheadings, **bold** for important terms, " +
-                        "and `code examples` if relevant.",
-                conceptTitle
-        );
-
-        String introArticle = callGeminiApi(introPrompt);
-
-        subModules.add(SubModuleDto.builder()
-                .subModuleTitle("Introduction to " + conceptTitle)
-                .article(introArticle)
-                .tags(Arrays.asList("introduction", "basics", "fundamentals"))
-                .keywords(Arrays.asList("concept", "introduction", "basics", conceptTitle.toLowerCase()))
-                .readingTime("5 minutes")
-                .build());
-
-        logger.info("Generating advanced submodule for concept: {}", conceptTitle);
-        // Advanced submodule with enhanced educational structure
-        String advancedPrompt = String.format(
-                "Create an advanced article about '%s' in markdown format. " +
-                        "The article should be approximately 400-500 words or 5 minutes reading time. " +
-
-                        "Structure the article following these educational best practices: " +
-                        "1. Start with 3-4 advanced learning objectives that build on foundational knowledge " +
-                        "2. Begin with a brief recap connecting basic concepts to advanced applications " +
-                        "3. Explain complex concepts with precise definitions and terminology " +
-                        "4. Present at least one detailed case study or complex real-world example " +
-                        "5. Discuss common challenges, pitfalls, or misconceptions at this advanced level " +
-                        "6. Describe a comparative diagram or visualization that would illustrate advanced concepts " +
-                        "7. Include a troubleshooting section that addresses common advanced problems " +
-                        "8. Add 2-3 challenging reflection questions that require applying advanced concepts " +
-                        "9. Conclude with emerging trends or future directions in this field " +
-                        "10. Include a small reference section with theoretical resources for deeper exploration " +
-
-                        "Use appropriate technical language but explain specialized terms. " +
-                        "Format with markdown using ## for main sections, ### for subsections, **bold** for key concepts, " +
-                        "`code blocks` for technical examples, and > blockquotes for expert insights.",
-                conceptTitle
-        );
-
-        String advancedArticle = callGeminiApi(advancedPrompt);
-
-        subModules.add(SubModuleDto.builder()
-                .subModuleTitle("Advanced " + conceptTitle)
-                .article(advancedArticle)
-                .tags(Arrays.asList("advanced", "in-depth", "applications"))
-                .keywords(Arrays.asList("advanced", "detailed", "expert", conceptTitle.toLowerCase()))
-                .readingTime("5 minutes")
-                .build());
-
-        logger.info("Generating practical implementation submodule for concept: {}", conceptTitle);
-        // Practical implementation submodule with enhanced educational structure
-        String practicalPrompt = String.format(
-                "Create a practical implementation guide for '%s' in markdown format. " +
-                        "The article should be approximately 400-500 words or 5 minutes reading time. " +
-
-                        "Structure the guide following these educational best practices: " +
-                        "1. Begin with 3-4 practical skill-based learning objectives " +
-                        "2. List any prerequisites or required background knowledge " +
-                        "3. Provide an overview of the implementation process with a numbered workflow " +
-                        "4. Break down the implementation into clear, sequential steps " +
-                        "5. Include practical code samples, commands, or specific instructions where relevant " +
-                        "6. Highlight common errors or pitfalls and how to avoid them " +
-                        "7. Suggest a workflow diagram that would illustrate the implementation process " +
-                        "8. Provide debugging tips or troubleshooting guidance " +
-                        "9. Add 2-3 hands-on exercises or challenges for practice " +
-                        "10. Include a checklist for verifying successful implementation " +
-                        "11. End with next steps for extending or customizing the implementation " +
-
-                        "Use clear, action-oriented language with specific examples. " +
-                        "Format with markdown using ## for main sections, ### for steps, **bold** for important warnings, " +
-                        "```code blocks``` for implementation examples, and * bullet points for tips and alternatives.",
-                conceptTitle
-        );
-
-        String practicalArticle = callGeminiApi(practicalPrompt);
-
-        subModules.add(SubModuleDto.builder()
-                .subModuleTitle("Practical Implementation of " + conceptTitle)
-                .article(practicalArticle)
-                .tags(Arrays.asList("practical", "implementation", "hands-on"))
-                .keywords(Arrays.asList("implementation", "practice", "tutorial", conceptTitle.toLowerCase()))
-                .readingTime("5 minutes")
-                .build());
-
-        return subModules;
-    }
-
     private List<QuizDto> generateQuizzes(String conceptTitle, String moduleTitle) {
         List<QuizDto> quizzes = new ArrayList<>();
-
         logger.info("Generating quizzes for concept: {}", conceptTitle);
 
         // Basic concepts quiz
@@ -383,7 +473,6 @@ public class LearningResourceService {
                         "3. Indicate the correct answer " +
                         "4. Include a brief explanation for why the answer is correct " +
                         "5. Ensure questions progress from simple recall to basic application " +
-
                         "Format as a structured JSON object with these exact fields: " +
                         "{ " +
                         "  \"questions\": [ " +
@@ -395,7 +484,6 @@ public class LearningResourceService {
                         "    } " +
                         "  ] " +
                         "} " +
-
                         "Focus on essential terminology and foundational principles that every beginner should master.",
                 conceptTitle
         );
@@ -421,7 +509,6 @@ public class LearningResourceService {
                         "3. Indicate the correct answer " +
                         "4. Include a detailed explanation that clarifies misconceptions " +
                         "5. Ensure questions require analysis, evaluation, or synthesis of knowledge " +
-
                         "Format as a structured JSON object with these exact fields: " +
                         "{ " +
                         "  \"questions\": [ " +
@@ -433,7 +520,6 @@ public class LearningResourceService {
                         "    } " +
                         "  ] " +
                         "} " +
-
                         "Focus on nuanced understanding, common misconceptions, and practical applications of advanced principles.",
                 conceptTitle
         );
@@ -448,44 +534,6 @@ public class LearningResourceService {
                 .timeLimit("10 minutes")
                 .questions(advancedQuestions)
                 .passingScore(70)
-                .build());
-
-        // Practical application quiz
-        String practicalQuizPrompt = String.format(
-                "Create a quiz to test practical application of '%s' with 5 scenario-based multiple-choice questions. " +
-                        "For each question: " +
-                        "1. Present a realistic scenario or problem that requires applying knowledge " +
-                        "2. Provide 4 answer options (A, B, C, D) that represent different approaches or solutions " +
-                        "3. Indicate the correct answer " +
-                        "4. Include an explanation that justifies the best approach and addresses why others are less optimal " +
-                        "5. Ensure questions mirror real-world implementation challenges " +
-
-                        "Format as a structured JSON object with these exact fields: " +
-                        "{ " +
-                        "  \"questions\": [ " +
-                        "    { " +
-                        "      \"question\": \"In a project where...\", " +
-                        "      \"options\": [\"A. approach 1\", \"B. approach 2\", \"C. approach 3\", \"D. approach 4\"], " +
-                        "      \"correctAnswer\": \"A\", " +
-                        "      \"explanation\": \"A is the best approach because...\" " +
-                        "    } " +
-                        "  ] " +
-                        "} " +
-
-                        "Focus on practical problem-solving, implementation decisions, and best practices in real-world contexts.",
-                conceptTitle
-        );
-
-        String practicalQuizJson = callGeminiApi(practicalQuizPrompt);
-        List<QuestionDto> practicalQuestions = parseQuizQuestions(practicalQuizJson);
-
-        quizzes.add(QuizDto.builder()
-                .quizTitle("Practical Application: " + conceptTitle)
-                .description("Apply your knowledge of " + conceptTitle + " to solve real-world scenarios")
-                .difficulty("Intermediate")
-                .timeLimit("15 minutes")
-                .questions(practicalQuestions)
-                .passingScore(80)
                 .build());
 
         return quizzes;

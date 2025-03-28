@@ -38,24 +38,46 @@ public class CourseService {
     public CourseResponseDto generateCourse(CourseRequestDto request) {
         logger.info("Starting course generation for topic: {}", request.getTopic());
 
-        // Build the master prompt using String.format.
+        // Enhanced prompt for better topic gradation and organization
         String masterPrompt = String.format("""
-                Generate a comprehensive and personalized course structure for the topic: "%s". 
-                The course should be designed for a learner with a basic understanding of the topic who aims to develop advanced skills. 
-                Your response should include:
+                Generate a comprehensive and pedagogically sound course structure for the topic: "%s". 
+                
+                First, analyze the topic thoroughly to:
+                1. Identify all core concepts and sub-topics that need to be covered for complete mastery
+                2. Determine the natural learning progression from fundamental to advanced concepts
+                3. Identify key dependencies between concepts (what must be learned before other topics)
+                4. Break down complex ideas into digestible, searchable modules
+                
+                Then, create a complete course structure that:
+                
                 1. Course Metadata:
-                   - title: A concise course title.
-                   - description: A brief description of the course content.
-                   - difficultyLevel: Choose from Beginner, Intermediate, or Advanced.
-                   - prerequisites: A list of prerequisites.
-                2. Modules: Generate %d modules. For each module, include:
-                   - moduleId: A unique identifier.
-                   - title: A module title.
-                   - description: Detailed content for the module.
-                   - duration: e.g., "45 minutes".
-                   - learningObjectives: A list of key objectives.
+                   - title: A concise, descriptive course title
+                   - description: A detailed description that outlines the scope, purpose, and intended audience
+                   - difficultyLevel: Overall difficulty (Beginner, Intermediate, Advanced, or Mixed)
+                   - prerequisites: Specific knowledge or skills needed before starting this course
+                
+                2. Modules: Create a COMPREHENSIVE set of modules to fully cover the topic with proper gradation:
+                   - Ensure progression from foundational to advanced concepts
+                   - Each module should build upon previous modules
+                   - Use clear knowledge dependencies (don't introduce advanced concepts before their prerequisites)
+                   - Break large topics into smaller, focused modules for better searchability 
+                   - Ensure each module has a specific, well-defined scope
+                   
+                   For each module, include:
+                   - moduleId: A sequential identifier (M1, M2, etc.)
+                   - title: A specific, searchable title that clearly identifies the module's content
+                   - description: Detailed content description (4-6 sentences)
+                   - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
+                   - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
+                   - keyTerms: 4-5 important terms or concepts covered in this module
+                   - learningObjectives: 3-5 specific, measurable objectives
+                   - prerequisites: Any specific modules that should be completed before this one
+                
                 Return the result as a valid JSON object with keys "courseMetadata" and "modules".
-                """, request.getTopic(), request.getModuleCount());
+                
+                Remember: Focus on comprehensive coverage and proper educational sequencing rather than limiting the number of modules.
+                Create as many modules as needed to cover the topic thoroughly while ensuring each module is focused and digestible.
+                """, request.getTopic());
 
         CourseResponseDto result = generateCourseViaGemini(masterPrompt);
 
@@ -84,18 +106,53 @@ public class CourseService {
     /**
      * ============ UPDATE ============
      * Updates an existing course by ID with the given CourseRequestDto.
-     * (Assumes a "full" update of metadata and modules.)
      */
     public CourseResponseDto updateCourse(Long id, CourseRequestDto request) {
         // 1) Find existing course.
         Course existingCourse = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
 
-        // 2) Generate an updated course structure via Gemini.
+        // 2) Generate an updated course structure via Gemini with enhanced prompt
         String masterPrompt = String.format("""
-                Generate a comprehensive and personalized course structure for the topic: "%s". 
-                ...
+                Generate a comprehensive and pedagogically sound course structure for the topic: "%s". 
+                
+                First, analyze the topic thoroughly to:
+                1. Identify all core concepts and sub-topics that need to be covered for complete mastery
+                2. Determine the natural learning progression from fundamental to advanced concepts
+                3. Identify key dependencies between concepts (what must be learned before other topics)
+                4. Break down complex ideas into digestible, searchable modules
+                
+                Then, create a complete course structure that:
+                
+                1. Course Metadata:
+                   - title: A concise, descriptive course title
+                   - description: A detailed description that outlines the scope, purpose, and intended audience
+                   - difficultyLevel: Overall difficulty (Beginner, Intermediate, Advanced, or Mixed)
+                   - prerequisites: Specific knowledge or skills needed before starting this course
+                
+                2. Modules: Create a COMPREHENSIVE set of modules to fully cover the topic with proper gradation:
+                   - Ensure progression from foundational to advanced concepts
+                   - Each module should build upon previous modules
+                   - Use clear knowledge dependencies (don't introduce advanced concepts before their prerequisites)
+                   - Break large topics into smaller, focused modules for better searchability 
+                   - Ensure each module has a specific, well-defined scope
+                   
+                   For each module, include:
+                   - moduleId: A sequential identifier (M1, M2, etc.)
+                   - title: A specific, searchable title that clearly identifies the module's content
+                   - description: Detailed content description (4-6 sentences)
+                   - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
+                   - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
+                   - keyTerms: 4-5 important terms or concepts covered in this module
+                   - learningObjectives: 3-5 specific, measurable objectives
+                   - prerequisites: Any specific modules that should be completed before this one
+                
+                Return the result as a valid JSON object with keys "courseMetadata" and "modules".
+                
+                Remember: Focus on comprehensive coverage and proper educational sequencing rather than limiting the number of modules.
+                Create as many modules as needed to cover the topic thoroughly while ensuring each module is focused and digestible.
                 """, request.getTopic());
+
         CourseResponseDto updatedDto = generateCourseViaGemini(masterPrompt);
         if (updatedDto == null) {
             throw new RuntimeException("Failed to get updated course info from Gemini.");
@@ -120,6 +177,10 @@ public class CourseService {
                     module.setDescription(moduleDto.getDescription());
                     module.setDuration(moduleDto.getDuration());
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
+                    // Add new fields
+                    module.setComplexityLevel(moduleDto.getComplexityLevel());
+                    module.setKeyTerms(moduleDto.getKeyTerms());
+                    module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(existingCourse);
                     return module;
                 })
@@ -169,6 +230,10 @@ public class CourseService {
                     module.setDescription(moduleDto.getDescription());
                     module.setDuration(moduleDto.getDuration());
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
+                    // Add new fields
+                    module.setComplexityLevel(moduleDto.getComplexityLevel());
+                    module.setKeyTerms(moduleDto.getKeyTerms());
+                    module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(course);
                     return module;
                 })
@@ -176,7 +241,7 @@ public class CourseService {
         course.setModules(modules);
 
         Course saved = courseRepository.save(course);
-        logger.info("Course saved. DB ID: {}", saved.getId());
+        logger.info("Course saved with {} modules. DB ID: {}", modules.size(), saved.getId());
         return saved;
     }
 
@@ -199,6 +264,9 @@ public class CourseService {
                         .description(module.getDescription())
                         .duration(module.getDuration())
                         .learningObjectives(module.getLearningObjectives())
+                        .complexityLevel(module.getComplexityLevel())
+                        .keyTerms(module.getKeyTerms())
+                        .prerequisiteModules(module.getPrerequisiteModules())
                         .build())
                 .collect(Collectors.toList());
 
