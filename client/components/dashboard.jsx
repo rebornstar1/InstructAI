@@ -208,7 +208,7 @@ export default function Dashboard() {
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 pt-28 pb-16 px-8 md:px-16 max-w-7xl mx-auto w-full">
+      <main className="flex-1 pt-28 pb-16 px-8 md:px-16 mx-auto w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

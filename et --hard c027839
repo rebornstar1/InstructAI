@@ -1,0 +1,39 @@
+[33mc027839[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m HEAD@{0}: reset: moving to HEAD~1
+[33md6b6c53[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{1}: commit: Enhancment in the course and module creation
+[33mc027839[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m HEAD@{2}: commit: Sub Module and Quiz Storing in Database is Completed
+[33m7e8d6ae[m HEAD@{3}: commit: Storing of the Courses and the Modules is being Completed
+[33m8bf2c32[m HEAD@{4}: commit: Learning Progress Tracker is added in the frontend
+[33m01d44f7[m HEAD@{5}: commit: SubModules Custom Markdown Rendering is completed
+[33m8b63829[m HEAD@{6}: commit: backend for the submodule creation is being completed
+[33ma04861c[m HEAD@{7}: pull: Fast-forward
+[33me56df4c[m HEAD@{8}: reset: moving to HEAD~1
+[33ma04861c[m HEAD@{9}: pull: Fast-forward
+[33me56df4c[m HEAD@{10}: reset: moving to HEAD~1
+[33ma04861c[m HEAD@{11}: commit: Customized Course Creation functionality added
+[33me56df4c[m HEAD@{12}: commit: fixes
+[33md280da5[m HEAD@{13}: commit: fixes
+[33m8c1f265[m HEAD@{14}: reset: moving to HEAD~1
+[33m5078369[m HEAD@{15}: commit: fixes
+[33m8c1f265[m HEAD@{16}: reset: moving to HEAD~
+[33mb201490[m HEAD@{17}: commit: fixes
+[33m8c1f265[m HEAD@{18}: reset: moving to HEAD~1
+[33m56c6778[m HEAD@{19}: commit: fixes
+[33m8c1f265[m HEAD@{20}: reset: moving to HEAD~1
+[33m13b716f[m HEAD@{21}: reset: moving to HEAD~1
+[33m652d3b4[m HEAD@{22}: commit: fixes
+[33m13b716f[m HEAD@{23}: commit: fixes
+[33m8c1f265[m HEAD@{24}: reset: moving to HEAD~1
+[33m0acc48a[m HEAD@{25}: reset: moving to HEAD~1
+[33mb1c7adb[m HEAD@{26}: rebase (abort): returning to refs/heads/main
+[33m81a6c7c[m HEAD@{27}: rebase (edit): Dashboard Page Added
+[33mddac36d[m HEAD@{28}: commit: fixes
+[33m0acc48a[m HEAD@{29}: pull origin main: Fast-forward
+[33m7627fae[m HEAD@{30}: reset: moving to HEAD~1
+[33me541159[m HEAD@{31}: rebase: fast-forward
+[33m7627fae[m HEAD@{32}: rebase (start): checkout HEAD~26
+[33mb1c7adb[m HEAD@{33}: commit: fixes
+[33m0acc48a[m HEAD@{34}: commit (amend): Dashboard is integrated with the course creation thing
+[33me5ff530[m HEAD@{35}: commit (amend): Dashboard is integrated with the course creation thing
+[33md9bff49[m HEAD@{36}: commit (amend): Dashboard is integrated with the course creation thing
+[33m9fc17f4[m HEAD@{37}: commit: Dashboard is integrated with the course creation thing
+[33m8c1f265[m HEAD@{38}: clone: from https://github.com/rebornstar1/InstructAI.git
