@@ -1,5 +1,6 @@
 package com.screening.interviews.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,5 +33,6 @@ public class QuizQuestion {
     // Associate the question with a Quiz.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quiz_id")
+    @JsonBackReference
     private Quiz quiz;
 }

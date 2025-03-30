@@ -1,5 +1,7 @@
 package com.screening.interviews.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,10 +34,12 @@ public class Quiz {
     // Each Quiz is associated with one Module.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "module_id")
+    @JsonBackReference
     private Module module;
 
     // A Quiz can have many questions.
     @OneToMany(mappedBy = "quiz", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     private List<QuizQuestion> questions;
 
     @PrePersist

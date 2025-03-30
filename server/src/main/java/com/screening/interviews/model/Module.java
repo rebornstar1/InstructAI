@@ -1,5 +1,7 @@
 package com.screening.interviews.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -39,6 +41,7 @@ public class Module {
     // Each Module belongs to one Course.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
+    @JsonBackReference
     private Course course;
 
     // New fields for improved gradation and organization
@@ -52,7 +55,12 @@ public class Module {
 
     // One Module can have many Submodules.
     @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     private List<SubModule> subModules;
+
+    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<Quiz> quizzes;
 
     @PrePersist
     public void prePersist() {

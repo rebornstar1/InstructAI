@@ -1,5 +1,6 @@
 package com.screening.interviews.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,6 +43,7 @@ public class SubModule {
     // Many submodules belong to one module.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "module_id")
+    @JsonBackReference
     private Module module;
 
     @PrePersist
