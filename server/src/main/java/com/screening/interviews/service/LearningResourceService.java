@@ -539,37 +539,48 @@ public class LearningResourceService {
         return quizzes;
     }
 
+
+
     private List<QuestionDto> parseQuizQuestions(String quizJson) {
         List<QuestionDto> questions = new ArrayList<>();
 
         try {
-            // Remove markdown code fences and extraneous tokens like "json"
-            quizJson = quizJson.replaceAll("```(json)?", "")
-                    .replaceAll("```", "")
-                    .replaceAll("^\\s*json\\s*", "")  // Remove leading "json" token if present
-                    .replaceAll("^.*?\\{", "{")         // Remove any leading text before the first '{'
-                    .replaceAll("\\}.*$", "}")          // Remove any trailing text after the last '}'
-                    .trim();
+            // First, perform a more thorough JSON cleaning
+            String cleanedJson = cleanJsonString(quizJson);
 
             // Attempt to parse the cleaned JSON
-            JsonNode root = objectMapper.readTree(quizJson);
-            JsonNode questionsNode = root.path("questions");
+            JsonNode root = objectMapper.readTree(cleanedJson);
 
-            if (questionsNode.isArray()) {
+            // Check if we have a "questions" array at the root
+            JsonNode questionsNode = root.has("questions") ? root.get("questions") : root;
+
+            // If it's not an array, try to handle it as a single question or look for another structure
+            if (!questionsNode.isArray()) {
+                logger.warn("Received quiz JSON that is not an array. Trying to extract questions object.");
+
+                // If the root has fields that look like a single question, treat it as such
+                if (root.has("question") || root.has("options")) {
+                    QuestionDto question = extractSingleQuestion(root);
+                    if (question != null) {
+                        questions.add(question);
+                    }
+                } else {
+                    // Last resort: search for any object that might be a question
+                    root.fields().forEachRemaining(entry -> {
+                        if (entry.getValue().isObject()) {
+                            QuestionDto question = extractSingleQuestion(entry.getValue());
+                            if (question != null) {
+                                questions.add(question);
+                            }
+                        }
+                    });
+                }
+            } else {
+                // Process each question in the array
                 for (JsonNode questionNode : questionsNode) {
-                    String questionText = extractStringValue(questionNode, "question");
-                    List<String> options = extractOptions(questionNode);
-                    String correctAnswer = extractStringValue(questionNode, "correctAnswer");
-                    String explanation = extractStringValue(questionNode, "explanation");
-
-                    // Only add if we have meaningful data
-                    if (StringUtils.hasText(questionText) && !options.isEmpty()) {
-                        questions.add(QuestionDto.builder()
-                                .question(questionText)
-                                .options(options)
-                                .correctAnswer(correctAnswer)
-                                .explanation(explanation)
-                                .build());
+                    QuestionDto question = extractSingleQuestion(questionNode);
+                    if (question != null) {
+                        questions.add(question);
                     }
                 }
             }
@@ -577,45 +588,179 @@ public class LearningResourceService {
             logger.error("Comprehensive error parsing quiz JSON: {}", e.getMessage(), e);
         }
 
-        // Fallback to default question if no questions parsed
+        // Fallback to default questions if no questions parsed
         if (questions.isEmpty()) {
-            logger.warn("Failed to parse quiz questions from JSON. Creating default question.");
+            logger.warn("Failed to parse quiz questions from JSON. Creating default questions.");
             questions.add(createDefaultQuestion());
         }
 
         return questions;
     }
 
-    private String extractStringValue(JsonNode node, String fieldName) {
-        JsonNode fieldNode = node.path(fieldName);
-        return fieldNode.isTextual() ? fieldNode.asText() : "";
+    /**
+     * Clean the JSON string to make it more likely to parse successfully
+     */
+    private String cleanJsonString(String rawJson) {
+        if (rawJson == null || rawJson.trim().isEmpty()) {
+            return "{}";
+        }
+
+        String cleaned = rawJson;
+
+        // Remove Markdown code block markers
+        cleaned = cleaned.replaceAll("```(json)?", "").replaceAll("```", "").trim();
+
+        // Remove any leading text before first opening brace
+        cleaned = cleaned.replaceAll("^[^{]*\\{", "{");
+
+        // Remove any trailing text after last closing brace
+        cleaned = cleaned.replaceAll("\\}[^}]*$", "}");
+
+        // Fix trailing commas in arrays and objects (common issue from LLMs)
+        cleaned = cleaned.replaceAll(",\\s*]", "]");
+        cleaned = cleaned.replaceAll(",\\s*}", "}");
+
+        // Fix missing commas between array elements (just after a closing brace or bracket)
+        cleaned = cleaned.replaceAll("(\\}|\\])\\s*(\\{)", "$1,$2");
+        cleaned = cleaned.replaceAll("(\\}|\\])\\s*(\\[)", "$1,$2");
+
+        // Fix property names without quotes
+        cleaned = cleaned.replaceAll("([{,]\\s*)(\\w+)(:)", "$1\"$2\"$3");
+
+        // Make sure array elements have commas between them
+        cleaned = cleaned.replaceAll("\"\\s*\\{", "\",{");
+
+        // Ensure enclosing brackets if missing
+        if (!cleaned.trim().startsWith("{") && !cleaned.trim().startsWith("[")) {
+            // Try to determine if it should be an array or object
+            if (cleaned.contains("\"question\"") || cleaned.contains("\"options\"")) {
+                cleaned = "{" + cleaned + "}";
+            } else {
+                cleaned = "[" + cleaned + "]";
+            }
+        }
+
+        // If we don't have a "questions" wrapper, add it for consistency if it looks like an array of questions
+        if (cleaned.trim().startsWith("[") &&
+                (cleaned.contains("\"question\"") || cleaned.contains("\"options\""))) {
+            cleaned = "{\"questions\":" + cleaned + "}";
+        }
+
+        return cleaned;
     }
 
+    /**
+     * Extract a single question from a JsonNode
+     */
+    private QuestionDto extractSingleQuestion(JsonNode questionNode) {
+        try {
+            String questionText = extractStringValue(questionNode, "question");
+
+            // If question is empty, this node probably isn't a question
+            if (questionText == null || questionText.trim().isEmpty()) {
+                return null;
+            }
+
+            List<String> options = extractOptions(questionNode);
+            String correctAnswer = extractStringValue(questionNode, "correctAnswer");
+
+            // Try "correct_answer" if "correctAnswer" is not found
+            if (correctAnswer == null || correctAnswer.trim().isEmpty()) {
+                correctAnswer = extractStringValue(questionNode, "correct_answer");
+            }
+
+            // Also check for possible numeric index as correctAnswerIndex
+            if ((correctAnswer == null || correctAnswer.trim().isEmpty()) && questionNode.has("correctAnswerIndex")) {
+                JsonNode indexNode = questionNode.get("correctAnswerIndex");
+                if (indexNode.isInt() && indexNode.asInt() >= 0 && indexNode.asInt() < options.size()) {
+                    int index = indexNode.asInt();
+                    // Convert numeric index to A, B, C, D format
+                    correctAnswer = String.valueOf((char)('A' + index));
+                }
+            }
+
+            String explanation = extractStringValue(questionNode, "explanation");
+
+            // Only create the question if we have at least question text and options
+            if (!options.isEmpty()) {
+                return QuestionDto.builder()
+                        .question(questionText)
+                        .options(options)
+                        .correctAnswer(correctAnswer)
+                        .explanation(explanation)
+                        .build();
+            }
+        } catch (Exception e) {
+            logger.warn("Error extracting individual question: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Improved extraction of string value with null safety
+     */
+    private String extractStringValue(JsonNode node, String fieldName) {
+        if (node == null || !node.has(fieldName)) {
+            return "";
+        }
+
+        JsonNode fieldNode = node.get(fieldName);
+        if (fieldNode.isTextual()) {
+            return fieldNode.asText();
+        } else if (fieldNode.isValueNode()) {
+            // Convert numeric or boolean to string
+            return fieldNode.asText();
+        }
+
+        return "";
+    }
+
+    /**
+     * Improved extraction of options with better error handling
+     */
     private List<String> extractOptions(JsonNode questionNode) {
         List<String> options = new ArrayList<>();
-        JsonNode optionsNode = questionNode.path("options");
+
+        if (questionNode == null || !questionNode.has("options")) {
+            return options;
+        }
+
+        JsonNode optionsNode = questionNode.get("options");
 
         if (optionsNode.isArray()) {
             for (JsonNode optionNode : optionsNode) {
                 if (optionNode.isTextual()) {
                     options.add(optionNode.asText());
+                } else if (optionNode.isValueNode()) {
+                    // Convert other value nodes (numbers, booleans) to strings
+                    options.add(optionNode.asText());
                 }
+            }
+        } else if (optionsNode.isTextual()) {
+            // Sometimes LLMs might incorrectly format options as a comma-separated string
+            String[] optionArray = optionsNode.asText().split(",");
+            for (String option : optionArray) {
+                options.add(option.trim());
             }
         }
 
         return options;
     }
 
+    /**
+     * Create a default question as a fallback
+     */
     private QuestionDto createDefaultQuestion() {
         return QuestionDto.builder()
                 .question("What is the main focus of this topic?")
                 .options(Arrays.asList(
-                        "A. Option 1",
-                        "B. Option 2",
-                        "C. Option 3",
-                        "D. Option 4"))
+                        "A. Understanding core concepts",
+                        "B. Practical applications",
+                        "C. Historical development",
+                        "D. Future trends"))
                 .correctAnswer("A")
-                .explanation("Default question due to parsing error.")
+                .explanation("This is a default question created because the system encountered an error while generating custom questions.")
                 .build();
     }
 

@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -103,10 +105,6 @@ public class CourseService {
         return mapEntityToCourseResponseDto(course);
     }
 
-    /**
-     * ============ UPDATE ============
-     * Updates an existing course by ID with the given CourseRequestDto.
-     */
     public CourseResponseDto updateCourse(Long id, CourseRequestDto request) {
         // 1) Find existing course.
         Course existingCourse = courseRepository.findById(id)
@@ -114,44 +112,44 @@ public class CourseService {
 
         // 2) Generate an updated course structure via Gemini with enhanced prompt
         String masterPrompt = String.format("""
-                Generate a comprehensive and pedagogically sound course structure for the topic: "%s". 
-                
-                First, analyze the topic thoroughly to:
-                1. Identify all core concepts and sub-topics that need to be covered for complete mastery
-                2. Determine the natural learning progression from fundamental to advanced concepts
-                3. Identify key dependencies between concepts (what must be learned before other topics)
-                4. Break down complex ideas into digestible, searchable modules
-                
-                Then, create a complete course structure that:
-                
-                1. Course Metadata:
-                   - title: A concise, descriptive course title
-                   - description: A detailed description that outlines the scope, purpose, and intended audience
-                   - difficultyLevel: Overall difficulty (Beginner, Intermediate, Advanced, or Mixed)
-                   - prerequisites: Specific knowledge or skills needed before starting this course
-                
-                2. Modules: Create a COMPREHENSIVE set of modules to fully cover the topic with proper gradation:
-                   - Ensure progression from foundational to advanced concepts
-                   - Each module should build upon previous modules
-                   - Use clear knowledge dependencies (don't introduce advanced concepts before their prerequisites)
-                   - Break large topics into smaller, focused modules for better searchability 
-                   - Ensure each module has a specific, well-defined scope
-                   
-                   For each module, include:
-                   - moduleId: A sequential identifier (M1, M2, etc.)
-                   - title: A specific, searchable title that clearly identifies the module's content
-                   - description: Detailed content description (4-6 sentences)
-                   - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
-                   - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
-                   - keyTerms: 4-5 important terms or concepts covered in this module
-                   - learningObjectives: 3-5 specific, measurable objectives
-                   - prerequisites: Any specific modules that should be completed before this one
-                
-                Return the result as a valid JSON object with keys "courseMetadata" and "modules".
-                
-                Remember: Focus on comprehensive coverage and proper educational sequencing rather than limiting the number of modules.
-                Create as many modules as needed to cover the topic thoroughly while ensuring each module is focused and digestible.
-                """, request.getTopic());
+            Generate a comprehensive and pedagogically sound course structure for the topic: "%s". 
+            
+            First, analyze the topic thoroughly to:
+            1. Identify all core concepts and sub-topics that need to be covered for complete mastery
+            2. Determine the natural learning progression from fundamental to advanced concepts
+            3. Identify key dependencies between concepts (what must be learned before other topics)
+            4. Break down complex ideas into digestible, searchable modules
+            
+            Then, create a complete course structure that:
+            
+            1. Course Metadata:
+               - title: A concise, descriptive course title
+               - description: A detailed description that outlines the scope, purpose, and intended audience
+               - difficultyLevel: Overall difficulty (Beginner, Intermediate, Advanced, or Mixed)
+               - prerequisites: Specific knowledge or skills needed before starting this course
+            
+            2. Modules: Create a COMPREHENSIVE set of modules to fully cover the topic with proper gradation:
+               - Ensure progression from foundational to advanced concepts
+               - Each module should build upon previous modules
+               - Use clear knowledge dependencies (don't introduce advanced concepts before their prerequisites)
+               - Break large topics into smaller, focused modules for better searchability 
+               - Ensure each module has a specific, well-defined scope
+               
+               For each module, include:
+               - moduleId: A sequential identifier (M1, M2, etc.)
+               - title: A specific, searchable title that clearly identifies the module's content
+               - description: Detailed content description (4-6 sentences)
+               - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
+               - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
+               - keyTerms: 4-5 important terms or concepts covered in this module
+               - learningObjectives: 3-5 specific, measurable objectives
+               - prerequisites: Any specific modules that should be completed before this one
+            
+            Return the result as a valid JSON object with keys "courseMetadata" and "modules".
+            
+            Remember: Focus on comprehensive coverage and proper educational sequencing rather than limiting the number of modules.
+            Create as many modules as needed to cover the topic thoroughly while ensuring each module is focused and digestible.
+            """, request.getTopic());
 
         CourseResponseDto updatedDto = generateCourseViaGemini(masterPrompt);
         if (updatedDto == null) {
@@ -163,7 +161,22 @@ public class CourseService {
         existingCourse.setTitle(meta.getTitle());
         existingCourse.setDescription(meta.getDescription());
         existingCourse.setDifficultyLevel(meta.getDifficultyLevel());
-        existingCourse.setPrerequisites(meta.getPrerequisites());
+
+        // Handle prerequisites which might be a String or a List<String>
+        if (meta.getPrerequisites() instanceof List) {
+            // If it's already a list, use it directly
+            @SuppressWarnings("unchecked")
+            List<String> prereqList = (List<String>) meta.getPrerequisites();
+            existingCourse.setPrerequisites(prereqList);
+        } else if (meta.getPrerequisites() != null) {
+            // If it's a string, convert it to a list using our helper method
+            String prereqString = meta.getPrerequisites().toString();
+            List<String> prereqList = splitPrerequisitesString(prereqString);
+            existingCourse.setPrerequisites(prereqList);
+        } else {
+            // If null, use an empty list
+            existingCourse.setPrerequisites(new ArrayList<>());
+        }
 
         // Clear out old modules.
         existingCourse.getModules().clear();
@@ -191,7 +204,6 @@ public class CourseService {
         Course saved = courseRepository.save(existingCourse);
         return mapEntityToCourseResponseDto(saved);
     }
-
     /**
      * ============ DELETE ============
      * Deletes a course (and cascades to all its modules).
@@ -205,10 +217,6 @@ public class CourseService {
         logger.info("Course deleted with ID: {}", id);
     }
 
-    // ----------------------------------------------------------------------
-    // HELPER METHODS
-    // ----------------------------------------------------------------------
-
     /**
      * Transforms the LLM-generated CourseResponseDto into a Course entity and persists it.
      */
@@ -219,7 +227,22 @@ public class CourseService {
         course.setTitle(meta.getTitle());
         course.setDescription(meta.getDescription());
         course.setDifficultyLevel(meta.getDifficultyLevel());
-        course.setPrerequisites(meta.getPrerequisites());
+
+        // Handle prerequisites which might be a String or a List<String>
+        if (meta.getPrerequisites() instanceof List) {
+            // If it's already a list, use it directly
+            @SuppressWarnings("unchecked")
+            List<String> prereqList = (List<String>) meta.getPrerequisites();
+            course.setPrerequisites(prereqList);
+        } else if (meta.getPrerequisites() != null) {
+            // If it's a string, convert it to a list using our helper method
+            String prereqString = meta.getPrerequisites().toString();
+            List<String> prereqList = splitPrerequisitesString(prereqString);
+            course.setPrerequisites(prereqList);
+        } else {
+            // If null, use an empty list
+            course.setPrerequisites(new ArrayList<>());
+        }
 
         List<Module> modules = courseResponseDto.getModules()
                 .stream()
@@ -245,9 +268,6 @@ public class CourseService {
         return saved;
     }
 
-    /**
-     * Maps a Course entity to the CourseResponseDto to return to the client.
-     */
     private CourseResponseDto mapEntityToCourseResponseDto(Course course) {
         CourseMetadataDto courseMetadataDto = CourseMetadataDto.builder()
                 .title(course.getTitle())
@@ -353,5 +373,56 @@ public class CourseService {
             logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate course from Gemini API", e);
         }
+    }
+
+    /**
+     * Helper method to intelligently split a prerequisites string into a list
+     * This can be added to your service class or as a utility method
+     */
+    private List<String> splitPrerequisitesString(String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // If the string is just "None" or similar, return as single item
+        if (input.trim().equalsIgnoreCase("none") ||
+                input.trim().equalsIgnoreCase("n/a") ||
+                input.trim().equalsIgnoreCase("not applicable")) {
+            return List.of(input.trim());
+        }
+
+        // If the input contains bullet points or numbered lists, split by those
+        if (input.contains("•") || input.contains("-") || input.contains("*")) {
+            String[] items = input.split("[•\\-\\*]");
+            return Arrays.stream(items)
+                    .map(String::trim)
+                    .filter(item -> !item.isEmpty())
+                    .collect(Collectors.toList());
+        }
+
+        // If it contains sentences (periods followed by space), split by those
+        if (input.matches(".*\\.\\s+.*")) {
+            String[] items = input.split("\\.\\s+");
+            return Arrays.stream(items)
+                    .map(String::trim)
+                    .filter(item -> !item.isEmpty())
+                    .map(item -> item.endsWith(".") ? item : item + ".")
+                    .collect(Collectors.toList());
+        }
+
+        // If it contains commas with reasonable-length segments, split by commas
+        if (input.contains(",")) {
+            String[] items = input.split(",");
+            // Only use comma splitting if all segments are reasonable length (not too short)
+            if (Arrays.stream(items).allMatch(item -> item.trim().length() > 3)) {
+                return Arrays.stream(items)
+                        .map(String::trim)
+                        .filter(item -> !item.isEmpty())
+                        .collect(Collectors.toList());
+            }
+        }
+
+        // Default: return the whole string as a single item
+        return List.of(input);
     }
 }

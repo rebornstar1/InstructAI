@@ -223,11 +223,11 @@ export default function Dashboard() {
             </span>
           </div>
           
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white mb-2">
-            {activeTab === "dashboard" ? "Your Learning Dashboard" : 
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white mb-2 py-3">
+            {activeTab === "dashboard" ? "Welcome Sanjay Paul, let's get started!" : 
              activeTab === "course" ? generatedCourse?.title || "Course Content" : "AI Tutor Chat"}
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray-600 dark:text-gray-300 py-4">
             {activeTab === "dashboard" ? "Continue your learning journey, explore new courses, or chat with your AI tutor." : 
              activeTab === "course" ? generatedCourse?.description || "Explore your course materials and track your progress." : 
              "Ask questions, get explanations, and deepen your understanding with your personal AI tutor."}

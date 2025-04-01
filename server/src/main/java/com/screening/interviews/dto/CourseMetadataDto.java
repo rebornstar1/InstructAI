@@ -1,5 +1,7 @@
 package com.screening.interviews.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.screening.interviews.config.PrerequisitesDeserializer;
 import lombok.Builder;
 import lombok.Data;
 
@@ -11,5 +13,7 @@ public class CourseMetadataDto {
     private String title;
     private String description;
     private String difficultyLevel;
-    private List<String> prerequisites;
+
+    @JsonDeserialize(using = PrerequisitesDeserializer.class)
+    private Object prerequisites;
 }

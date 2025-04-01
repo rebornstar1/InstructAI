@@ -25,6 +25,7 @@ import {
   Award,
   BookOpen,
   ArrowRight,
+  Check,
   Users,
   ExternalLink,
   Star,
