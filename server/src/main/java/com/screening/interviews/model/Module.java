@@ -23,6 +23,9 @@ public class Module {
     @Column(name = "module_uuid", nullable = false, updatable = false, unique = true)
     private String moduleUuid;
 
+    @Column(name = "content", columnDefinition = "text")
+    private String content;
+
     // A plain string for moduleId (e.g. "M01").
     private String moduleId;
 

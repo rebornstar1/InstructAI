@@ -56,6 +56,11 @@ public class LearningResourceService {
         // 1) Generate main content using Gemini
         String mainContent = generateMainContent(conceptTitle, moduleTitle);
 
+        Module module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> new RuntimeException("Module not found with id: " + moduleId));
+        module.setContent(mainContent);
+        moduleRepository.save(module);
+
         // 2) Generate transcript for video content
         logger.info("Generating video transcript for concept: {}", conceptTitle);
         String transcript = generateTranscript(conceptTitle);
