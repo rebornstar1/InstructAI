@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/quizzes")
+@CrossOrigin(origins = "*")
 public class QuizController {
 
     private final QuizRepository quizRepository;

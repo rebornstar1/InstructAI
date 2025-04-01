@@ -4,16 +4,14 @@ import com.screening.interviews.dto.SubModuleDto;
 import com.screening.interviews.model.SubModule;
 import com.screening.interviews.repo.SubModuleRepository;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/submodules")
+@CrossOrigin(origins = "*")
 public class SubModuleController {
 
     private final SubModuleRepository subModuleRepository;

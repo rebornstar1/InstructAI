@@ -11,6 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/modules")
+@CrossOrigin(origins = "*")
 public class ModuleController {
 
     private final ModuleService moduleService;

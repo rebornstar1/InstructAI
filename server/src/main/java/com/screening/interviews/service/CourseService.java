@@ -268,6 +268,9 @@ public class CourseService {
         return saved;
     }
 
+    /**
+     * Maps a Course entity to the CourseResponseDto to return to the client.
+     */
     private CourseResponseDto mapEntityToCourseResponseDto(Course course) {
         CourseMetadataDto courseMetadataDto = CourseMetadataDto.builder()
                 .title(course.getTitle())
@@ -291,11 +294,12 @@ public class CourseService {
                 .collect(Collectors.toList());
 
         return CourseResponseDto.builder()
+                .id(course.getId())                  // Include the course ID
+                .courseUuid(course.getCourseUuid())  // Include the course UUID
                 .courseMetadata(courseMetadataDto)
                 .modules(moduleDtos)
                 .build();
     }
-
     /**
      * Calls Gemini with the master prompt, cleans the response of any extraneous characters,
      * and parses it into a CourseResponseDto.
