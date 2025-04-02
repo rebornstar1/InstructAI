@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/courses/simplified")
 @RequiredArgsConstructor
@@ -19,6 +21,13 @@ public class CourseController {
     public ResponseEntity<CourseResponseDto> generateCourse(@RequestBody CourseRequestDto request) {
         CourseResponseDto courseResponse = courseService.generateCourse(request);
         return ResponseEntity.ok(courseResponse);
+    }
+    
+    // GET all request
+    @GetMapping
+    public ResponseEntity<List<CourseResponseDto>> getAllCourses() {
+        List<CourseResponseDto> courses = courseService.getAllCourses();
+        return ResponseEntity.ok(courses);
     }
 
     // GET request

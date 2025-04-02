@@ -41,6 +41,7 @@ export default function CourseDetailPage({ params }) {
         
         const data = await response.json();
         setCourse(data);
+        console.log("data",data);
       } catch (error) {
         console.error("Error fetching course:", error);
       } finally {
@@ -53,8 +54,8 @@ export default function CourseDetailPage({ params }) {
     }
   }, [courseId]);
 
-  const navigateToModule = (moduleId) => {
-    router.push(`/courses/${courseId}/module/${moduleId}`);
+  const navigateToModule = (id) => {
+    router.push(`/courses/${courseId}/module/${id}`);
   };
 
   const navigateBack = () => {
@@ -319,7 +320,7 @@ export default function CourseDetailPage({ params }) {
                       >
                         <div 
                           className="p-5 cursor-pointer"
-                          onClick={() => navigateToModule(module.moduleId || module.id)}
+                          onClick={() => navigateToModule(module.id || module.moduleId)}
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex-1">

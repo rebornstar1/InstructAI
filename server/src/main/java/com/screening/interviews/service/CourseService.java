@@ -105,6 +105,15 @@ public class CourseService {
         return mapEntityToCourseResponseDto(course);
     }
 
+    public List<CourseResponseDto> getAllCourses() {
+        logger.info("Fetching all courses");
+        List<Course> courses = courseRepository.findAll();
+        return courses.stream()
+                .map(this::mapEntityToCourseResponseDto)
+                .collect(Collectors.toList());
+    }
+
+
     public CourseResponseDto updateCourse(Long id, CourseRequestDto request) {
         // 1) Find existing course.
         Course existingCourse = courseRepository.findById(id)
