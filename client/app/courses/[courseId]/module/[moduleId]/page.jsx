@@ -20,7 +20,15 @@ import {
   CheckCircle,
   FileText as FileTextIcon,
   PlayCircle,
-  HelpCircle
+  HelpCircle,
+  Share2,
+  Download,
+  ExternalLink,
+  Award,
+  X,
+  Code,
+  BookmarkPlus,
+  ChevronRight
 } from "lucide-react";
 import CustomMarkdownRenderer from "@/components/ui/CustomMarkdownRenderer";
 import { 
@@ -38,30 +46,53 @@ export default function ModuleDetailPage({ params }) {
   const [activeTab, setActiveTab] = useState("overview");
   const router = useRouter();
   const contentRef = useRef(null);
+  
+  // Article Modal State
+  const [showArticleModal, setShowArticleModal] = useState(false);
+  const [activeArticle, setActiveArticle] = useState({ title: "", content: "" });
 
-  useEffect(() => {
-    const loadModule = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Fetch module data
-        const moduleData = await fetchModule(moduleId);
-        setModule(moduleData);
-        
-        // Check if learning resources already exist
-        const resources = await checkLearningResources(moduleData.id);
+  // Quiz Modal & related states
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [activeQuiz, setActiveQuiz] = useState(null);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [passedQuiz, setPassedQuiz] = useState(false);
+
+// Inside the useEffect hook, modify the loadModule function
+useEffect(() => {
+  const loadModule = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch module data
+      const moduleData = await fetchModule(moduleId);
+      setModule(moduleData);
+      
+      // Check if learning resources already exist
+      const resources = await checkLearningResources(moduleData.id);
+      
+      // Only set learning resources if they exist and have submodules
+      if (resources && 
+          ((resources.subModules && resources.subModules.length > 0) || 
+           (resources.content && resources.content.trim() !== ""))) {
         setLearningResource(resources);
-      } catch (error) {
-        console.error("Error loading module data:", error);
-      } finally {
-        setIsLoading(false);
+      } else {
+        // No resources or empty resources - will trigger the generation UI
+        setLearningResource(null);
       }
-    };
-
-    if (moduleId) {
-      loadModule();
+    } catch (error) {
+      console.error("Error loading module data:", error);
+    } finally {
+      setIsLoading(false);
     }
-  }, [moduleId]);
+  };
+
+  if (moduleId) {
+    loadModule();
+  }
+}, [moduleId]);
+
 
   const navigateBack = () => {
     router.push(`/courses/${courseId}`);
@@ -83,16 +114,87 @@ export default function ModuleDetailPage({ params }) {
           `Create a comprehensive guide for the module: ${module.title}`,
           "Include detailed explanations, diagrams, and code samples",
           "Structure content with clear sections and summaries",
+          "Create at least 3-5 submodules with detailed articles",
         ],
       };
-
+  
+      // Include learning objectives if provided
+      if (module.learningObjectives && module.learningObjectives.length > 0) {
+        request.specificRequirements.push(
+          `Address the following learning objectives: ${module.learningObjectives.join(", ")}`
+        );
+      }
+  
+      // Generate learning resources
       const data = await generateLearningResources(request);
-      setLearningResource(data);
+      
+      // Verify the generated data has submodules before setting
+      if (data) {
+        // Check if we received proper data with submodules or content
+        if ((data.subModules && data.subModules.length > 0) || (data.content && data.content.trim() !== "")) {
+          setLearningResource(data);
+        } else {
+          console.error("Generated resources do not contain submodules or content");
+          // You might want to show an error message to the user here
+        }
+      }
     } catch (error) {
       console.error("Error generating module resources:", error);
+      // You might want to show an error message to the user here
     } finally {
       setIsLoadingResource(false);
     }
+  };
+
+  // Article handling functions
+  const handleOpenArticle = (subModule) => {
+    setActiveArticle({ title: subModule.subModuleTitle, content: subModule.article });
+    setShowArticleModal(true);
+  };
+
+  // Quiz handling functions
+  const handleOpenQuiz = (quiz) => {
+    setActiveQuiz(quiz);
+    setShowQuizModal(true);
+    setQuizAnswers({});
+    setQuizScore(0);
+    setQuizSubmitted(false);
+    setPassedQuiz(false);
+  };
+
+  const handleQuizAnswerChange = (questionIndex, option) => {
+    setQuizAnswers((prev) => ({ ...prev, [questionIndex]: option }));
+  };
+
+  const handleSubmitQuiz = () => {
+    if (!activeQuiz || !activeQuiz.questions) return;
+    let correctCount = 0;
+    activeQuiz.questions.forEach((q, idx) => {
+      const userAnswer = quizAnswers[idx];
+      if (userAnswer && userAnswer === q.correctAnswer) {
+        correctCount++;
+      }
+    });
+    const scorePercentage = Math.round((correctCount / activeQuiz.questions.length) * 100);
+    setQuizScore(scorePercentage);
+    setQuizSubmitted(true);
+    const passingScore = activeQuiz.passingScore || 60;
+    setPassedQuiz(scorePercentage >= passingScore);
+  };
+
+  const handleCloseQuizModal = () => {
+    setShowQuizModal(false);
+    setActiveQuiz(null);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setPassedQuiz(false);
+    setQuizScore(0);
+  };
+
+  // Helper: Convert YouTube watch URL to embed URL
+  const convertToEmbedUrl = (url) => {
+    if (!url) return "";
+    return url.replace("watch?v=", "embed/");
   };
 
   // Animation variants
@@ -211,6 +313,9 @@ export default function ModuleDetailPage({ params }) {
                   <Info className="h-4 w-4" />
                   <span>Overview</span>
                 </div>
+                {activeTab === "overview" && (
+                  <ChevronRight className="h-4 w-4" />
+                )}
               </button>
               
               {learningResource && (
@@ -227,6 +332,9 @@ export default function ModuleDetailPage({ params }) {
                       <FileTextIcon className="h-4 w-4" />
                       <span>Main Content</span>
                     </div>
+                    {activeTab === "content" && (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
                   </button>
                   
                   {learningResource.subModules && learningResource.subModules.length > 0 && (
@@ -242,6 +350,9 @@ export default function ModuleDetailPage({ params }) {
                         <BookOpen className="h-4 w-4" />
                         <span>Detailed Articles</span>
                       </div>
+                      {activeTab === "articles" && (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                     </button>
                   )}
                   
@@ -258,6 +369,9 @@ export default function ModuleDetailPage({ params }) {
                         <PlayCircle className="h-4 w-4" />
                         <span>Video Lectures</span>
                       </div>
+                      {activeTab === "videos" && (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                     </button>
                   )}
                   
@@ -274,8 +388,28 @@ export default function ModuleDetailPage({ params }) {
                         <HelpCircle className="h-4 w-4" />
                         <span>Knowledge Checks</span>
                       </div>
+                      {activeTab === "quizzes" && (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                     </button>
                   )}
+                  
+                  <button
+                    className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
+                      activeTab === "resources" 
+                        ? "bg-blue-50 text-blue-700"
+                        : "hover:bg-gray-50 text-gray-700"
+                    }`}
+                    onClick={() => setActiveTab("resources")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Download className="h-4 w-4" />
+                      <span>Resources</span>
+                    </div>
+                    {activeTab === "resources" && (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
                 </>
               )}
             </div>
@@ -376,6 +510,44 @@ export default function ModuleDetailPage({ params }) {
                 </div>
                 
                 <CardContent className="p-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="flex flex-col items-center p-6 text-center">
+                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-2xl mb-4">
+                        <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">
+                        In-Depth Articles
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        Comprehensive explanations and detailed examples to build your understanding
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-col items-center p-6 text-center">
+                      <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl mb-4">
+                        <PlayCircle className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">
+                        Video Resources
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        Curated video content to support visual learning and reinforce concepts
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-col items-center p-6 text-center">
+                      <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-2xl mb-4">
+                        <HelpCircle className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">
+                        Knowledge Checks
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">
+                        Interactive quizzes to test your understanding and reinforce learning
+                      </p>
+                    </div>
+                  </div>
+                  
                   <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
                     <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Module Learning Objectives</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -508,13 +680,13 @@ export default function ModuleDetailPage({ params }) {
                               </div>
                               <Button 
                                 variant="ghost" 
-                                onClick={() => setActiveTab("articles")}
+                                onClick={() => handleOpenArticle(subModule)}
                                 className="shrink-0 h-8 w-8 p-0 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50"
                                 aria-label={`Read article: ${subModule.subModuleTitle}`}
                               >
-                                <FileTextIcon className="h-4 w-4" />
+                                <ChevronRight className="h-4 w-4" />
                               </Button>
-                            </div>
+                              </div>
                           ))}
                         </div>
                       </CardContent>
@@ -547,7 +719,7 @@ export default function ModuleDetailPage({ params }) {
                     transition={{ duration: 0.5 }}
                     className="space-y-6"
                   >
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {learningResource.subModules.map((subModule, idx) => (
                         <Card key={idx} className="shadow-lg overflow-hidden border-none">
                           <div className="bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 border-b border-blue-200 dark:border-blue-800/50">
@@ -593,34 +765,26 @@ export default function ModuleDetailPage({ params }) {
                     </div>
                     <CardContent className="p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {learningResource.videoUrls.map((videoUrl, index) => {
-                          // Helper function to convert YouTube watch URL to embed URL
-                          const getEmbedUrl = (url) => {
-                            if (!url) return "";
-                            return url.replace("watch?v=", "embed/");
-                          };
-                          
-                          return (
-                            <div key={index} className="space-y-3">
-                              <div className="aspect-video overflow-hidden rounded-lg shadow-md">
-                                <iframe
-                                  title={`Video Lecture ${index + 1}`}
-                                  className="w-full h-full"
-                                  src={getEmbedUrl(videoUrl)}
-                                  frameBorder="0"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                ></iframe>
-                              </div>
-                              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">
-                                Video Lecture {index + 1}: {module.title} 
-                              </h3>
-                              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                Comprehensive video tutorial covering key concepts and practical demonstrations for this module.
-                              </p>
+                        {learningResource.videoUrls.map((videoUrl, index) => (
+                          <div key={index} className="space-y-3">
+                            <div className="aspect-video overflow-hidden rounded-lg shadow-md">
+                              <iframe
+                                title={`Video Lecture ${index + 1}`}
+                                className="w-full h-full"
+                                src={convertToEmbedUrl(videoUrl)}
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              ></iframe>
                             </div>
-                          );
-                        })}
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">
+                              Video Lecture {index + 1}: {module.title} 
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                              Comprehensive video tutorial covering key concepts and practical demonstrations for this module.
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -660,7 +824,10 @@ export default function ModuleDetailPage({ params }) {
                           <p className="text-gray-700 dark:text-gray-300 mb-4">
                             This quiz contains {quiz.questions?.length || 0} questions to test your understanding of the module content.
                           </p>
-                          <Button className="bg-purple-600 hover:bg-purple-700">
+                          <Button 
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={() => handleOpenQuiz(quiz)}
+                          >
                             <PlayCircle className="mr-2 h-4 w-4" />
                             Take Quiz
                           </Button>
@@ -674,10 +841,418 @@ export default function ModuleDetailPage({ params }) {
                   </div>
                 )}
               </TabsContent>
+              
+              <TabsContent value="resources" className="m-0 mt-2">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <Card className="shadow-lg overflow-hidden border-none">
+                    <div className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-900/50 dark:to-gray-800/50 p-6 border-b border-gray-200 dark:border-gray-700">
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                        <Download className="h-6 w-6 text-blue-600" />
+                        Additional Resources
+                      </h2>
+                    </div>
+                    <CardContent className="p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-all group cursor-pointer h-full overflow-hidden">
+                          <div className="h-2 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+                          <CardContent className="p-6">
+                            <div className="flex flex-col items-center">
+                              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl mb-4">
+                                <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <h3 className="text-lg font-bold mb-2 text-center text-gray-800 dark:text-gray-200">
+                                Module PDF
+                              </h3>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm text-center mb-4">
+                                Complete module content in PDF format for offline access and printing
+                              </p>
+                              <Button className="mt-auto w-full justify-center">
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card className="border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-all group cursor-pointer h-full overflow-hidden">
+                          <div className="h-2 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+                          <CardContent className="p-6">
+                            <div className="flex flex-col items-center">
+                              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl mb-4">
+                                <Code className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <h3 className="text-lg font-bold mb-2 text-center text-gray-800 dark:text-gray-200">
+                                Code Examples
+                              </h3>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm text-center mb-4">
+                                Sample code and implementation examples to reinforce concepts
+                              </p>
+                              <Button className="mt-auto w-full justify-center">
+                                <Download className="h-4 w-4 mr-2" />
+                                Download ZIP
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card className="border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-all group cursor-pointer h-full overflow-hidden">
+                          <div className="h-2 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+                          <CardContent className="p-6">
+                            <div className="flex flex-col items-center">
+                              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl mb-4">
+                                <ExternalLink className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <h3 className="text-lg font-bold mb-2 text-center text-gray-800 dark:text-gray-200">
+                                External Resources
+                              </h3>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm text-center mb-4">
+                                Curated links to additional resources, readings, and tools
+                              </p>
+                              <Button className="mt-auto w-full justify-center">
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                View Resources
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      
+                      <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Reading List</h3>
+                        <div className="space-y-3">
+                          {[
+                            {
+                              title: "Comprehensive Guide to the Subject",
+                              author: "Jane Smith",
+                              type: "Book",
+                              link: "#"
+                            },
+                            {
+                              title: "Advanced Techniques and Methodologies",
+                              author: "Robert Johnson",
+                              type: "Academic Paper",
+                              link: "#"
+                            },
+                            {
+                              title: "Practical Applications in Modern Contexts",
+                              author: "Maria Garcia",
+                              type: "Article",
+                              link: "#"
+                            }
+                          ].map((resource, idx) => (
+                            <div 
+                              key={idx}
+                              className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 transition-colors"
+                            >
+                              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                                {resource.type === "Book" ? (
+                                  <BookOpen className="h-5 w-5" />
+                                ) : resource.type === "Academic Paper" ? (
+                                  <FileText className="h-5 w-5" />
+                                ) : (
+                                  <ExternalLink className="h-5 w-5" />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-800 dark:text-gray-200">{resource.title}</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  By {resource.author} • {resource.type}
+                                </p>
+                              </div>
+                              <Button variant="ghost" size="sm" className="text-blue-600 h-8 w-8 p-0 rounded-full">
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
             </Tabs>
           )}
         </div>
       </div>
-    </div>
-  );
-}
+
+      {/* ARTICLE MODAL */}
+      {showArticleModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" 
+          role="dialog" 
+          aria-modal="true"
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white dark:bg-gray-900 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-xl relative flex flex-col"
+          >
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">{activeArticle.title}</h2>
+              <button 
+                className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full p-2 transition-colors" 
+                onClick={() => setShowArticleModal(false)}
+                aria-label="Close article"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto">
+              <div className="px-6 py-5">
+                <div className="prose max-w-full dark:prose-invert">
+                  <CustomMarkdownRenderer markdown={activeArticle.content} />
+                </div>
+              </div>
+            </div>
+            
+            <div className="sticky bottom-0 bg-white dark:bg-gray-900 px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between">
+              <Button variant="outline" onClick={() => setShowArticleModal(false)}>
+                Close
+              </Button>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <BookmarkPlus className="h-4 w-4 mr-2" />
+                Save Article
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      {/* QUIZ MODAL */}
+      {showQuizModal && activeQuiz && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" 
+          role="dialog" 
+          aria-modal="true"
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white dark:bg-gray-900 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-xl relative flex flex-col"
+          >
+            <div className="sticky top-0 z-10 bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 text-white flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold">{activeQuiz.quizTitle}</h2>
+                <p className="text-sm text-white/80">{activeQuiz.description}</p>
+              </div>
+              <button 
+                className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 transition-colors" 
+                onClick={handleCloseQuizModal}
+                aria-label="Close quiz"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto">
+              <div className="px-6 py-5">
+                {!quizSubmitted ? (
+                  <div className="space-y-8">
+                    {activeQuiz.questions?.map((q, idx) => (
+                      <motion.div 
+                        key={idx}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: idx * 0.1 }}
+                        className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-800/50"
+                      >
+                        <div className="flex items-start gap-3 mb-4">
+                          <div className="bg-indigo-600 text-white h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
+                            {idx + 1}
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                            {q.question}
+                          </h3>
+                        </div>
+                        
+                        <div className="space-y-3 mt-4">
+                          {q.options.map((option, optionIdx) => {
+                            const optionLetter = option.charAt(0);
+                            
+                            return (
+                              <motion.div
+                                key={optionIdx}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.2, delay: 0.1 + optionIdx * 0.05 }}
+                                whileHover={{ x: 3 }}
+                              >
+                                <label 
+                                  className={`flex items-center gap-3 p-4 rounded-lg cursor-pointer transition-all ${
+                                    quizAnswers[idx] === optionLetter 
+                                      ? "bg-indigo-100 dark:bg-indigo-800/50 border border-indigo-300 dark:border-indigo-700 shadow-sm" 
+                                      : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700"
+                                  }`}
+                                >
+                                  <div className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${
+                                    quizAnswers[idx] === optionLetter 
+                                      ? "bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-700" 
+                                      : "border-2 border-gray-300 dark:border-gray-600"
+                                  }`}>
+                                    {quizAnswers[idx] === optionLetter && (
+                                      <CheckCircle className="h-4 w-4" />
+                                    )}
+                                  </div>
+                                  <input
+                                    type="radio"
+                                    name={`question-${idx}`}
+                                    value={optionLetter}
+                                    checked={quizAnswers[idx] === optionLetter}
+                                    onChange={() => handleQuizAnswerChange(idx, optionLetter)}
+                                    className="sr-only"
+                                  />
+                                  <span className="text-gray-700 dark:text-gray-300">{option}</span>
+                                </label>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.5 }}
+                      className={`p-8 rounded-xl shadow-sm ${
+                        passedQuiz ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                      }`}
+                    >
+                      <div className="flex items-center gap-6">
+                        <div className={`p-4 rounded-full ${passedQuiz ? "bg-green-100 dark:bg-green-800/50" : "bg-red-100 dark:bg-red-800/50"}`}>
+                          {passedQuiz 
+                            ? <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
+                            : <X className="h-12 w-12 text-red-600 dark:text-red-400" />
+                          }
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">
+                            {passedQuiz ? "Congratulations!" : "Quiz Results"}
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xl font-bold">
+                              Score: <span className={passedQuiz ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{quizScore}%</span>
+                            </div>
+                            <div className="h-5 w-px bg-gray-300 dark:bg-gray-700"></div>
+                            <div className="text-gray-600 dark:text-gray-400">
+                              Passing score: {activeQuiz.passingScore || 60}%
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-6 pt-6 border-t border-dashed border-gray-200 dark:border-gray-700">
+                        {passedQuiz ? (
+                          <p className="text-green-700 dark:text-green-400">
+                            You've successfully completed this knowledge check! Your solid understanding of the material will help you as you continue through the course.
+                          </p>
+                        ) : (
+                          <p className="text-red-700 dark:text-red-400">
+                            You didn't reach the passing score. Review the material in this module and try again to strengthen your understanding of the key concepts.
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                    
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">Question Summary</h3>
+                      {activeQuiz.questions?.map((q, idx) => {
+                        const isCorrect = quizAnswers[idx] === q.correctAnswer;
+                        
+                        return (
+                          <motion.div 
+                            key={idx}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: idx * 0.1 }}
+                            className={`p-4 rounded-lg border ${
+                              isCorrect 
+                                ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" 
+                                : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`mt-0.5 p-1 rounded-full text-white ${isCorrect ? "bg-green-600" : "bg-red-600"}`}>
+                                {isCorrect ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-800 dark:text-gray-200">
+                                  {q.question}
+                                </p>
+                                <div className="mt-2 text-sm">
+                                  <p className={isCorrect ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>
+                                    Your answer: {quizAnswers[idx] ? q.options.find(opt => opt.startsWith(quizAnswers[idx])) : "Not answered"}
+                                  </p>
+                                  {!isCorrect && (
+                                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                                      Correct answer: {q.options.find(opt => opt.startsWith(q.correctAnswer))}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="sticky bottom-0 bg-white dark:bg-gray-900 px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between">
+              {!quizSubmitted ? (
+                <>
+                  <Button variant="outline" onClick={handleCloseQuizModal}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                    onClick={handleSubmitQuiz}
+                    disabled={Object.keys(quizAnswers).length < (activeQuiz.questions?.length || 0)}
+                    >
+                      Submit Quiz
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setQuizAnswers({});
+                        setQuizSubmitted(false);
+                        setPassedQuiz(false);
+                        setQuizScore(0);
+                      }}
+                    >
+                      <PlayCircle className="h-4 w-4 mr-2" />
+                      Retake Quiz
+                    </Button>
+                    <Button 
+                      className="bg-indigo-600 hover:bg-indigo-700"
+                      onClick={handleCloseQuizModal}
+                    >
+                      Continue Learning
+                    </Button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </div>
+    );
+  }

@@ -58,9 +58,9 @@ export const checkLearningResources = async (moduleId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/modules/${moduleId}`);
     if (response.ok) {
-    //   const data = await response.json();
-    //   console.log(data,"data");
-      return await response.json();
+      const data = await response.json();
+      console.log(data,"data");
+      return await data;
     }
     return null;
   } catch (error) {
