@@ -81,6 +81,10 @@ public class LearningResourceService {
         // 7) Find relevant YouTube videos for main concept and key terms
         Map<String, List<String>> allVideos = new HashMap<>();
         List<String> mainConceptVideos = findRelevantYouTubeVideos(conceptTitle, 3);
+
+        module.setVideoUrls(mainConceptVideos);
+        moduleRepository.save(module);
+
         allVideos.put(conceptTitle, mainConceptVideos);
 
         // Find definition videos for each key term

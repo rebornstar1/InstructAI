@@ -65,6 +65,11 @@ public class Module {
     @JsonManagedReference
     private List<Quiz> quizzes;
 
+    @ElementCollection
+    @CollectionTable(name = "module_video_urls", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "video_url")
+    private List<String> videoUrls;
+
     @PrePersist
     public void prePersist() {
         if (moduleUuid == null) {

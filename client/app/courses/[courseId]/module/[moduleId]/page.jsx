@@ -755,7 +755,8 @@ useEffect(() => {
               </TabsContent>
               
               <TabsContent value="videos" className="m-0 mt-2">
-                {learningResource.videoUrls && learningResource.videoUrls.length > 0 ? (
+                {((learningResource && learningResource.videoUrls && learningResource.videoUrls.length > 0) || 
+                  (module && module.videoUrls && module.videoUrls.length > 0)) ? (
                   <Card className="shadow-lg overflow-hidden border-none">
                     <div className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-900/50 dark:to-gray-800/50 p-6 border-b border-gray-200 dark:border-gray-700">
                       <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
@@ -765,7 +766,9 @@ useEffect(() => {
                     </div>
                     <CardContent className="p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {learningResource.videoUrls.map((videoUrl, index) => (
+                      {(learningResource && learningResource.videoUrls ? 
+                          learningResource.videoUrls : 
+                          module.videoUrls || []).map((videoUrl, index) => (
                           <div key={index} className="space-y-3">
                             <div className="aspect-video overflow-hidden rounded-lg shadow-md">
                               <iframe
