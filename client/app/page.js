@@ -13,7 +13,7 @@ const LandingPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 font-sans">
+    <div className="min-h-screen bg-[#FAFAFA] font-sans">
       {/* Navigation */}
       <nav className="flex justify-between items-center py-6 px-8 md:px-16 bg-white/80 backdrop-blur-md fixed w-full z-50">
         <motion.div 
@@ -202,7 +202,7 @@ const LandingPage = () => {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="py-20 px-8 md:px-16 bg-gradient-to-br from-blue-50 to-indigo-100">
+      <section id="how-it-works" className="py-20 px-8 md:px-16 bg-[#FAFAFA]">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -368,7 +368,7 @@ const LandingPage = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-8 md:px-16 bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
+      <section className="py-20 px-8 md:px-16 bg-indigo-900 text-white">
         <div className="max-w-7xl mx-auto text-center">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
