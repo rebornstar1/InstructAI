@@ -2,9 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, Star, Book, MessageCircle, Home, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Brain, 
+  Star, 
+  Book, 
+  MessageCircle, 
+  Home, 
+  ChevronRight, 
+  Sparkles,
+  GraduationCap,
+  LayoutDashboard,
+  FileText,
+  Settings
+} from "lucide-react";
 
 import CourseCreationComponent from "./CourseCreationComponent";
 import CourseContentComponent from "./CourseContentComponent";
@@ -52,41 +63,91 @@ export default function Dashboard() {
     setIsLoaded(true);
   }, []);
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        duration: 0.5,
+        when: "beforeChildren",
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  };
+
+  const cardHoverVariants = {
+    hover: { 
+      scale: 1.02, 
+      boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
+      transition: { duration: 0.2 }
+    }
+  };
+
   // Suggested courses component
   const SuggestedCourses = () => (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay: 0.2 }}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
       className="mt-12"
     >
-      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Recommended Courses</h2>
+      <motion.div variants={itemVariants} className="text-center space-y-4 mb-8">
+        <h2 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
+          <Sparkles className="h-5 w-5 text-blue-500" />
+          <span>Recommended Courses</span>
+          <Sparkles className="h-5 w-5 text-blue-500" />
+        </h2>
+        <p className="text-gray-500 max-w-2xl mx-auto">
+          These courses are tailored to your learning history and goals
+        </p>
+      </motion.div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {rawCourses.map((course, index) => (
           <motion.div
             key={index}
-            initial={{ opacity: 0, y: 20 }}
-            animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: 0.1 * index + 0.3 }}
-            className="bg-white dark:bg-gray-800 p-6 rounded-xl hover:shadow-lg transition duration-300 border border-gray-100 dark:border-gray-700"
-            onClick={() => {
-              setGeneratedCourse({
-                title: course.title,
-                description: course.description,
-                modules: [{
-                  title: "Introduction",
-                  lessons: [{ title: "Getting Started" }]
-                }]
-              });
-              setActiveTab("course");
-            }}
+            variants={itemVariants}
+            whileHover="hover"
+            whileTap={{ scale: 0.98 }}
+            className="cursor-pointer"
           >
-            <div className="text-4xl mb-4">{course.icon}</div>
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">{course.title}</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">{course.description}</p>
-            <div className="mt-4 flex items-center text-blue-600 dark:text-blue-400 text-sm font-medium">
-              Start Course
-              <ChevronRight className="ml-1 h-4 w-4" />
+            <div 
+              className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1"
+              variants={cardHoverVariants}
+              onClick={() => {
+                setGeneratedCourse({
+                  title: course.title,
+                  description: course.description,
+                  modules: [{
+                    title: "Introduction",
+                    lessons: [{ title: "Getting Started" }]
+                  }]
+                });
+                setActiveTab("course");
+              }}
+            >
+              <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+              <div className="p-6">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  {course.icon ? (
+                    <span className="text-2xl">{course.icon}</span>
+                  ) : (
+                    <Book className="h-5 w-5 text-blue-500" />
+                  )}
+                  {course.title}
+                </h3>
+                <p className="text-slate-600 mt-3">{course.description}</p>
+                <div className="mt-4 flex items-center text-blue-600 text-sm font-medium">
+                  Start Course
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </div>
+              </div>
             </div>
           </motion.div>
         ))}
@@ -97,12 +158,12 @@ export default function Dashboard() {
   // Stats cards component
   const StatsCards = () => (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6 }}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
       className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
     >
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-md">
+      <motion.div variants={itemVariants} className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-md">
         <div className="flex justify-between items-start">
           <div>
             <p className="text-blue-100">Total XP</p>
@@ -116,134 +177,189 @@ export default function Dashboard() {
           <div className="bg-white h-full rounded-full" style={{ width: "65%" }}></div>
         </div>
         <p className="text-sm mt-2 text-blue-100">65% to next level</p>
-      </div>
+      </motion.div>
       
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
+      <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-gray-500 dark:text-gray-400">Courses Started</p>
-            <h3 className="text-3xl font-bold mt-1 text-gray-800 dark:text-white">5</h3>
+            <p className="text-slate-500">Courses Started</p>
+            <h3 className="text-3xl font-bold mt-1 text-slate-800">5</h3>
           </div>
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
             <Book className="h-6 w-6" />
           </div>
         </div>
-        <p className="text-sm mt-6 text-blue-600 dark:text-blue-400 font-medium">View all courses</p>
-      </div>
+        <p className="text-sm mt-6 text-blue-600 font-medium">View all courses</p>
+      </motion.div>
       
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
+      <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-gray-500 dark:text-gray-400">AI Tutor Chats</p>
-            <h3 className="text-3xl font-bold mt-1 text-gray-800 dark:text-white">12</h3>
+            <p className="text-slate-500">AI Tutor Chats</p>
+            <h3 className="text-3xl font-bold mt-1 text-slate-800">12</h3>
           </div>
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
             <MessageCircle className="h-6 w-6" />
           </div>
         </div>
-        <p className="text-sm mt-6 text-blue-600 dark:text-blue-400 font-medium cursor-pointer" onClick={() => setActiveTab("chat")}>
+        <p className="text-sm mt-6 text-blue-600 font-medium cursor-pointer" onClick={() => setActiveTab("chat")}>
           Continue conversation
         </p>
-      </div>
+      </motion.div>
     </motion.div>
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FAFAFA] dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
       {/* HEADER */}
-      <nav className="flex justify-between items-center py-6 px-8 md:px-16 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md fixed w-full z-50 shadow-sm">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex items-center gap-2"
-        >
-          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-            <Brain className="text-white h-6 w-6" />
+      <nav className="fixed w-full z-50 backdrop-blur-sm bg-white/80 border-b border-slate-200">
+        <div className="max-w-screen-xl mx-auto px-6 md:px-8">
+          <div className="flex items-center justify-between h-20">
+            {/* Logo */}
+            <Link href="/">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="h-10 w-10 bg-blue-600 rounded-tl-2xl rounded-br-2xl rotate-12"></div>
+                  <div className="absolute top-1 left-1 h-8 w-8 bg-indigo-500 rounded-tl-xl rounded-br-xl rotate-12 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg -rotate-12">C</span>
+                  </div>
+                </div>
+                <span className="font-extrabold tracking-tight text-slate-800">
+                  Instruct<span className="text-blue-600">AI</span>
+                </span>
+              </div>
+            </Link>
+            
+            {/* Desktop navigation */}
+            <div className="hidden md:flex items-center space-x-1">
+              <NavLink href="#" active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")}>Dashboard</NavLink>
+              <NavLink href="#" active={activeTab === "course"} onClick={() => generatedCourse && setActiveTab("course")} disabled={!generatedCourse}>Courses</NavLink>
+              <NavLink href="#" active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>AI Tutor</NavLink>
+              
+              <div className="ml-8 flex items-center space-x-4">
+                <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+                  <Star className="h-4 w-4 mr-1" />
+                  <span>{totalXP} XP</span>
+                </div>
+                <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
+                  <span className="font-medium text-slate-600">SP</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Mobile menu button */}
+            <div className="md:hidden">
+              <button className="text-slate-700 hover:text-blue-600 focus:outline-none">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <span className="font-bold text-xl text-gray-800 dark:text-white">InstructAI</span>
-        </motion.div>
-        
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="hidden md:flex gap-8 items-center"
-        >
-          <button 
-            className={`transition ${activeTab === "dashboard" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"}`}
-            onClick={() => setActiveTab("dashboard")}
-          >
-            Dashboard
-          </button>
-          <button 
-            className={`transition ${activeTab === "course" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"}`}
-            onClick={() => generatedCourse && setActiveTab("course")}
-            disabled={!generatedCourse}
-          >
-            Course
-          </button>
-          <button 
-            className={`transition ${activeTab === "chat" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"}`}
-            onClick={() => setActiveTab("chat")}
-          >
-            AI Tutor
-          </button>
-        </motion.div>
-        
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex items-center gap-3"
-        >
-          <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm shadow-md">
-            <Star className="h-4 w-4 mr-1" />
-            <span>{totalXP} XP</span>
-          </div>
-          <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
-            <span className="font-medium text-gray-600 dark:text-gray-300">US</span>
-          </div>
-        </motion.div>
+        </div>
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 pt-28 pb-16 px-8 md:px-16 mx-auto w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-        >
-          <div className="flex items-center mb-2">
-            <Home className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-            <span className="mx-2 text-gray-500 dark:text-gray-400">/</span>
-            <span className="text-blue-600 dark:text-blue-400 font-medium">
-              {activeTab === "dashboard" ? "Dashboard" : 
-               activeTab === "course" ? "Course Content" : "AI Tutor Chat"}
-            </span>
-          </div>
-          
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white mb-2 py-3">
-            {activeTab === "dashboard" ? "Welcome Sanjay Paul, let's get started!" : 
-             activeTab === "course" ? generatedCourse?.title || "Course Content" : "AI Tutor Chat"}
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300 py-4">
-            {activeTab === "dashboard" ? "Continue your learning journey, explore new courses, or chat with your AI tutor." : 
-             activeTab === "course" ? generatedCourse?.description || "Explore your course materials and track your progress." : 
-             "Ask questions, get explanations, and deepen your understanding with your personal AI tutor."}
-          </p>
-
+      <main className="pt-32 md:pt-32 pb-16 px-6 md:px-8 max-w-screen-xl mx-auto">
+        <AnimatePresence mode="wait">
           {activeTab === "dashboard" && (
-            <>
-              <StatsCards />
-              
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+              className="space-y-8"
+            >
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="md:w-7/12">
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    <motion.div className="inline-block mb-3">
+                      <div className="flex items-center">
+                        <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+                        <span className="text-blue-600 font-medium">Your Learning Dashboard</span>
+                      </div>
+                    </motion.div>
+                    
+                    <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+                      Welcome back, <span className="relative">
+                        <span className="relative z-10">Sanjay</span>
+                        <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
+                      </span>
+                    </h1>
+                    
+                    <p className="text-lg text-slate-600 mb-8 max-w-2xl">
+                      Continue your learning journey, explore new courses, or chat with your AI tutor to enhance your skills.
+                    </p>
+                  </motion.div>
+                  
+                  <StatsCards />
+                </div>
+                
+                <div className="md:w-5/12">
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.7, delay: 0.2 }}
+                  >
+                    {/* Activity card */}
+                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                      <div className="p-6 border-b border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-800">Recent Activity</h3>
+                      </div>
+                      <div className="divide-y divide-slate-200">
+                        {[
+                          {
+                            title: "Completed lesson",
+                            description: "Introduction to Python Variables",
+                            time: "2 hours ago",
+                            icon: <CheckIcon />
+                          },
+                          {
+                            title: "Started new course",
+                            description: "Web Development Fundamentals",
+                            time: "Yesterday",
+                            icon: <PlayIcon />
+                          },
+                          {
+                            title: "Earned achievement",
+                            description: "Coding Streak: 7 Days",
+                            time: "3 days ago",
+                            icon: <TrophyIcon />
+                          }
+                        ].map((activity, i) => (
+                          <div key={i} className="p-4 flex items-start hover:bg-slate-50 transition-colors">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 flex-shrink-0">
+                              {activity.icon}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-slate-800">{activity.title}</h4>
+                              <p className="text-sm text-slate-600">{activity.description}</p>
+                            </div>
+                            <div className="text-xs text-slate-500">{activity.time}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-4 bg-slate-50 text-center">
+                        <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
+                          View all activity
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              </div>
+
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
-                animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 border border-gray-100 dark:border-gray-700 mb-10"
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="bg-white rounded-xl shadow-md p-8 border border-slate-200"
               >
-                {/* <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Generate New Course</h2> */}
                 <CourseCreationComponent
                   rawCourses={rawCourses}
                   setGeneratedCourse={setGeneratedCourse}
@@ -254,86 +370,200 @@ export default function Dashboard() {
               </motion.div>
               
               <SuggestedCourses />
-            </>
+            </motion.div>
           )}
 
           {activeTab === "course" && (
             <motion.div 
+              key="course"
               initial={{ opacity: 0, y: 20 }}
-              animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6 }}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 border border-gray-100 dark:border-gray-700 mt-6"
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
             >
-              <CourseContentComponent
-                generatedCourse={generatedCourse}
-                setMessages={setMessages}
-              />
+              <div className="inline-block mb-3">
+                <div className="flex items-center">
+                  <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+                  <span className="text-blue-600 font-medium">Course Content</span>
+                </div>
+              </div>
+              
+              <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+                {generatedCourse?.title || "Course Content"}
+              </h1>
+              
+              <p className="text-lg text-slate-600 mb-8">
+                {generatedCourse?.description || "Explore your course materials and track your progress."}
+              </p>
+              
+              <div className="bg-white rounded-xl shadow-md p-8 border border-slate-200">
+                <CourseContentComponent
+                  generatedCourse={generatedCourse}
+                  setMessages={setMessages}
+                />
+              </div>
             </motion.div>
           )}
 
           {activeTab === "chat" && (
             <motion.div 
+              key="chat"
               initial={{ opacity: 0, y: 20 }}
-              animate={isLoaded ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6 }}
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 border border-gray-100 dark:border-gray-700 mt-6"
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
             >
-              <AITutorChatComponent messages={messages} setMessages={setMessages} />
+              <div className="inline-block mb-3">
+                <div className="flex items-center">
+                  <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+                  <span className="text-blue-600 font-medium">AI Tutor</span>
+                </div>
+              </div>
+              
+              <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+                Chat with Your AI Tutor
+              </h1>
+              
+              <p className="text-lg text-slate-600 mb-8">
+                Ask questions, get explanations, and deepen your understanding with your personal AI tutor.
+              </p>
+              
+              <div className="bg-white rounded-xl shadow-md p-8 border border-slate-200">
+                <AITutorChatComponent messages={messages} setMessages={setMessages} />
+              </div>
             </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-white dark:bg-gray-800 py-8 px-8 md:px-16 border-t border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div>
-            <div className="flex items-center gap-2 mb-6">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <Brain className="text-white h-6 w-6" />
+      <footer className="bg-slate-900 text-white">
+        <div className="max-w-screen-xl mx-auto px-6 md:px-8">
+          {/* Main footer content */}
+          <div className="py-16 grid grid-cols-1 md:grid-cols-4 gap-12 md:gap-8">
+            <div className="md:col-span-1">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="relative">
+                  <div className="h-10 w-10 bg-blue-600 rounded-tl-2xl rounded-br-2xl rotate-12"></div>
+                  <div className="absolute top-1 left-1 h-8 w-8 bg-indigo-500 rounded-tl-xl rounded-br-xl rotate-12 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg -rotate-12">C</span>
+                  </div>
+                </div>
+                <span className="font-extrabold tracking-tight">
+                  Instruct<span className="text-blue-500">AI</span>
+                </span>
               </div>
-              <span className="font-bold text-xl text-gray-800 dark:text-white">InstructAI</span>
+              <p className="text-slate-400 mb-6">
+                Revolutionizing personalized education through AI-powered learning experiences.
+              </p>
+              <div className="flex space-x-4">
+                {['twitter', 'facebook', 'linkedin', 'instagram'].map(social => (
+                  <a key={social} href="#" className="text-slate-500 hover:text-blue-400 transition">
+                    <div className="w-8 h-8 rounded-full border border-slate-700 flex items-center justify-center">
+                      <span className="sr-only">{social}</span>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
+                      </svg>
+                    </div>
+                  </a>
+                ))}
+              </div>
             </div>
-            <p className="text-gray-600 dark:text-gray-400">
-              Create personalized learning experiences with the power of AI.
+            
+            <div>
+              <h3 className="font-bold text-lg mb-4">Product</h3>
+              <ul className="space-y-2">
+                {['Features', 'Pricing', 'Use Cases', 'Roadmap', 'Integrations'].map(link => (
+                  <li key={link}>
+                    <a href="#" className="text-slate-400 hover:text-white transition">
+                      {link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-bold text-lg mb-4">Resources</h3>
+              <ul className="space-y-2">
+                {['Documentation', 'Blog', 'Community', 'Support', 'Learning Center'].map(link => (
+                  <li key={link}>
+                    <a href="#" className="text-slate-400 hover:text-white transition">
+                      {link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-bold text-lg mb-4">Company</h3>
+              <ul className="space-y-2">
+                {['About Us', 'Careers', 'Press', 'Privacy Policy', 'Terms of Service'].map(link => (
+                  <li key={link}>
+                    <a href="#" className="text-slate-400 hover:text-white transition">
+                      {link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          
+          {/* Bottom footer */}
+          <div className="py-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-slate-500 text-sm mb-4 md:mb-0">
+              &copy; {new Date().getFullYear()} InstructAI, Inc. All rights reserved.
             </p>
+            <div className="flex space-x-6">
+              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Privacy</a>
+              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Terms</a>
+              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Cookies</a>
+              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Contact</a>
+            </div>
           </div>
-          
-          <div>
-            <h3 className="font-bold mb-4 text-lg text-gray-800 dark:text-white">Learning</h3>
-            <ul className="space-y-2">
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">All Courses</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Learning Paths</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Study Groups</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Resources</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="font-bold mb-4 text-lg text-gray-800 dark:text-white">Account</h3>
-            <ul className="space-y-2">
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Profile</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Settings</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Billing</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Help Center</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="font-bold mb-4 text-lg text-gray-800 dark:text-white">Company</h3>
-            <ul className="space-y-2">
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">About Us</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Blog</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Privacy Policy</a></li>
-              <li><a href="#" className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">Terms of Service</a></li>
-            </ul>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-gray-200 dark:border-gray-700 text-center text-gray-500 dark:text-gray-400">
-          <p>&copy; 2025 InstructAI. All rights reserved.</p>
         </div>
       </footer>
     </div>
   );
 }
+
+// Helper component for navigation links
+const NavLink = ({ href, active, onClick, disabled, children }) => (
+  <a 
+    href={href} 
+    onClick={(e) => {
+      e.preventDefault();
+      if (!disabled && onClick) onClick();
+    }} 
+    className={`px-3 py-2 rounded-md transition-colors relative group ${
+      disabled ? 'text-slate-400 cursor-not-allowed' :
+      active ? 'text-blue-700' : 'text-slate-700 hover:text-blue-600'
+    }`}
+  >
+    {children}
+    <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 transform origin-left transition-transform ${
+      active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+    }`}></span>
+  </a>
+);
+
+// Simple icon components for activity feed
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
+
+const PlayIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+  </svg>
+);
+
+const TrophyIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M6 3.75A2.75 2.75 0 018.75 1h2.5A2.75 2.75 0 0114 3.75v.443c.795.077 1.584.24 2.287.491a.75.75 0 11-.574 1.385c-.708-.25-1.466-.4-2.212-.465V6.75a2.75 2.75 0 01-2.75 2.75h-2.5A2.75 2.75 0 016 6.75v-3zm7.5 3V3.75A1.25 1.25 0 0012.25 2.5h-2.5A1.25 1.25 0 008.5 3.75v3a1.25 1.25 0 001.25 1.25h2.5A1.25 1.25 0 0013.5 6.75z" clipRule="evenodd" />
+    <path d="M12.78 15.81l-3.214-4.018a.75.75 0 00-1.173 0L5.18 15.81a.75.75 0 001.173.938l2.147-2.683v3.684a.75.75 0 001.5 0v-3.684l2.147 2.683a.75.75 0 001.173-.938z" />
+  </svg>
+);

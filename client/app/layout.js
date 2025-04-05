@@ -1,32 +1,20 @@
-import localFont from "next/font/local";
-import "./globals.css";
+import { Inter } from 'next/font/google';
+import './globals.css';
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: "Instruct AI",
-  description: "A personalized AI tutor",
+  title: 'InstructAI - Personalized Education Platform',
+  description: 'Create bespoke education experiences with AI-powered courses',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="icon" href="public/favicon.ico" sizes="any" />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${inter.className} min-h-screen flex flex-col`}>
+        <main className="">
+          {children}
+        </main>
       </body>
     </html>
   );
