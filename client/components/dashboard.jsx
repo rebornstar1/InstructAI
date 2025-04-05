@@ -149,7 +149,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="flex flex-col min-h-screen bg-[#FAFAFA] dark:from-gray-900 dark:to-gray-800">
       {/* HEADER */}
       <nav className="flex justify-between items-center py-6 px-8 md:px-16 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md fixed w-full z-50 shadow-sm">
         <motion.div 
@@ -243,7 +243,7 @@ export default function Dashboard() {
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 border border-gray-100 dark:border-gray-700 mb-10"
               >
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Generate New Course</h2>
+                {/* <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Generate New Course</h2> */}
                 <CourseCreationComponent
                   rawCourses={rawCourses}
                   setGeneratedCourse={setGeneratedCourse}

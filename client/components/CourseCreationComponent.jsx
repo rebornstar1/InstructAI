@@ -456,7 +456,7 @@ export default function CourseCreationComponent({
             </p>
           </motion.div>
 
-          {/* Suggested Courses Section */}
+          {/* Suggested Courses Section
           <motion.div variants={itemVariants} className="space-y-4">
             <h2 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
               <Sparkles className="h-5 w-5 text-blue-500" />
@@ -496,7 +496,7 @@ export default function CourseCreationComponent({
                 </motion.div>
               ))}
             </div>
-          </motion.div>
+          </motion.div> */}
 
           {/* Generate New Course Section */}
           <motion.div variants={itemVariants}>
