@@ -16,6 +16,8 @@ import {
   FileText,
   Settings
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext"; // Changed from Clerk to our custom auth
+import { fetchWithAuth } from "@/lib/api";
 
 import CourseCreationComponent from "./CourseCreationComponent";
 import CourseContentComponent from "./CourseContentComponent";
@@ -25,6 +27,11 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [generatedCourse, setGeneratedCourse] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { user } = useAuth();
+  
   const [messages, setMessages] = useState([
     {
       role: "ai",
@@ -33,8 +40,7 @@ export default function Dashboard() {
     },
   ]);
 
-  // Example XP and raw course suggestions
-  const totalXP = 1000;
+  // Example raw course suggestions - will still be hardcoded for the UI
   const rawCourses = [
     {
       title: "Mathematics: Algebra Basics",
@@ -58,10 +64,45 @@ export default function Dashboard() {
     },
   ];
 
-  // Set isLoaded to true after component mounts (for animations)
+  // Fetch user profile data from the backend
   useEffect(() => {
-    setIsLoaded(true);
-  }, []);
+    console.log("HIII")
+    console.log("USSS" ,user)
+    async function fetchUserProfile() {
+      
+      try {
+        
+        if (!user) return;
+        console.log("doing")
+        
+        setLoading(true);
+        const response = await fetchWithAuth('/users/profile');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch user profile');
+        }
+        console.log("REsponse" , response.json)
+        const data = await response.json();
+        
+        setUserProfile(data);
+      } catch (err) {
+        
+        console.error('Error fetching user profile:', err);
+        setError('Could not load user profile data');
+      } finally {
+        
+        setLoading(false);
+        setIsLoaded(true);
+      }
+    }
+
+    fetchUserProfile();
+    
+  }, [user]);
+  
+  useEffect(() => {
+    console.log("USerprofile" , userProfile)
+  }, [userProfile])
 
   // Animation variants
   const containerVariants = {
@@ -167,7 +208,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-start">
           <div>
             <p className="text-blue-100">Total XP</p>
-            <h3 className="text-3xl font-bold mt-1">{totalXP}</h3>
+            <h3 className="text-3xl font-bold mt-1">{userProfile?.xp || 0}</h3>
           </div>
           <div className="p-2 bg-white/20 rounded-lg">
             <Star className="h-6 w-6" />
@@ -183,7 +224,9 @@ export default function Dashboard() {
         <div className="flex justify-between items-start">
           <div>
             <p className="text-slate-500">Courses Started</p>
-            <h3 className="text-3xl font-bold mt-1 text-slate-800">5</h3>
+            <h3 className="text-3xl font-bold mt-1 text-slate-800">
+              {userProfile?.completedCourses?.length || 10}
+            </h3>
           </div>
           <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
             <Book className="h-6 w-6" />
@@ -239,10 +282,10 @@ export default function Dashboard() {
               <div className="ml-8 flex items-center space-x-4">
                 <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
                   <Star className="h-4 w-4 mr-1" />
-                  <span>{totalXP} XP</span>
+                  <span>{userProfile?.xp} XP</span>
                 </div>
                 <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
-                  <span className="font-medium text-slate-600">SP</span>
+                  <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
                 </div>
               </div>
             </div>
@@ -287,7 +330,7 @@ export default function Dashboard() {
                     
                     <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
                       Welcome back, <span className="relative">
-                        <span className="relative z-10">Sanjay</span>
+                        <span className="relative z-10">{userProfile?.username}</span>
                         <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
                       </span>
                     </h1>

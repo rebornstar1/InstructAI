@@ -30,7 +30,7 @@ export function SignUpGoogle() {
 
   useEffect(() => {
     if (user) {
-      router.push('/dashboard') // Redirect to dashboard after successful signup
+      router.push('/home') // Redirect to dashboard after successful signup
     }
   }, [user, router])
 

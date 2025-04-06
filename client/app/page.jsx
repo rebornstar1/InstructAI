@@ -79,12 +79,16 @@ const LandingPage = () => {
               <NavLink href="#pricing" active={activeSection === 'pricing'}>Solutions</NavLink>
               
               <div className="ml-8 flex items-center space-x-4">
-                <button className="font-medium text-slate-700 hover:text-blue-700 transition-colors">
-                  Log in
-                </button>
-                <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium transform transition hover:translate-y-[-2px] hover:shadow-lg">
-                  Start Free
-                </button>
+                <Link href="/login">
+                  <button className="text-slate-700 py-2 font-medium">
+                      Log in
+                  </button>
+                </Link>
+                <Link href= "/register">
+                  <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg font-medium">
+                    Start Free
+                  </button>
+                </Link>
               </div>
             </div>
             
@@ -106,28 +110,34 @@ const LandingPage = () => {
           </div>
           
           {/* Mobile menu */}
-          {isMenuOpen && (
-            <div className="md:hidden py-4 border-t border-slate-200">
-              <div className="flex flex-col space-y-3 px-2">
-                <MobileNavLink href="#home" onClick={() => setIsMenuOpen(false)}>Home</MobileNavLink>
-                <MobileNavLink href="#features" onClick={() => setIsMenuOpen(false)}>Platform</MobileNavLink>
-                <MobileNavLink href="#methodology" onClick={() => setIsMenuOpen(false)}>Methodology</MobileNavLink>
-                <MobileNavLink href="#pricing" onClick={() => setIsMenuOpen(false)}>Solutions</MobileNavLink>
-                <div className="pt-4 border-t border-slate-200 flex flex-col space-y-3">
-                  <button className="text-slate-700 py-2 font-medium">
-                    Log in
-                  </button>
-                  <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg font-medium">
+                {isMenuOpen && (
+                <div className="md:hidden py-4 border-t border-slate-200">
+                  <div className="flex flex-col space-y-3 px-2">
+                  <MobileNavLink href="#home" onClick={() => setIsMenuOpen(false)}>Home</MobileNavLink>
+                  <MobileNavLink href="#features" onClick={() => setIsMenuOpen(false)}>Platform</MobileNavLink>
+                  <MobileNavLink href="#methodology" onClick={() => setIsMenuOpen(false)}>Methodology</MobileNavLink>
+                  <MobileNavLink href="#pricing" onClick={() => setIsMenuOpen(false)}>Solutions</MobileNavLink>
+                  <div className="pt-4 border-t border-slate-200 flex flex-col space-y-3">
+                    
+                    <Link href="/login">
+                    <button className="text-slate-700 py-2 font-medium">
+                      Log in
+                    </button>
+                    </Link>
+                    
+                    <Link href= "/register">
+                    <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg font-medium">
                     Start Free
-                  </button>
+                    </button>
+                    </Link>
+                  </div>
+                  </div>
                 </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
-      </nav>
+              </nav>
 
-      {/* Hero Section - Asymmetrical and distinctive */}
+              {/* Hero Section - Asymmetrical and distinctive */}
       <section id="home" className="pt-32 md:pt-40 pb-16 md:pb-24 px-6 md:px-8">
         <div className="max-w-screen-xl mx-auto">
           <div className="flex flex-col md:flex-row items-center">
