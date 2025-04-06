@@ -1,123 +1,167 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle, PlayCircle, Award } from "lucide-react";
-import { completeSubmodule } from "@/services/progressApi";
-import { toast } from "@/components/ui/use-toast"; // Fixed import
+import { Progress } from "@/components/ui/progress";
+import { CheckCircle, Play, Clock } from "lucide-react";
+import { completeVideo } from "@/services/progressApi";
 
 /**
- * Component for tracking video progress 
+ * VideoProgressTracker - Tracks and reports video completion progress
+ * 
+ * @param {Object} props - Component props
+ * @param {string} props.moduleId - ID of the current module
+ * @param {number} props.videoIndex - Index of the video in the module
+ * @param {string} props.videoUrl - URL of the video
+ * @param {boolean} props.isCompleted - Whether the video has already been marked as completed
+ * @param {Function} props.onProgressUpdate - Callback when progress updates with progress data
  */
-export default function VideoProgressTracker({ 
+const VideoProgressTracker = ({ 
   moduleId, 
-  videoIndex,
-  videoUrl,
-  isCompleted = false, 
+  videoIndex, 
+  videoUrl, 
+  isCompleted = false,
   onProgressUpdate 
-}) {
-  const [markingComplete, setMarkingComplete] = useState(false);
+}) => {
+  const [watching, setWatching] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [completed, setCompleted] = useState(isCompleted);
-
-  // Generate a video ID based on index or URL
-  const getVideoId = () => {
-    // Use index as the video ID (not ideal, but works for demo purposes)
-    // In a real app, you'd want to extract this from the actual video metadata
-    return 9000 + videoIndex; // Using 9000+ range to avoid collision with other submodule IDs
-  };
-
-  // Update this section in VideoProgressTracker.jsx
-
-const handleMarkAsWatched = async () => {
-    if (completed || markingComplete) return;
+  const [loading, setLoading] = useState(false);
   
+  // Generate a stable video ID for tracking
+  const videoId = `video-${moduleId}-${videoIndex}`;
+  
+  // Progress simulation for demo purposes
+  // In a real app, this would track actual video playback progress
+  useEffect(() => {
+    let interval;
+    
+    if (watching && progress < 100) {
+      interval = setInterval(() => {
+        setProgress(prev => {
+          const newProgress = Math.min(prev + 5, 100);
+          
+          // Automatically mark as complete when reaching 100%
+          if (newProgress === 100 && !completed) {
+            handleMarkComplete();
+          }
+          
+          return newProgress;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [watching, progress, completed]);
+  
+  const handleStartWatching = () => {
+    setWatching(true);
+  };
+  
+  const handleStopWatching = () => {
+    setWatching(false);
+  };
+  
+  const handleMarkComplete = async () => {
+    if (completed || loading) return;
+    
+    setLoading(true);
+    
     try {
-      setMarkingComplete(true);
+      // Call API to mark video as complete
+      const progressData = await completeVideo(moduleId, videoId);
       
-      // Get numeric video ID
-      const videoId = getVideoId();
-      
-      // Parse moduleId to ensure it's a number if it's a string
-      const moduleIdNumber = typeof moduleId === 'string' ? parseInt(moduleId, 10) : moduleId;
-      
-      // Prepare request data
-      const requestData = {
-        moduleId: moduleIdNumber,
-        submoduleId: videoId
-      };
-      
-      // Call API to complete the submodule
-      const progressData = await completeSubmodule(requestData);
-      
+      // Update local state
       setCompleted(true);
+      setProgress(100);
       
-      // Show success toast with XP
-      toast({
-        title: "Video Completed!",
-        description: `You earned 10 XP from this video.`,
-      });
-      
-      // Notify parent component of progress update
-      if (onProgressUpdate) {
+      // Notify parent component
+      if (onProgressUpdate && progressData) {
         onProgressUpdate(progressData);
       }
     } catch (error) {
-      console.error("Error marking video as watched:", error);
-      toast({
-        title: "Error",
-        description: "Failed to mark video as watched. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Error marking video as complete:", error);
     } finally {
-      setMarkingComplete(false);
+      setLoading(false);
+      setWatching(false);
     }
   };
-
+  
   return (
-    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-4 bg-purple-50/50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800/30">
-      <div className="flex items-center gap-3">
-        {completed ? (
-          <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
-            <CheckCircle className="h-5 w-5" />
-          </div>
-        ) : (
-          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600 dark:text-purple-400">
-            <PlayCircle className="h-5 w-5" />
-          </div>
-        )}
-        
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-800 dark:text-gray-200">
-              {completed ? "Completed" : "Track Your Progress"}
-            </span>
-            
-            {completed && (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
-                <Award className="h-3.5 w-3.5 mr-1" />
-                +10 XP
-              </Badge>
+    <div className="mt-4 space-y-3">
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center text-sm text-gray-500">
+          <div className="flex items-center">
+            {watching ? (
+              <Clock className="w-4 h-4 mr-1 text-blue-500 animate-pulse" />
+            ) : completed ? (
+              <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+            ) : (
+              <Play className="w-4 h-4 mr-1" />
             )}
+            <span>
+              {completed ? "Completed" : watching ? "Watching..." : "Video Progress"}
+            </span>
           </div>
-          
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {completed 
-              ? "You've marked this video as watched" 
-              : "Mark this video as watched to track your progress and earn XP"}
-          </p>
+          <span>{progress}%</span>
         </div>
+        
+        <Progress 
+          value={progress} 
+          className={`h-2 ${completed ? "bg-green-100" : "bg-gray-100"}`} 
+        />
       </div>
       
-      {!completed && (
-        <Button 
-          onClick={handleMarkAsWatched}
-          disabled={markingComplete}
-          className="bg-purple-600 hover:bg-purple-700 text-white"
-        >
-          {markingComplete ? "Updating..." : "Mark as Watched"}
-        </Button>
-      )}
+      {/* Control buttons */}
+      <div className="flex gap-3">
+        {!completed ? (
+          <>
+            {watching ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleStopWatching}
+              >
+                Pause Tracking
+              </Button>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleStartWatching}
+              >
+                <Play className="w-4 h-4" />
+                Resume Watching
+              </Button>
+            )}
+            
+            <Button 
+              className="gap-2"
+              size="sm"
+              onClick={handleMarkComplete}
+              disabled={loading}
+            >
+              <CheckCircle className="w-4 h-4" />
+              {loading ? "Updating..." : "Mark as Complete"}
+            </Button>
+          </>
+        ) : (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+            disabled
+          >
+            <CheckCircle className="w-4 h-4" />
+            Video Completed
+          </Button>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default VideoProgressTracker;

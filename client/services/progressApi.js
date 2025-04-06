@@ -1,100 +1,117 @@
 // src/services/progressApi.js
 const API_BASE_URL = 'http://localhost:8007';
 
-/**
- * Enroll the current user in a course
- * @param {number} courseId - Course ID to enroll in
- * @returns {Promise} - Course progress data
- */
 export const enrollInCourse = async (courseId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/courses/${courseId}/enroll`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to enroll in course');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error enrolling in course:', error);
-    throw error;
-  }
-};
-
-/**
- * Get course progress for the current user
- * @param {number} courseId - Course ID to get progress for
- * @returns {Promise} - Course progress data
- */
-export const getCourseProgress = async (courseId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/courses/${courseId}`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-
-    if (!response.ok) {
-      // If 404, course might not be enrolled yet
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error('Failed to get course progress');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error getting course progress:', error);
-    return null;
-  }
-};
-
-/**
- * Get enhanced course data with progress information
- * @param {number} courseId - Course ID to get
- * @returns {Promise} - Enhanced course data with progress
- */
-export const getCourseWithProgress = async (courseId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/courses/simplified/${courseId}/with-progress`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get course with progress');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error getting course with progress:', error);
-    throw error;
-  }
-};
-
-export const getModuleProgress = async (moduleId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/progress/modules/${moduleId}`, {
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/enroll`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, courseId })
       });
-  
+      
       if (!response.ok) {
-        throw new Error("Failed to fetch module progress");
+        throw new Error(`Failed to enroll in course: ${response.statusText}`);
       }
-  
+      
       return await response.json();
     } catch (error) {
-      console.error("Error fetching module progress:", error);
+      console.error('Error enrolling in course:', error);
       throw error;
+    }
+  };
+
+/**
+ * Get progress for a specific course
+ * @param {string} courseId - Course ID
+ * @returns {Promise<Object>} - Course progress data
+ */
+export const getCourseProgress = async (courseId) => {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) return null;
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/course/${courseId}?userId=${userId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch course progress: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching course progress:', error);
+      return null;
+    }
+  };
+
+/**
+ * Get detailed course progress with module progress map
+ * @param {string} courseId - Course ID
+ * @returns {Promise<Object>} - Detailed course progress data
+ */
+export const getCourseWithProgress = async (courseId) => {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) return { course: null, courseProgress: null };
+      
+      // Fetch course data
+      const courseResponse = await fetch(`${API_BASE_URL}/api/courses/simplified/${courseId}`);
+      if (!courseResponse.ok) {
+        throw new Error(`Failed to fetch course: ${courseResponse.statusText}`);
+      }
+      const course = await courseResponse.json();
+      
+      // Fetch progress data with module map
+      const progressResponse = await fetch(
+        `${API_BASE_URL}/api/progress/course/${courseId}/detailed?userId=${userId}`
+        , {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+      
+      if (!progressResponse.ok) {
+        return { course, courseProgress: null, moduleProgressMap: {} };
+      }
+      
+      const progressData = await progressResponse.json();
+      
+      return {
+        course,
+        courseProgress: progressData.courseProgress,
+        moduleProgressMap: progressData.moduleProgressMap || {}
+      };
+    } catch (error) {
+      console.error('Error fetching course with progress:', error);
+      return { course: null, courseProgress: null, moduleProgressMap: {} };
+    }
+  };
+  
+
+/**
+ * Get progress for a specific module
+ * @param {string} moduleId - Module ID
+ * @returns {Promise<Object>} - Module progress data
+ */
+export const getModuleProgress = async (moduleId) => {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) return null;
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}?userId=${userId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch module progress: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching module progress:', error);
+      return null;
     }
   };
 
@@ -145,88 +162,58 @@ export const getUserProgressSummary = async () => {
 };
 
 /**
- * Start a module (mark as in progress)
- * @param {number} moduleId - Module ID to start
- * @returns {Promise} - Module progress data
+ * Start a module
+ * @param {string} moduleId - Module ID
+ * @returns {Promise<Object>} - Updated module progress
  */
 export const startModule = async (moduleId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/modules/${moduleId}/start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to start module');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error starting module:', error);
-    throw error;
-  }
-};
-
-/**
- * Complete a submodule
- * @param {number} moduleId - Module ID
- * @param {number} submoduleId - Submodule ID to mark as completed
- * @returns {Promise} - Module progress data
- */
-/**
- * Complete a submodule (article or video)
- * @param {number} moduleId - The module ID
- * @param {number|string} submoduleId - The submodule ID (must be convertible to a Long)
- * @returns {Promise} - The updated module progress
- */
-/**
- * Complete a submodule (article or video)
- * @param {Object} requestData - Object containing moduleId and submoduleId
- * @returns {Promise} - The updated module progress
- */
-export const completeSubmodule = async (requestData) => {
     try {
-      console.log('Completing submodule:', requestData);
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
       
-      // Extract values from requestData
-      const { moduleId, submoduleId } = requestData;
-
-      console.log('Extracted moduleId:', moduleId, 'submoduleId:', submoduleId);
-      
-      // Ensure moduleId and submoduleId are numbers
-      const numericModuleId = parseInt(moduleId, 10);
-      const numericSubmoduleId = parseInt(submoduleId, 10);
-      
-      // Check if conversion resulted in valid numbers
-      if (isNaN(numericModuleId)) {
-        throw new Error("Invalid moduleId: must be convertible to a number");
-      }
-      
-      if (isNaN(numericSubmoduleId)) {
-        throw new Error("Invalid submoduleId: must be convertible to a number");
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/api/progress/submodules/complete`, {
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(localStorage.getItem('token') ? 
-            {'Authorization': `Bearer ${localStorage.getItem('token')}`} : {})
         },
-        credentials: 'include',
-        body: JSON.stringify({
-          moduleId,
-          submoduleId
-        })
+        body: JSON.stringify({ userId })
       });
-  
+      
       if (!response.ok) {
-        throw new Error(`Failed to complete submodule: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to start module: ${response.statusText}`);
       }
-  
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error starting module:', error);
+      throw error;
+    }
+  };
+
+/**
+ * Complete a submodule (article)
+ * @param {string} moduleId - Module ID
+ * @param {string} submoduleId - Submodule ID
+ * @returns {Promise<Object>} - Updated module progress
+ */
+export const completeSubmodule = async (moduleId, submoduleId) => {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/submodule/${submoduleId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to complete submodule: ${response.statusText}`);
+      }
+      
       return await response.json();
     } catch (error) {
       console.error('Error completing submodule:', error);
@@ -234,28 +221,48 @@ export const completeSubmodule = async (requestData) => {
     }
   };
 
-/**
- * Send the quiz completion data to the API
- * @param {number} moduleId - The ID of the module
- * @param {number} score - The score percentage
- * @returns {Promise<Object>} - Progress data
- */
-export const completeQuiz = async (moduleId, score) => {
+  export const completeVideo = async (moduleId, videoId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/progress/quiz/complete`, {
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/video/${videoId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ 
-          moduleId: moduleId,
-          score: score
-        })
+        
+        body: JSON.stringify({ userId })
       });
       
       if (!response.ok) {
-        throw new Error('Failed to complete quiz');
+        throw new Error(`Failed to complete video: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error completing video:', error);
+      throw error;
+    }
+  };
+
+  export const completeQuiz = async (moduleId, quizId, score) => {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+      
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/quiz/${quizId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ userId, score })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to complete quiz: ${response.statusText}`);
       }
       
       return await response.json();
@@ -263,6 +270,12 @@ export const completeQuiz = async (moduleId, score) => {
       console.error('Error completing quiz:', error);
       throw error;
     }
+  };
+
+  const getCurrentUserId = () => {
+    // In a real app, you would get this from your auth service
+    // For this demo, we'll use a placeholder or localStorage
+    return localStorage.getItem('userId') || '1'; // Default to user ID 1 for demo
   };
 
 /**

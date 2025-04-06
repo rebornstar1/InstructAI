@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -27,10 +28,10 @@ public class ProgressController {
     /**
      * Enroll the current user in a course
      */
-    @PostMapping("/courses/{courseId}/enroll")
-    public ResponseEntity<CourseProgressDto> enrollInCourse(@PathVariable Long courseId) {
+    @PostMapping("/enroll")
+    public ResponseEntity<CourseProgressDto> enrollInCourse(@RequestBody CourseEnrollmentDto request) {
         User currentUser = userService.getCurrentUser();
-        UserCourseProgress progress = progressService.enrollInCourse(currentUser.getId(), courseId);
+        UserCourseProgress progress = progressService.enrollInCourse(currentUser.getId(), request.getCourseId());
         return ResponseEntity.ok(CourseProgressDto.fromEntity(progress));
     }
 
@@ -52,7 +53,7 @@ public class ProgressController {
     /**
      * Get progress for a specific course
      */
-    @GetMapping("/courses/{courseId}")
+    @GetMapping("/course/{courseId}")
     public ResponseEntity<CourseProgressDto> getCourseProgress(@PathVariable Long courseId) {
         User currentUser = userService.getCurrentUser();
         UserCourseProgress progress = progressService.getCourseProgress(currentUser.getId(), courseId);
@@ -60,9 +61,21 @@ public class ProgressController {
     }
 
     /**
+     * Get detailed course progress with module progress map
+     */
+    @GetMapping("/course/{courseId}/detailed")
+    public ResponseEntity<Map<String, Object>> getCourseWithAllProgress(@PathVariable Long courseId) {
+        User currentUser = userService.getCurrentUser();
+        Map<String, Object> progressData = progressService.getCourseWithAllProgress(
+                currentUser.getId(), courseId);
+
+        return ResponseEntity.ok(progressData);
+    }
+
+    /**
      * Get progress for a specific module
      */
-    @GetMapping("/modules/{moduleId}")
+    @GetMapping("/module/{moduleId}")
     public ResponseEntity<ModuleProgressDto> getModuleProgress(@PathVariable Long moduleId) {
         User currentUser = userService.getCurrentUser();
         UserModuleProgress progress = progressService.getModuleProgress(currentUser.getId(), moduleId);
@@ -72,7 +85,7 @@ public class ProgressController {
     /**
      * Start a module (mark as in progress)
      */
-    @PostMapping("/modules/{moduleId}/start")
+    @PostMapping("/module/{moduleId}/start")
     public ResponseEntity<ModuleProgressDto> startModule(@PathVariable Long moduleId) {
         User currentUser = userService.getCurrentUser();
         UserModuleProgress progress = progressService.startModule(currentUser.getId(), moduleId);
@@ -82,22 +95,40 @@ public class ProgressController {
     /**
      * Mark a submodule as completed
      */
-    @PostMapping("/submodules/complete")
-    public ResponseEntity<ModuleProgressDto> completeSubmodule(@RequestBody SubmoduleCompletionDto request) {
+    @PostMapping("/module/{moduleId}/submodule/{submoduleId}/complete")
+    public ResponseEntity<ModuleProgressDto> completeSubmodule(
+            @PathVariable Long moduleId,
+            @PathVariable Long submoduleId) {
         User currentUser = userService.getCurrentUser();
         UserModuleProgress progress = progressService.completeSubmodule(
-                currentUser.getId(), request.getModuleId(), request.getSubmoduleId());
+                currentUser.getId(), moduleId, submoduleId);
+        return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    /**
+     * Mark a video as completed
+     */
+    @PostMapping("/module/{moduleId}/video/{videoId}/complete")
+    public ResponseEntity<ModuleProgressDto> completeVideo(
+            @PathVariable Long moduleId,
+            @PathVariable String videoId) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.completeVideo(
+                currentUser.getId(), moduleId, videoId);
         return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
     }
 
     /**
      * Complete a quiz with a score
      */
-    @PostMapping("/quiz/complete")
-    public ResponseEntity<ModuleProgressDto> completeQuiz(@RequestBody QuizCompletionDto request) {
+    @PostMapping("/module/{moduleId}/quiz/{quizId}/complete")
+    public ResponseEntity<ModuleProgressDto> completeQuiz(
+            @PathVariable Long moduleId,
+            @PathVariable Long quizId,
+            @RequestBody QuizCompletionDto request) {
         User currentUser = userService.getCurrentUser();
         UserModuleProgress progress = progressService.completeQuiz(
-                currentUser.getId(), request.getModuleId(), request.getScore());
+                currentUser.getId(), moduleId, request.getScore());
         return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
     }
 
@@ -149,19 +180,21 @@ public class ProgressController {
     /**
      * Check if a user can access a module
      */
-    @GetMapping("/modules/{moduleId}/access")
+    @GetMapping("/module/{moduleId}/access")
     public ResponseEntity<Boolean> canAccessModule(@PathVariable Long moduleId) {
         User currentUser = userService.getCurrentUser();
         boolean canAccess = progressService.canAccessModule(currentUser.getId(), moduleId);
         return ResponseEntity.ok(canAccess);
     }
 
-    @GetMapping("/courses/{courseId}/modules")
+    /**
+     * Get module progress for a course
+     */
+    @GetMapping("/course/{courseId}/modules")
     public ResponseEntity<List<ModuleProgressDto>> getModuleProgressByCourse(
             @PathVariable Long courseId) {
         User currentUser = userService.getCurrentUser();
 
-        // Update this line to use the corrected method name
         List<UserModuleProgress> progressList = userModuleProgressRepository
                 .findByUserIdAndModuleCourseId(currentUser.getId(), courseId);
 
@@ -170,5 +203,28 @@ public class ProgressController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(dtoList);
+    }
+
+    /**
+     * Recalculate module progress
+     */
+    @PostMapping("/module/{moduleId}/recalculate")
+    public ResponseEntity<ModuleProgressDto> recalculateModuleProgress(@PathVariable Long moduleId) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.recalculateModuleProgress(
+                currentUser.getId(), moduleId);
+        return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    /**
+     * Reset module progress (admin only)
+     */
+    @PostMapping("/module/{moduleId}/reset")
+    public ResponseEntity<ModuleProgressDto> resetModuleProgress(
+            @PathVariable Long moduleId,
+            @RequestParam Long userId) {
+        // In a real app, add security check to ensure only admins can call this
+        UserModuleProgress progress = progressService.resetModuleProgress(userId, moduleId);
+        return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
     }
 }

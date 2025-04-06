@@ -1,290 +1,394 @@
-"use client";
-
-import { useState } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { CheckCircle, X, HelpCircle, Award } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  AlertCircle, 
+  ChevronRight, 
+  ChevronLeft,
+  Award
+} from "lucide-react";
 import { completeQuiz } from "@/services/progressApi";
-import { toast } from "@/components/ui/use-toast"; // Fixed import
-import { Badge } from "@/components/ui/badge"; // Added missing Badge import
 
 /**
- * Enhanced Quiz component that submits quiz results to the API
+ * EnhancedQuiz - Interactive quiz component with progress tracking
+ * 
+ * @param {Object} props - Component props
+ * @param {string} props.moduleId - ID of the current module
+ * @param {Object} props.quiz - Quiz data with questions
+ * @param {Function} props.onClose - Callback when quiz is closed
+ * @param {Function} props.onProgressUpdate - Callback when progress updates with progress data
  */
-export default function EnhancedQuiz({ 
+const EnhancedQuiz = ({ 
   moduleId, 
   quiz, 
-  onClose, 
+  onClose,
   onProgressUpdate 
-}) {
-  const [quizAnswers, setQuizAnswers] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [quizScore, setQuizScore] = useState(0);
-  const [passedQuiz, setPassedQuiz] = useState(false);
-
-  const handleQuizAnswerChange = (questionIndex, option) => {
-    setQuizAnswers((prev) => ({ ...prev, [questionIndex]: option }));
+}) => {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes by default
+  const [showResults, setShowResults] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  
+  const questions = quiz.questions || [];
+  const totalQuestions = questions.length;
+  const quizId = quiz.id || quiz.quizId;
+  
+  // Parse time limit and set timer
+  useEffect(() => {
+    let seconds = 600; // Default 10 minutes
+    
+    if (quiz.timeLimit) {
+      // Try to parse time limit (e.g., "10 minutes", "1 hour")
+      const minutesMatch = quiz.timeLimit.match(/(\d+)\s*minute/i);
+      const hoursMatch = quiz.timeLimit.match(/(\d+)\s*hour/i);
+      
+      if (minutesMatch) {
+        seconds = parseInt(minutesMatch[1]) * 60;
+      } else if (hoursMatch) {
+        seconds = parseInt(hoursMatch[1]) * 3600;
+      }
+    }
+    
+    setTimeRemaining(seconds);
+  }, [quiz.timeLimit]);
+  
+  // Handle timer countdown
+  useEffect(() => {
+    if (quizCompleted || showResults) return;
+    
+    const timer = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmitQuiz();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [quizCompleted, showResults]);
+  
+  // Format remaining time as mm:ss
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
+  
+  // Handle answer selection
+  const handleSelectAnswer = (questionIndex, answer) => {
+    setSelectedAnswers({
+      ...selectedAnswers,
+      [questionIndex]: answer
+    });
+  };
+  
+  // Navigate to next question
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    }
+  };
+  
+  // Navigate to previous question
+  const handlePrevQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    }
+  };
+  
+  // Check if current question has been answered
+  const isCurrentQuestionAnswered = () => {
+    return selectedAnswers[currentQuestionIndex] !== undefined;
+  };
+  
+  // Calculate progress percentage
+  const calculateProgress = () => {
+    const answeredCount = Object.keys(selectedAnswers).length;
+    return Math.round((answeredCount / totalQuestions) * 100);
+  };
+  
+  // Check if all questions have been answered
+  const areAllQuestionsAnswered = () => {
+    return Object.keys(selectedAnswers).length === totalQuestions;
+  };
+  
+  // Submit quiz
   const handleSubmitQuiz = async () => {
-    if (!quiz || !quiz.questions) return;
+    // Check if all questions have been answered
+    if (!areAllQuestionsAnswered() && !showResults) {
+      setErrorMessage('Please answer all questions before submitting');
+      return;
+    }
+    
+    setErrorMessage('');
+    setIsSubmitting(true);
     
     try {
-      setSubmitting(true);
+      // Calculate score
+      let correctAnswers = 0;
       
-      // Calculate the score
-      let correctCount = 0;
-      quiz.questions.forEach((q, idx) => {
-        const userAnswer = quizAnswers[idx];
-        if (userAnswer && userAnswer === q.correctAnswer) {
-          correctCount++;
+      questions.forEach((question, index) => {
+        if (selectedAnswers[index] === question.correctAnswer) {
+          correctAnswers++;
         }
       });
       
-      const scorePercentage = Math.round((correctCount / quiz.questions.length) * 100);
-      const passingScore = quiz.passingScore || 60;
-      const passed = scorePercentage >= passingScore;
+      const calculatedScore = Math.round((correctAnswers / totalQuestions) * 100);
+      setScore(calculatedScore);
       
-      // Parse moduleId to a number (Long in Java)
-      const moduleIdNumber = typeof moduleId === 'string' ? parseInt(moduleId, 10) : moduleId;
+      // Show results first
+      setShowResults(true);
       
-      // Submit the quiz score to the API
-      const progressData = await completeQuiz(moduleIdNumber, scorePercentage);
+      // Submit to API
+      const progressData = await completeQuiz(moduleId, quizId, calculatedScore);
+      setQuizCompleted(true);
       
-      // Update local state
-      setQuizScore(scorePercentage);
-      setQuizSubmitted(true);
-      setPassedQuiz(passed);
-      
-      // Show toast notification
-      toast({
-        title: passed ? "Quiz Passed!" : "Quiz Submitted",
-        description: `You scored ${scorePercentage}% and earned ${scorePercentage} XP.`,
-        variant: passed ? "default" : "destructive",
-      });
-      
-      // Notify parent component of progress update
-      if (onProgressUpdate) {
-        onProgressUpdate(progressData);
+      // Notify parent component
+      if (onProgressUpdate && progressData) {
+        setTimeout(() => {
+          onProgressUpdate(progressData);
+        }, 2000); // Delay to show results first
       }
     } catch (error) {
       console.error("Error submitting quiz:", error);
-      toast({
-        title: "Error",
-        description: "Failed to submit quiz. Please try again.",
-        variant: "destructive",
-      });
+      setErrorMessage('Failed to submit quiz. Please try again.');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
-
-  const handleRetakeQuiz = () => {
-    setQuizAnswers({});
-    setQuizSubmitted(false);
-    setPassedQuiz(false);
-    setQuizScore(0);
-  };
-
-  return (
-    <div className="space-y-8">
-      {!quizSubmitted ? (
-        <div className="space-y-8">
-          {quiz.questions?.map((q, idx) => (
-            <motion.div 
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.1 }}
-              className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-800/50"
-            >
-              <div className="flex items-start gap-3 mb-4">
-                <div className="bg-indigo-600 text-white h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
-                  {idx + 1}
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                  {q.question}
-                </h3>
-              </div>
-              
-              <div className="space-y-3 mt-4">
-                {q.options.map((option, optionIdx) => {
-                  const optionLetter = option.charAt(0);
-                  
-                  return (
-                    <motion.div
-                      key={optionIdx}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2, delay: 0.1 + optionIdx * 0.05 }}
-                      whileHover={{ x: 3 }}
-                    >
-                      <label 
-                        className={`flex items-center gap-3 p-4 rounded-lg cursor-pointer transition-all ${
-                          quizAnswers[idx] === optionLetter 
-                            ? "bg-indigo-100 dark:bg-indigo-800/50 border border-indigo-300 dark:border-indigo-700 shadow-sm" 
-                            : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700"
-                        }`}
-                      >
-                        <div className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${
-                          quizAnswers[idx] === optionLetter 
-                            ? "bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-700" 
-                            : "border-2 border-gray-300 dark:border-gray-600"
-                        }`}>
-                          {quizAnswers[idx] === optionLetter && (
-                            <CheckCircle className="h-4 w-4" />
+  
+  // Render quiz results
+  if (showResults) {
+    const passingScore = quiz.passingScore || 60;
+    const isPassed = score >= passingScore;
+    
+    return (
+      <div className="space-y-8">
+        <div className="text-center space-y-2">
+          <div className={`inline-flex p-4 rounded-full ${
+            isPassed 
+              ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" 
+              : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+          }`}>
+            {isPassed ? (
+              <CheckCircle className="h-12 w-12" />
+            ) : (
+              <XCircle className="h-12 w-12" />
+            )}
+          </div>
+          
+          <h2 className="text-2xl font-bold mt-4">
+            {isPassed ? "Quiz Passed!" : "Not Passed"}
+          </h2>
+          
+          <p className="text-gray-600 dark:text-gray-400">
+            You scored {score}% (passing score: {passingScore}%)
+          </p>
+        </div>
+        
+        <Card className="overflow-hidden">
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 flex justify-between items-center border-b">
+            <h3 className="font-bold">Quiz Results</h3>
+            <div className="text-sm text-gray-500">
+              {Object.values(selectedAnswers).filter(
+                (answer, index) => answer === questions[index].correctAnswer
+              ).length} of {totalQuestions} correct
+            </div>
+          </div>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {questions.map((question, index) => {
+                const selected = selectedAnswers[index];
+                const isCorrect = selected === question.correctAnswer;
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`p-4 ${
+                      isCorrect 
+                        ? "bg-green-50 dark:bg-green-900/10" 
+                        : "bg-red-50 dark:bg-red-900/10"
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      <div className={`mt-0.5 p-1 rounded-full flex-shrink-0 ${
+                        isCorrect 
+                          ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" 
+                          : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                      }`}>
+                        {isCorrect ? (
+                          <CheckCircle className="h-4 w-4" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800 dark:text-gray-200">
+                          {question.question}
+                        </p>
+                        <div className="mt-1 space-y-1 text-sm">
+                          <p className={
+                            selected === question.correctAnswer
+                              ? "text-green-600 dark:text-green-400 font-medium"
+                              : "text-red-600 dark:text-red-400 font-medium"
+                          }>
+                            Your answer: {selected || "No answer"}
+                          </p>
+                          
+                          {selected !== question.correctAnswer && (
+                            <p className="text-green-600 dark:text-green-400 font-medium">
+                              Correct answer: {question.correctAnswer}
+                            </p>
+                          )}
+                          
+                          {question.explanation && (
+                            <p className="text-gray-600 dark:text-gray-400 mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
+                              {question.explanation}
+                            </p>
                           )}
                         </div>
-                        <input
-                          type="radio"
-                          name={`question-${idx}`}
-                          value={optionLetter}
-                          checked={quizAnswers[idx] === optionLetter}
-                          onChange={() => handleQuizAnswerChange(idx, optionLetter)}
-                          className="sr-only"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">{option}</span>
-                      </label>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ))}
-
-          <div className="flex justify-between items-center mt-8">
-            {onClose && (
-              <Button 
-                variant="outline" 
-                onClick={onClose}
-              >
-                Cancel
-              </Button>
-            )}
-            
-            <Button 
-              className="bg-indigo-600 hover:bg-indigo-700"
-              onClick={handleSubmitQuiz}
-              disabled={submitting || Object.keys(quizAnswers).length < (quiz.questions?.length || 0)}
-            >
-              {submitting ? "Submitting..." : "Submit Quiz"}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className={`p-8 rounded-xl shadow-sm ${
-              passedQuiz ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-            }`}
-          >
-            <div className="flex items-center gap-6">
-              <div className={`p-4 rounded-full ${passedQuiz ? "bg-green-100 dark:bg-green-800/50" : "bg-red-100 dark:bg-red-800/50"}`}>
-                {passedQuiz 
-                  ? <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
-                  : <X className="h-12 w-12 text-red-600 dark:text-red-400" />
-                }
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">
-                  {passedQuiz ? "Congratulations!" : "Quiz Results"}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <div className="text-xl font-bold">
-                    Score: <span className={passedQuiz ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{quizScore}%</span>
-                  </div>
-                  <div className="h-5 w-px bg-gray-300 dark:bg-gray-700"></div>
-                  <div className="text-gray-600 dark:text-gray-400">
-                    Passing score: {quiz.passingScore || 60}%
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-none">
-                    <Award className="h-3.5 w-3.5 mr-1" />
-                    +{quizScore} XP
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 pt-6 border-t border-dashed border-gray-200 dark:border-gray-700">
-              {passedQuiz ? (
-                <p className="text-green-700 dark:text-green-400">
-                  You've successfully completed this knowledge check! Your solid understanding of the material will help you as you continue through the course.
-                </p>
-              ) : (
-                <p className="text-red-700 dark:text-red-400">
-                  You didn't reach the passing score. Review the material in this module and try again to strengthen your understanding of the key concepts.
-                </p>
-              )}
-            </div>
-          </motion.div>
-          
-          <div className="space-y-4">
-            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">Question Summary</h3>
-            {quiz.questions?.map((q, idx) => {
-              const isCorrect = quizAnswers[idx] === q.correctAnswer;
-              
-              return (
-                <motion.div 
-                  key={idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: idx * 0.1 }}
-                  className={`p-4 rounded-lg border ${
-                    isCorrect 
-                      ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" 
-                      : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 p-1 rounded-full text-white ${isCorrect ? "bg-green-600" : "bg-red-600"}`}>
-                      {isCorrect ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-800 dark:text-gray-200">
-                        {q.question}
-                      </p>
-                      <div className="mt-2 text-sm">
-                        <p className={isCorrect ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>
-                          Your answer: {quizAnswers[idx] ? q.options.find(opt => opt.startsWith(quizAnswers[idx])) : "Not answered"}
-                        </p>
-                        {!isCorrect && (
-                          <p className="text-gray-600 dark:text-gray-400 mt-1">
-                            Correct answer: {q.options.find(opt => opt.startsWith(q.correctAnswer))}
-                          </p>
-                        )}
                       </div>
                     </div>
                   </div>
-                </motion.div>
-              );
-            })}
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="flex justify-between items-center mt-6">
+          <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-700 dark:text-blue-400">
+            <Award className="h-5 w-5" />
+            <span>You earned <strong>{score}</strong> XP for this quiz!</span>
           </div>
-
-          <div className="flex justify-between items-center mt-8">
-            <Button 
-              variant="outline" 
-              onClick={handleRetakeQuiz}
-            >
-              <HelpCircle className="h-4 w-4 mr-2" />
-              Retake Quiz
-            </Button>
-            
-            {onClose && (
-              <Button 
-                className="bg-indigo-600 hover:bg-indigo-700"
-                onClick={onClose}
-              >
-                Continue Learning
-              </Button>
-            )}
-          </div>
+          
+          <Button onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Render quiz questions
+  return (
+    <div className="space-y-6">
+      {/* Timer and progress */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-700 dark:text-blue-400">
+          <Clock className="h-4 w-4" />
+          <span className="font-mono font-medium">{formatTime(timeRemaining)}</span>
+        </div>
+        
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <span>Question {currentQuestionIndex + 1} of {totalQuestions}</span>
+          <Progress value={((currentQuestionIndex + 1) / totalQuestions) * 100} className="w-24 h-2" />
+        </div>
+      </div>
+      
+      {/* Error message */}
+      {errorMessage && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-700 dark:text-red-400">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       )}
+      
+      {/* Current question */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+        <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">
+          {questions[currentQuestionIndex]?.question}
+        </h3>
+        
+        <RadioGroup 
+          value={selectedAnswers[currentQuestionIndex] || ""}
+          onValueChange={(value) => handleSelectAnswer(currentQuestionIndex, value)}
+          className="space-y-3"
+        >
+          {questions[currentQuestionIndex]?.options?.map((option, idx) => (
+            <div 
+              key={idx} 
+              className="flex items-center space-x-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+              onClick={() => handleSelectAnswer(currentQuestionIndex, option)}
+            >
+              <RadioGroupItem 
+                value={option} 
+                id={`option-${idx}`} 
+                className="data-[state=checked]:border-blue-500 data-[state=checked]:text-blue-500" 
+              />
+              <Label 
+                htmlFor={`option-${idx}`}
+                className="w-full cursor-pointer flex-1 text-base font-medium"
+              >
+                {option}
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+      </div>
+      
+      {/* Navigation buttons */}
+      <div className="flex justify-between mt-6">
+        <Button 
+          variant="ghost" 
+          onClick={handlePrevQuestion}
+          disabled={currentQuestionIndex === 0}
+          className="gap-2"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+        
+        <div className="flex gap-2">
+          {currentQuestionIndex < totalQuestions - 1 ? (
+            <Button 
+              onClick={handleNextQuestion}
+              disabled={!isCurrentQuestionAnswered()}
+              className="gap-2"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleSubmitQuiz}
+              disabled={isSubmitting || !areAllQuestionsAnswered()}
+              className="gap-2 bg-green-600 hover:bg-green-700"
+            >
+              {isSubmitting ? "Submitting..." : "Submit Quiz"}
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      {/* Quiz progress */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+          <span>Completion</span>
+          <span>{calculateProgress()}%</span>
+        </div>
+        <Progress value={calculateProgress()} className="h-2" />
+        <p className="text-xs text-gray-500 mt-2">
+          {areAllQuestionsAnswered() 
+            ? "All questions answered, you can submit the quiz!" 
+            : `${Object.keys(selectedAnswers).length} of ${totalQuestions} questions answered`}
+        </p>
+      </div>
     </div>
   );
-}
+};
+
+export default EnhancedQuiz;
