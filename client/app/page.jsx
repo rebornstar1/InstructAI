@@ -173,7 +173,7 @@ const LandingPage = () => {
               </motion.p>
               
               <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4">
-                <Link href="/dashboard">
+                <Link href="/home">
                   <button className="relative overflow-hidden group bg-blue-600 text-white px-8 py-4 rounded-lg font-medium text-lg transition-all hover:bg-blue-700">
                     <span className="relative z-10 flex items-center">
                       Get Started

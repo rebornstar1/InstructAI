@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/components/ui/toast"
 import {
   BookOpen,
   ChevronLeft,
@@ -37,6 +38,19 @@ import {
   generateLearningResources 
 } from "@/services/api";
 
+// Import our new progress components
+import ArticleProgressTracker from "../components/ArticleProgressTracker";
+import VideoProgressTracker from "../components/VideoProgressTracker";
+import EnhancedQuiz from "../components/EnhancedQuiz";
+
+// Import progress API functions
+import {
+  getModuleProgress,
+  startModule,
+  completeSubmodule,
+  completeQuiz
+} from "@/services/progressApi";
+
 export default function ModuleDetailPage({ params }) {
   const { courseId, moduleId } = params;
   const [module, setModule] = useState(null);
@@ -47,6 +61,12 @@ export default function ModuleDetailPage({ params }) {
   const router = useRouter();
   const contentRef = useRef(null);
   
+  // Progress tracking state
+  const [moduleProgress, setModuleProgress] = useState(null);
+  const [completedArticles, setCompletedArticles] = useState({});
+  const [completedVideos, setCompletedVideos] = useState({});
+  const [quizzesTaken, setQuizzesTaken] = useState({});
+  
   // Article Modal State
   const [showArticleModal, setShowArticleModal] = useState(false);
   const [activeArticle, setActiveArticle] = useState({ title: "", content: "" });
@@ -54,45 +74,107 @@ export default function ModuleDetailPage({ params }) {
   // Quiz Modal & related states
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState(null);
-  const [quizAnswers, setQuizAnswers] = useState({});
-  const [quizScore, setQuizScore] = useState(0);
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
-  const [passedQuiz, setPassedQuiz] = useState(false);
 
-// Inside the useEffect hook, modify the loadModule function
-useEffect(() => {
-  const loadModule = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Fetch module data
-      const moduleData = await fetchModule(moduleId);
-      setModule(moduleData);
-      
-      // Check if learning resources already exist
-      const resources = await checkLearningResources(moduleData.id);
-      
-      // Only set learning resources if they exist and have submodules
-      if (resources && 
-          ((resources.subModules && resources.subModules.length > 0) || 
-           (resources.content && resources.content.trim() !== ""))) {
-        setLearningResource(resources);
-      } else {
-        // No resources or empty resources - will trigger the generation UI
-        setLearningResource(null);
+  // Load module data and progress
+  useEffect(() => {
+    const loadModule = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Fetch module data
+        const moduleData = await fetchModule(moduleId);
+        setModule(moduleData);
+        
+        // Check if learning resources already exist
+        const resources = await checkLearningResources(moduleData.id);
+        
+        // Only set learning resources if they exist and have submodules
+        if (resources && 
+            ((resources.subModules && resources.subModules.length > 0) || 
+             (resources.content && resources.content.trim() !== ""))) {
+          setLearningResource(resources);
+        } else {
+          // No resources or empty resources - will trigger the generation UI
+          setLearningResource(null);
+        }
+
+        // Fetch module progress
+        try {
+          const progress = await getModuleProgress(moduleId);
+          setModuleProgress(progress);
+
+          // Initialize completed items based on progress
+          if (progress) {
+            // If module is completed, mark everything as completed
+            if (progress.state === "COMPLETED") {
+              if (resources && resources.subModules) {
+                const articles = {};
+                resources.subModules.forEach(subModule => {
+                  articles[subModule.id || subModule.subModuleId] = true;
+                });
+                setCompletedArticles(articles);
+              }
+              
+              if (resources && resources.videoUrls) {
+                const videos = {};
+                resources.videoUrls.forEach((_, index) => {
+                  videos[9000 + index] = true; // Using 9000+ range as in VideoProgressTracker
+                });
+                setCompletedVideos(videos);
+              }
+              
+              if (resources && resources.quizzes) {
+                const quizzes = {};
+                resources.quizzes.forEach(quiz => {
+                  quizzes[quiz.id || quiz.quizId] = true;
+                });
+                setQuizzesTaken(quizzes);
+              }
+            }
+            
+            // If module is in progress, we need to determine what's completed
+            // This would normally come from the API, but we're simulating it here
+            else if (progress.state === "IN_PROGRESS") {
+              // Use completedSubmodules count as a guide
+              // In a real app, you'd likely have a more detailed API response
+              const completedCount = progress.completedSubmodules || 0;
+              
+              // Mark some articles as completed based on count
+              if (resources && resources.subModules) {
+                const articles = {};
+                resources.subModules.slice(0, completedCount).forEach(subModule => {
+                  articles[subModule.id || subModule.subModuleId] = true;
+                });
+                setCompletedArticles(articles);
+              }
+              
+              // Mark quiz as taken if quiz score exists
+              if (progress.bestQuizScore && resources && resources.quizzes && resources.quizzes.length > 0) {
+                const quizzes = {};
+                quizzes[resources.quizzes[0].id || resources.quizzes[0].quizId] = true;
+                setQuizzesTaken(quizzes);
+              }
+            }
+          }
+          
+          // If module is not started yet, start it now
+          if (progress && progress.state === "UNLOCKED") {
+            startModule(moduleId);
+          }
+        } catch (error) {
+          console.error("Error fetching module progress:", error);
+        }
+      } catch (error) {
+        console.error("Error loading module data:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading module data:", error);
-    } finally {
-      setIsLoading(false);
+    };
+
+    if (moduleId) {
+      loadModule();
     }
-  };
-
-  if (moduleId) {
-    loadModule();
-  }
-}, [moduleId]);
-
+  }, [moduleId]);
 
   const navigateBack = () => {
     router.push(`/courses/${courseId}`);
@@ -135,60 +217,99 @@ useEffect(() => {
           setLearningResource(data);
         } else {
           console.error("Generated resources do not contain submodules or content");
-          // You might want to show an error message to the user here
+          toast({
+            title: "Error",
+            description: "Failed to generate proper learning materials. Please try again.",
+            variant: "destructive",
+          });
         }
       }
     } catch (error) {
       console.error("Error generating module resources:", error);
-      // You might want to show an error message to the user here
+      toast({
+        title: "Error",
+        description: "Failed to generate learning materials. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoadingResource(false);
     }
   };
 
+  // Progress tracking handlers
+  const handleArticleProgressUpdate = (subModuleId, progressData) => {
+    // Update local state
+    setCompletedArticles(prev => ({
+      ...prev,
+      [subModuleId]: true
+    }));
+    
+    // Update module progress
+    if (progressData) {
+      setModuleProgress(progressData);
+    }
+
+    toast({
+      title: "Progress Updated",
+      description: "Your progress has been saved",
+    });
+  };
+
+  const handleVideoProgressUpdate = (videoId, progressData) => {
+    // Update local state
+    setCompletedVideos(prev => ({
+      ...prev,
+      [videoId]: true
+    }));
+    
+    // Update module progress
+    if (progressData) {
+      setModuleProgress(progressData);
+    }
+
+    toast({
+      title: "Video Completed",
+      description: "Your progress has been saved",
+    });
+  };
+
+  const handleQuizProgressUpdate = (quizId, progressData) => {
+    // Update local state
+    setQuizzesTaken(prev => ({
+      ...prev,
+      [quizId]: true
+    }));
+    
+    // Update module progress
+    if (progressData) {
+      setModuleProgress(progressData);
+    }
+
+    setShowQuizModal(false);
+  };
+
   // Article handling functions
   const handleOpenArticle = (subModule) => {
-    setActiveArticle({ title: subModule.subModuleTitle, content: subModule.article });
+    setActiveArticle({ 
+      title: subModule.subModuleTitle, 
+      content: subModule.article,
+      id: subModule.id || subModule.subModuleId
+    });
     setShowArticleModal(true);
   };
 
   // Quiz handling functions
   const handleOpenQuiz = (quiz) => {
-    setActiveQuiz(quiz);
-    setShowQuizModal(true);
-    setQuizAnswers({});
-    setQuizScore(0);
-    setQuizSubmitted(false);
-    setPassedQuiz(false);
-  };
-
-  const handleQuizAnswerChange = (questionIndex, option) => {
-    setQuizAnswers((prev) => ({ ...prev, [questionIndex]: option }));
-  };
-
-  const handleSubmitQuiz = () => {
-    if (!activeQuiz || !activeQuiz.questions) return;
-    let correctCount = 0;
-    activeQuiz.questions.forEach((q, idx) => {
-      const userAnswer = quizAnswers[idx];
-      if (userAnswer && userAnswer === q.correctAnswer) {
-        correctCount++;
-      }
+    setActiveQuiz({
+      ...quiz,
+      id: quiz.id || quiz.quizId
     });
-    const scorePercentage = Math.round((correctCount / activeQuiz.questions.length) * 100);
-    setQuizScore(scorePercentage);
-    setQuizSubmitted(true);
-    const passingScore = activeQuiz.passingScore || 60;
-    setPassedQuiz(scorePercentage >= passingScore);
+    setShowQuizModal(true);
   };
 
   const handleCloseQuizModal = () => {
     setShowQuizModal(false);
     setActiveQuiz(null);
-    setQuizAnswers({});
-    setQuizSubmitted(false);
-    setPassedQuiz(false);
-    setQuizScore(0);
   };
 
   // Helper: Convert YouTube watch URL to embed URL
@@ -242,6 +363,11 @@ useEffect(() => {
     );
   }
 
+  // Determine progress stats
+  const moduleState = moduleProgress ? moduleProgress.state : "UNLOCKED";
+  const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
+  const earnedXP = moduleProgress ? moduleProgress.earnedXP : 0;
+
   return (
     <div className="container mx-auto px-4 py-8" ref={contentRef}>
       <Button 
@@ -263,6 +389,17 @@ useEffect(() => {
           <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0">
             Module {module.moduleId}
           </Badge>
+          
+          {moduleProgress && (
+            <Badge className={`
+              ${moduleState === "COMPLETED" ? "bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400" : 
+                moduleState === "IN_PROGRESS" ? "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-400" :
+                "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-400"}
+              border-none
+            `}>
+              {moduleState.replace("_", " ")}
+            </Badge>
+          )}
         </div>
         
         <h1 className="text-3xl font-bold mb-3 text-gray-800 dark:text-gray-200">
@@ -288,7 +425,37 @@ useEffect(() => {
               </div>
             </>
           )}
+          
+          {moduleProgress && (
+            <>
+              <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
+              <div className="flex items-center gap-1">
+                <Award className="h-4 w-4 text-purple-500" />
+                <span className="text-purple-600 font-medium">{earnedXP} XP</span>
+              </div>
+            </>
+          )}
         </div>
+        
+        {/* Progress Bar - Show only if module is started */}
+        {moduleProgress && moduleState !== "UNLOCKED" && (
+          <div className="mt-6">
+            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <span>Progress</span>
+              <span>{progressPercentage}%</span>
+            </div>
+            <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full ${
+                  moduleState === "COMPLETED" 
+                    ? "bg-green-500 dark:bg-green-600" 
+                    : "bg-blue-500 dark:bg-blue-600"
+                }`}
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Module Content */}
@@ -437,6 +604,50 @@ useEffect(() => {
               </CardContent>
             </Card>
           )}
+
+          {/* Module Progress Status Card */}
+          {moduleProgress && (
+            <Card className="border-none shadow-md overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-4 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-900/20">
+                  <Award className="h-8 w-8 text-purple-600 mb-2" />
+                  <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">Your Progress</h3>
+                </div>
+                <div className="p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span>Module Status</span>
+                        <span>{moduleState.replace("_", " ")}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span>Completion</span>
+                        <span>{progressPercentage}%</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full ${
+                            moduleState === "COMPLETED" 
+                              ? "bg-green-500 dark:bg-green-600" 
+                              : "bg-blue-500 dark:bg-blue-600"
+                          }`}
+                          style={{ width: `${progressPercentage}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span>XP Earned</span>
+                        <span>{earnedXP} XP</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
         
         {/* Main Content Area */}
@@ -490,6 +701,8 @@ useEffect(() => {
             >
               <Card className="border-none shadow-lg overflow-hidden">
                 <div className="aspect-video bg-gradient-to-br from-blue-600 to-indigo-800 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[url('/path/to/pattern.svg')] opacity-10"></div>
+                  
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-8 text-center">
                     <div className="p-4 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 mb-6">
                       <Brain className="h-16 w-16 text-white" />
@@ -537,6 +750,7 @@ useEffect(() => {
                     
                     <div className="flex flex-col items-center p-6 text-center">
                       <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-2xl mb-4">
+                      // Continuing from previous file
                         <HelpCircle className="h-8 w-8 text-purple-600 dark:text-purple-400" />
                       </div>
                       <h3 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-200">
@@ -606,12 +820,12 @@ useEffect(() => {
                           </h3>
                           <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                             {module.learningObjectives ? (
-                              module.learningObjectives.map((obj, idx) => (
+                              module.learningObjectives.map((objective, idx) => (
                                 <li key={idx} className="flex items-start gap-2">
-                                  <div className="mt-1 p-1 bg-blue-200 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
+                                  <div className="mt-1.5 p-1 bg-blue-200 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
                                     <CheckCircle className="h-3.5 w-3.5" />
                                   </div>
-                                  <span className="text-gray-700 dark:text-gray-300">{obj}</span>
+                                  <span className="text-gray-700 dark:text-gray-300">{objective}</span>
                                 </li>
                               ))
                             ) : (
@@ -620,7 +834,7 @@ useEffect(() => {
                                 "Build critical analysis skills",
                                 "Develop problem-solving approaches"].map((obj, idx) => (
                                 <li key={idx} className="flex items-start gap-2">
-                                  <div className="mt-1 p-1 bg-blue-200 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
+                                  <div className="mt-1.5 p-1 bg-blue-200 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
                                     <CheckCircle className="h-3.5 w-3.5" />
                                   </div>
                                   <span className="text-gray-700 dark:text-gray-300">{obj}</span>
@@ -648,46 +862,74 @@ useEffect(() => {
                       </div>
                       <CardContent className="p-6">
                         <div className="space-y-4">
-                          {learningResource.subModules.map((subModule, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 transition-colors"
-                            >
-                              <div className="mt-1 h-8 w-8 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">
-                                {idx + 1}
-                              </div>
-                              <div className="flex-1">
-                                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200 mb-1">{subModule.subModuleTitle}</h3>
-                                <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">
-                                  {subModule.article.split('\n\n')[0].replace(/[#*]/g, '')}
-                                </p>
-                                <div className="flex flex-wrap gap-2 mt-3">
-                                  <div className="flex items-center text-xs text-gray-500">
-                                    <Clock className="h-3.5 w-3.5 mr-1" />
-                                    <span>{subModule.readingTime || "10-15 min"}</span>
-                                  </div>
-                                  
-                                  {subModule.tags?.map((tag, tagIdx) => (
-                                    <Badge 
-                                      key={tagIdx} 
-                                      variant="outline"
-                                      className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100"
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                onClick={() => handleOpenArticle(subModule)}
-                                className="shrink-0 h-8 w-8 p-0 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                                aria-label={`Read article: ${subModule.subModuleTitle}`}
+                          {learningResource.subModules.map((subModule, idx) => {
+                            // Get submodule ID for progress tracking
+                            const subModuleId = subModule.id || subModule.subModuleId || 
+                              Math.abs(subModule.subModuleTitle.split('').reduce((acc, char) => {
+                                return acc + char.charCodeAt(0);
+                              }, 0));
+                            
+                            // Check if submodule is completed
+                            const isCompleted = completedArticles[subModuleId];
+                            
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${
+                                  isCompleted 
+                                    ? "border-green-200 dark:border-green-800" 
+                                    : "border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700"
+                                } transition-colors`}
                               >
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
+                                <div className={`mt-1 h-8 w-8 flex items-center justify-center rounded-full ${
+                                  isCompleted
+                                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                                    : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" 
+                                } font-medium`}>
+                                  {isCompleted ? <CheckCircle className="h-5 w-5" /> : idx + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200 mb-1">
+                                    {subModule.subModuleTitle}
+                                  </h3>
+                                  <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">
+                                    {subModule.article.split('\n\n')[0].replace(/[#*]/g, '')}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2 mt-3">
+                                    <div className="flex items-center text-xs text-gray-500">
+                                      <Clock className="h-3.5 w-3.5 mr-1" />
+                                      <span>{subModule.readingTime || "10-15 min"}</span>
+                                    </div>
+                                    
+                                    {subModule.tags?.map((tag, tagIdx) => (
+                                      <Badge 
+                                        key={tagIdx} 
+                                        variant="outline"
+                                        className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100"
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                    
+                                    {isCompleted && (
+                                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Completed
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenArticle(subModule)}
+                                  className="shrink-0 h-8 w-8 p-0 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                  aria-label={`Read article: ${subModule.subModuleTitle}`}
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </Button>
                               </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
@@ -707,6 +949,16 @@ useEffect(() => {
                     <div className="prose max-w-none dark:prose-invert">
                       <CustomMarkdownRenderer markdown={learningResource.content} />
                     </div>
+                    
+                    {/* Add Article Progress Tracker */}
+                    {learningResource && learningResource.content && (
+                      <ArticleProgressTracker
+                        moduleId={moduleId}
+                        subModule={{ subModuleTitle: "Main Content", id: "main-content" }}
+                        isCompleted={completedArticles["main-content"]}
+                        onProgressUpdate={(progressData) => handleArticleProgressUpdate("main-content", progressData)}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -720,35 +972,68 @@ useEffect(() => {
                     className="space-y-6"
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {learningResource.subModules.map((subModule, idx) => (
-                        <Card key={idx} className="shadow-lg overflow-hidden border-none">
-                          <div className="bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 border-b border-blue-200 dark:border-blue-800/50">
-                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                              {subModule.subModuleTitle}
-                            </h2>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              <div className="flex items-center text-sm text-gray-500">
-                                <Clock className="h-4 w-4 mr-1" />
-                                <span>{subModule.readingTime || "10-15 min"}</span>
+                      {learningResource.subModules.map((subModule, idx) => {
+                        // Get submodule ID for progress tracking
+                        const subModuleId = subModule.id || subModule.subModuleId || 
+                          Math.abs(subModule.subModuleTitle.split('').reduce((acc, char) => {
+                            return acc + char.charCodeAt(0);
+                          }, 0));
+                        
+                        // Check if submodule is completed
+                        const isCompleted = completedArticles[subModuleId];
+                        
+                        return (
+                          <Card key={idx} className="shadow-lg overflow-hidden border-none">
+                            <div className={`p-6 border-b ${
+                              isCompleted 
+                                ? "bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800/50"
+                                : "bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800/50"
+                            }`}>
+                              <div className="flex items-start">
+                                <div className="flex-1">
+                                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+                                    {subModule.subModuleTitle}
+                                  </h2>
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    <div className="flex items-center text-sm text-gray-500">
+                                      <Clock className="h-4 w-4 mr-1" />
+                                      <span>{subModule.readingTime || "10-15 min"}</span>
+                                    </div>
+                                    
+                                    {subModule.tags?.map((tag, tagIdx) => (
+                                      <Badge 
+                                        key={tagIdx}
+                                        className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none"
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                                
+                                {isCompleted && (
+                                  <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full text-green-600 dark:text-green-400">
+                                    <CheckCircle className="h-6 w-6" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <CardContent className="p-6">
+                              <div className="prose max-w-none dark:prose-invert">
+                                <CustomMarkdownRenderer markdown={subModule.article} />
                               </div>
                               
-                              {subModule.tags?.map((tag, tagIdx) => (
-                                <Badge 
-                                  key={tagIdx}
-                                  className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-none"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                          <CardContent className="p-6">
-                            <div className="prose max-w-none dark:prose-invert">
-                              <CustomMarkdownRenderer markdown={subModule.article} />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                              {/* Add Article Progress Tracker */}
+                              <ArticleProgressTracker
+                                moduleId={moduleId}
+                                subModule={subModule}
+                                isCompleted={isCompleted}
+                                onProgressUpdate={(progressData) => handleArticleProgressUpdate(subModuleId, progressData)}
+                              />
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 )}
@@ -766,28 +1051,45 @@ useEffect(() => {
                     </div>
                     <CardContent className="p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {(learningResource && learningResource.videoUrls ? 
+                        {(learningResource && learningResource.videoUrls ? 
                           learningResource.videoUrls : 
-                          module.videoUrls || []).map((videoUrl, index) => (
-                          <div key={index} className="space-y-3">
-                            <div className="aspect-video overflow-hidden rounded-lg shadow-md">
-                              <iframe
-                                title={`Video Lecture ${index + 1}`}
-                                className="w-full h-full"
-                                src={convertToEmbedUrl(videoUrl)}
-                                frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              ></iframe>
+                          module.videoUrls || []).map((videoUrl, index) => {
+                          // Generate video ID for progress tracking
+                          const videoId = 9000 + index;
+                          
+                          // Check if video is completed
+                          const isCompleted = completedVideos[videoId];
+                          
+                          return (
+                            <div key={index} className="space-y-3">
+                              <div className="aspect-video overflow-hidden rounded-lg shadow-md">
+                                <iframe
+                                  title={`Video Lecture ${index + 1}`}
+                                  className="w-full h-full"
+                                  src={convertToEmbedUrl(videoUrl)}
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                ></iframe>
+                              </div>
+                              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">
+                                Video Lecture {index + 1}: {module.title} 
+                              </h3>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                Comprehensive video tutorial covering key concepts and practical demonstrations for this module.
+                              </p>
+                              
+                              {/* Add Video Progress Tracker */}
+                              <VideoProgressTracker
+                                moduleId={moduleId}
+                                videoIndex={index}
+                                videoUrl={videoUrl}
+                                isCompleted={isCompleted}
+                                onProgressUpdate={(progressData) => handleVideoProgressUpdate(videoId, progressData)}
+                              />
                             </div>
-                            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">
-                              Video Lecture {index + 1}: {module.title} 
-                            </h3>
-                            <p className="text-gray-600 dark:text-gray-400 text-sm">
-                              Comprehensive video tutorial covering key concepts and practical demonstrations for this module.
-                            </p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
@@ -801,42 +1103,85 @@ useEffect(() => {
               <TabsContent value="quizzes" className="m-0 mt-2">
                 {learningResource.quizzes && learningResource.quizzes.length > 0 ? (
                   <div className="space-y-6">
-                    {learningResource.quizzes.map((quiz, index) => (
-                      <Card key={index} className="shadow-lg overflow-hidden border-none">
-                        <div className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-900/20 p-6 border-b border-purple-200 dark:border-purple-800/50">
-                          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-                            <HelpCircle className="h-6 w-6 text-purple-600" />
-                            {quiz.quizTitle}
-                          </h2>
-                          <p className="text-gray-600 dark:text-gray-400 mt-2">
-                            {quiz.description}
-                          </p>
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <Badge className="bg-purple-100 text-purple-800 border-none">
-                              {quiz.difficulty || "Mixed"}
-                            </Badge>
-                            <Badge className="bg-blue-100 text-blue-800 border-none">
-                              {quiz.timeLimit || "10 minutes"}
-                            </Badge>
-                            <Badge className="bg-green-100 text-green-800 border-none">
-                              Passing: {quiz.passingScore || 60}%
-                            </Badge>
+                    {learningResource.quizzes.map((quiz, index) => {
+                      // Generate quiz ID for progress tracking
+                      const quizId = quiz.id || quiz.quizId || `quiz-${index}`;
+                      
+                      // Check if quiz is completed
+                      const isCompleted = quizzesTaken[quizId];
+                      
+                      return (
+                        <Card key={index} className={`shadow-lg overflow-hidden border-none ${
+                          isCompleted ? "ring-1 ring-green-200 dark:ring-green-800" : ""
+                        }`}>
+                          <div className={`p-6 border-b ${
+                            isCompleted 
+                              ? "bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800/50"
+                              : "bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800/50"
+                          }`}>
+                            <div className="flex items-start">
+                              <div className="flex-1">
+                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                                  <HelpCircle className="h-6 w-6 text-purple-600" />
+                                  {quiz.quizTitle}
+                                </h2>
+                                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                                  {quiz.description}
+                                </p>
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  <Badge className="bg-purple-100 text-purple-800 border-none">
+                                    {quiz.difficulty || "Mixed"}
+                                  </Badge>
+                                  <Badge className="bg-blue-100 text-blue-800 border-none">
+                                    {quiz.timeLimit || "10 minutes"}
+                                  </Badge>
+                                  <Badge className="bg-green-100 text-green-800 border-none">
+                                    Passing: {quiz.passingScore || 60}%
+                                  </Badge>
+                                  
+                                  {isCompleted && (
+                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Completed
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {isCompleted && (
+                                <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full text-green-600 dark:text-green-400">
+                                  <CheckCircle className="h-6 w-6" />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <CardContent className="p-6">
-                          <p className="text-gray-700 dark:text-gray-300 mb-4">
-                            This quiz contains {quiz.questions?.length || 0} questions to test your understanding of the module content.
-                          </p>
-                          <Button 
-                            className="bg-purple-600 hover:bg-purple-700"
-                            onClick={() => handleOpenQuiz(quiz)}
-                          >
-                            <PlayCircle className="mr-2 h-4 w-4" />
-                            Take Quiz
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          <CardContent className="p-6">
+                            <p className="text-gray-700 dark:text-gray-300 mb-4">
+                              This quiz contains {quiz.questions?.length || 0} questions to test your understanding of the module content.
+                            </p>
+                            <Button 
+                              className={isCompleted 
+                                ? "bg-green-600 hover:bg-green-700" 
+                                : "bg-purple-600 hover:bg-purple-700"
+                              }
+                              onClick={() => handleOpenQuiz(quiz)}
+                            >
+                              {isCompleted ? (
+                                <>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Retake Quiz
+                                </>
+                              ) : (
+                                <>
+                                  <PlayCircle className="mr-2 h-4 w-4" />
+                                  Take Quiz
+                                </>
+                              )}
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-12 text-center">
@@ -952,6 +1297,7 @@ useEffect(() => {
                               className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 transition-colors"
                             >
                               <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                              // Continuing from previous file
                                 {resource.type === "Book" ? (
                                   <BookOpen className="h-5 w-5" />
                                 ) : resource.type === "Academic Paper" ? (
@@ -1014,6 +1360,19 @@ useEffect(() => {
                 <div className="prose max-w-full dark:prose-invert">
                   <CustomMarkdownRenderer markdown={activeArticle.content} />
                 </div>
+                
+                {/* Add Article Progress Tracker in modal */}
+                {activeArticle && activeArticle.id && (
+                  <ArticleProgressTracker
+                    moduleId={moduleId}
+                    subModule={{ subModuleTitle: activeArticle.title, id: activeArticle.id }}
+                    isCompleted={completedArticles[activeArticle.id]}
+                    onProgressUpdate={(progressData) => {
+                      handleArticleProgressUpdate(activeArticle.id, progressData);
+                      setShowArticleModal(false);
+                    }}
+                  />
+                )}
               </div>
             </div>
             
@@ -1021,7 +1380,10 @@ useEffect(() => {
               <Button variant="outline" onClick={() => setShowArticleModal(false)}>
                 Close
               </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => setShowArticleModal(false)}
+              >
                 <BookmarkPlus className="h-4 w-4 mr-2" />
                 Save Article
               </Button>
@@ -1029,6 +1391,7 @@ useEffect(() => {
           </motion.div>
         </motion.div>
       )}
+      
       {/* QUIZ MODAL */}
       {showQuizModal && activeQuiz && (
         <motion.div 
@@ -1061,201 +1424,18 @@ useEffect(() => {
             
             <div className="flex-1 overflow-auto">
               <div className="px-6 py-5">
-                {!quizSubmitted ? (
-                  <div className="space-y-8">
-                    {activeQuiz.questions?.map((q, idx) => (
-                      <motion.div 
-                        key={idx}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: idx * 0.1 }}
-                        className="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-800/50"
-                      >
-                        <div className="flex items-start gap-3 mb-4">
-                          <div className="bg-indigo-600 text-white h-7 w-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
-                            {idx + 1}
-                          </div>
-                          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                            {q.question}
-                          </h3>
-                        </div>
-                        
-                        <div className="space-y-3 mt-4">
-                          {q.options.map((option, optionIdx) => {
-                            const optionLetter = option.charAt(0);
-                            
-                            return (
-                              <motion.div
-                                key={optionIdx}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.2, delay: 0.1 + optionIdx * 0.05 }}
-                                whileHover={{ x: 3 }}
-                              >
-                                <label 
-                                  className={`flex items-center gap-3 p-4 rounded-lg cursor-pointer transition-all ${
-                                    quizAnswers[idx] === optionLetter 
-                                      ? "bg-indigo-100 dark:bg-indigo-800/50 border border-indigo-300 dark:border-indigo-700 shadow-sm" 
-                                      : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700"
-                                  }`}
-                                >
-                                  <div className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${
-                                    quizAnswers[idx] === optionLetter 
-                                      ? "bg-indigo-600 text-white border-2 border-indigo-200 dark:border-indigo-700" 
-                                      : "border-2 border-gray-300 dark:border-gray-600"
-                                  }`}>
-                                    {quizAnswers[idx] === optionLetter && (
-                                      <CheckCircle className="h-4 w-4" />
-                                    )}
-                                  </div>
-                                  <input
-                                    type="radio"
-                                    name={`question-${idx}`}
-                                    value={optionLetter}
-                                    checked={quizAnswers[idx] === optionLetter}
-                                    onChange={() => handleQuizAnswerChange(idx, optionLetter)}
-                                    className="sr-only"
-                                  />
-                                  <span className="text-gray-700 dark:text-gray-300">{option}</span>
-                                </label>
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5 }}
-                      className={`p-8 rounded-xl shadow-sm ${
-                        passedQuiz ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <div className={`p-4 rounded-full ${passedQuiz ? "bg-green-100 dark:bg-green-800/50" : "bg-red-100 dark:bg-red-800/50"}`}>
-                          {passedQuiz 
-                            ? <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
-                            : <X className="h-12 w-12 text-red-600 dark:text-red-400" />
-                          }
-                        </div>
-                        <div>
-                          <h3 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">
-                            {passedQuiz ? "Congratulations!" : "Quiz Results"}
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <div className="text-xl font-bold">
-                              Score: <span className={passedQuiz ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{quizScore}%</span>
-                            </div>
-                            <div className="h-5 w-px bg-gray-300 dark:bg-gray-700"></div>
-                            <div className="text-gray-600 dark:text-gray-400">
-                              Passing score: {activeQuiz.passingScore || 60}%
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-6 pt-6 border-t border-dashed border-gray-200 dark:border-gray-700">
-                        {passedQuiz ? (
-                          <p className="text-green-700 dark:text-green-400">
-                            You've successfully completed this knowledge check! Your solid understanding of the material will help you as you continue through the course.
-                          </p>
-                        ) : (
-                          <p className="text-red-700 dark:text-red-400">
-                            You didn't reach the passing score. Review the material in this module and try again to strengthen your understanding of the key concepts.
-                          </p>
-                        )}
-                      </div>
-                    </motion.div>
-                    
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">Question Summary</h3>
-                      {activeQuiz.questions?.map((q, idx) => {
-                        const isCorrect = quizAnswers[idx] === q.correctAnswer;
-                        
-                        return (
-                          <motion.div 
-                            key={idx}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: idx * 0.1 }}
-                            className={`p-4 rounded-lg border ${
-                              isCorrect 
-                                ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" 
-                                : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`mt-0.5 p-1 rounded-full text-white ${isCorrect ? "bg-green-600" : "bg-red-600"}`}>
-                                {isCorrect ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-gray-800 dark:text-gray-200">
-                                  {q.question}
-                                </p>
-                                <div className="mt-2 text-sm">
-                                  <p className={isCorrect ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>
-                                    Your answer: {quizAnswers[idx] ? q.options.find(opt => opt.startsWith(quizAnswers[idx])) : "Not answered"}
-                                  </p>
-                                  {!isCorrect && (
-                                    <p className="text-gray-600 dark:text-gray-400 mt-1">
-                                      Correct answer: {q.options.find(opt => opt.startsWith(q.correctAnswer))}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* Use our EnhancedQuiz component */}
+                <EnhancedQuiz 
+                  moduleId={moduleId} 
+                  quiz={activeQuiz} 
+                  onClose={handleCloseQuizModal}
+                  onProgressUpdate={(progressData) => handleQuizProgressUpdate(activeQuiz.id, progressData)}
+                />
               </div>
             </div>
-            
-            <div className="sticky bottom-0 bg-white dark:bg-gray-900 px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between">
-              {!quizSubmitted ? (
-                <>
-                  <Button variant="outline" onClick={handleCloseQuizModal}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    className="bg-indigo-600 hover:bg-indigo-700"
-                    onClick={handleSubmitQuiz}
-                    disabled={Object.keys(quizAnswers).length < (activeQuiz.questions?.length || 0)}
-                    >
-                      Submit Quiz
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setQuizAnswers({});
-                        setQuizSubmitted(false);
-                        setPassedQuiz(false);
-                        setQuizScore(0);
-                      }}
-                    >
-                      <PlayCircle className="h-4 w-4 mr-2" />
-                      Retake Quiz
-                    </Button>
-                    <Button 
-                      className="bg-indigo-600 hover:bg-indigo-700"
-                      onClick={handleCloseQuizModal}
-                    >
-                      Continue Learning
-                    </Button>
-                  </>
-                )}
-              </div>
-            </motion.div>
           </motion.div>
-        )}
-      </div>
-    );
-  }
+        </motion.div>
+      )}
+    </div>
+  );
+}

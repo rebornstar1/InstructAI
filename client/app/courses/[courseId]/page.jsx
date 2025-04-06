@@ -13,42 +13,71 @@ import {
   ChevronRight,
   ChevronLeft,
   Info,
-  Users,
   Award,
   Clock,
   Layers,
   CheckCircle,
   Star,
-  Brain
+  Lock,
+  Unlock
 } from "lucide-react";
+
+// Import our new components and API functions
+import CourseProgressCard from "../components/CourseProgressCard";
+import EnrollmentModal from "../components/EnrollmentModal";
+import { getCourseWithProgress } from "../../../services/progressApi";
 
 export default function CourseDetailPage({ params }) {
   const { courseId } = params;
   const [course, setCourse] = useState(null);
+  const [courseProgress, setCourseProgress] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [isEnrolling, setIsEnrolling] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const fetchCourse = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`http://localhost:8007/api/courses/simplified/${courseId}`);
         
-        if (!response.ok) {
-          throw new Error("Failed to fetch course");
+        // Try to get course with progress data using our new API service
+        try {
+          const enhancedData = await getCourseWithProgress(courseId);
+          setCourse(enhancedData.course);
+          setCourseProgress(enhancedData.courseProgress);
+          
+          // If course is found and has progress, check if we need to sync module progress
+          if (enhancedData.course && enhancedData.courseProgress) {
+            const moduleProgressMap = enhancedData.moduleProgressMap || {};
+            
+            // Store module progress map for use in rendering
+            setCourseProgress(prev => ({
+              ...prev,
+              moduleProgressMap
+            }));
+          }
+        } catch (err) {
+          console.error("Error fetching progress data, falling back to basic course data:", err);
+          
+          // Fallback to basic course data if not logged in or other error
+          const response = await fetch(`/api/courses/simplified/${courseId}`);
+          
+          if (!response.ok) {
+            throw new Error("Failed to fetch course");
+          }
+          
+          const data = await response.json();
+          setCourse(data);
         }
-        
-        const data = await response.json();
-        setCourse(data);
-        console.log("data",data);
       } catch (error) {
         console.error("Error fetching course:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
+  
     if (courseId) {
       fetchCourse();
     }
@@ -59,7 +88,41 @@ export default function CourseDetailPage({ params }) {
   };
 
   const navigateBack = () => {
-    router.push("/");
+    router.push("/courses");
+  };
+
+  const handleEnrollSuccess = (progress) => {
+    setCourseProgress(progress);
+    setShowEnrollModal(false);
+    setIsEnrolling(false);
+  };
+
+  const handleEnrollClick = async () => {
+    try {
+      setIsEnrolling(true);
+      
+      // Call the enrollInCourse API function
+      const progressData = await enrollInCourse(courseId);
+      
+      // Update state with new progress data
+      setCourseProgress(progressData);
+      
+      // Show success message
+      toast({
+        title: "Successfully enrolled!",
+        description: "You have been enrolled in this course.",
+      });
+    } catch (error) {
+      console.error("Error enrolling in course:", error);
+      
+      toast({
+        title: "Enrollment failed",
+        description: "There was an error enrolling in this course. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnrolling(false);
+    }
   };
 
   // Animation variants
@@ -99,7 +162,7 @@ export default function CourseDetailPage({ params }) {
         <h1 className="text-2xl font-bold mb-4">Course not found</h1>
         <Button onClick={navigateBack}>
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Back to Home
+          Back to Courses
         </Button>
       </div>
     );
@@ -115,13 +178,6 @@ export default function CourseDetailPage({ params }) {
     return course?.modules || [];
   };
 
-  // Calculate course completion percentage (placeholder)
-  const calculateCompletion = () => {
-    const totalModules = getModules().length;
-    const completedModules = 0; // This would come from user progress data
-    return totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-  };
-
   return (
     <div className="container mx-auto px-4 py-8">
       <Button 
@@ -130,7 +186,7 @@ export default function CourseDetailPage({ params }) {
         className="mb-6"
       >
         <ChevronLeft className="mr-2 h-4 w-4" />
-        Back to Home
+        Back to Courses
       </Button>
 
       <motion.div 
@@ -159,6 +215,21 @@ export default function CourseDetailPage({ params }) {
                   <Badge className="bg-white/20 hover:bg-white/30 text-white border-none backdrop-blur-sm self-center md:self-start">
                     {getCourseMetadata('difficultyLevel', 'Course')}
                   </Badge>
+                  
+                  {/* Add enrollment status badge if available */}
+                  {courseProgress && (
+                    <Badge className={`backdrop-blur-sm self-center md:self-start ${
+                      courseProgress.state === "COMPLETED" 
+                        ? "bg-green-500/20 hover:bg-green-500/30 text-white border-none"
+                        : "bg-blue-500/20 hover:bg-blue-500/30 text-white border-none"
+                    }`}>
+                      {courseProgress.state === "COMPLETED" 
+                        ? <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                        : <Star className="h-3.5 w-3.5 mr-1" />
+                      }
+                      {courseProgress.state.replace("_", " ")}
+                    </Badge>
+                  )}
                 </div>
                 
                 <h1 className="text-3xl md:text-4xl font-bold mb-3">
@@ -178,7 +249,45 @@ export default function CourseDetailPage({ params }) {
                     <Award className="h-3.5 w-3.5 mr-1" />
                     {getCourseMetadata('difficultyLevel', 'Mixed')}
                   </Badge>
+                  
+                  {/* Add XP badge if enrolled */}
+                  {courseProgress && (
+                    <Badge className="bg-purple-500/20 text-white hover:bg-purple-500/30 border-none backdrop-blur-sm px-3 py-1.5">
+                      <Star className="h-3.5 w-3.5 mr-1" />
+                      {courseProgress.earnedXP} XP
+                    </Badge>
+                  )}
                 </div>
+                
+                {/* Add Enroll/Continue button */}
+                {!courseProgress && (
+                  <Button 
+                    className="mt-6 bg-white text-blue-700 hover:bg-white/90 px-6 py-5"
+                    onClick={handleEnrollClick}
+                    disabled={isEnrolling}
+                  >
+                    {isEnrolling ? "Enrolling..." : "Enroll in Course"}
+                  </Button>
+                )}
+                
+                {courseProgress && courseProgress.state !== "COMPLETED" && (
+                  <Button 
+                    className="mt-6 bg-white text-blue-700 hover:bg-white/90 px-6 py-5"
+                    onClick={() => {
+                      if (courseProgress.lastAccessedModuleId) {
+                        navigateToModule(courseProgress.lastAccessedModuleId);
+                      } else {
+                        // Navigate to first module if no last accessed
+                        const firstModule = getModules()[0];
+                        if (firstModule) {
+                          navigateToModule(firstModule.id);
+                        }
+                      }
+                    }}
+                  >
+                    Continue Learning
+                  </Button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -190,6 +299,9 @@ export default function CourseDetailPage({ params }) {
             <TabsList className="mb-8">
               <TabsTrigger value="overview" className="text-base py-2 px-4">Overview</TabsTrigger>
               <TabsTrigger value="curriculum" className="text-base py-2 px-4">Curriculum</TabsTrigger>
+              {courseProgress && (
+                <TabsTrigger value="progress" className="text-base py-2 px-4">My Progress</TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="overview" className="mt-0">
@@ -254,43 +366,13 @@ export default function CourseDetailPage({ params }) {
                 
                 {/* Sidebar */}
                 <div className="space-y-6">
-                  {/* Course Progress Card */}
-                  <Card className="overflow-hidden border-none shadow-lg">
-                    <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
-                      <CardTitle className="text-xl flex items-center gap-2">
-                        Your Progress
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between mb-2 text-sm">
-                            <span className="text-gray-500">Progress</span>
-                            <span className="font-medium">{calculateCompletion()}%</span>
-                          </div>
-                          <Progress value={calculateCompletion()} className="h-2" />
-                        </div>
-                        
-                        <div className="pt-4 grid grid-cols-2 gap-4 text-center text-sm">
-                          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                            <p className="text-gray-500 mb-1">Completed</p>
-                            <p className="text-xl font-bold text-blue-600">0/{getModules().length}</p>
-                            <p className="text-gray-500">Modules</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                            <p className="text-gray-500 mb-1">Time Spent</p>
-                            <p className="text-xl font-bold text-blue-600">0h 0m</p>
-                            <p className="text-gray-500">Learning</p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardContent className="bg-gray-50 dark:bg-gray-800 p-6 border-t">
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700 gap-2">
-                        Start Learning
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  {/* Course Progress/Enrollment Card */}
+                  <CourseProgressCard 
+                    course={course} 
+                    progress={courseProgress}
+                    onEnroll={handleEnrollSuccess}
+                    isEnrolling={isEnrolling}
+                  />
                 </div>
               </div>
             </TabsContent>
@@ -310,28 +392,65 @@ export default function CourseDetailPage({ params }) {
                     </div>
                   </CardHeader>
                   <CardContent className="p-0 divide-y">
-                    {getModules().map((module, index) => (
+                  {getModules().map((module, index) => {
+                    // Get module progress data if available
+                    const moduleProgress = courseProgress && courseProgress.moduleProgressMap 
+                      ? courseProgress.moduleProgressMap[module.id || module.moduleId]
+                      : null;
+                    
+                    // Determine module state for UI
+                    const moduleState = moduleProgress ? moduleProgress.state : null;
+                    const isLocked = moduleState === "LOCKED";
+                    const isCompleted = moduleState === "COMPLETED";
+                    const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
+                    const earnedXP = moduleProgress ? moduleProgress.earnedXP : 0;
+                    
+                    return (
                       <motion.div 
                         key={module.moduleId || module.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors"
+                        className={`group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${
+                          isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        }`}
                       >
                         <div 
-                          className="p-5 cursor-pointer"
-                          onClick={() => navigateToModule(module.id || module.moduleId)}
+                          className="p-5"
+                          onClick={() => !isLocked && navigateToModule(module.id || module.moduleId)}
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 group-hover:text-blue-700 transition-colors">
+                                {/* Module status icon */}
+                                {isCompleted && (
+                                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
+                                    <CheckCircle className="h-4 w-4" />
+                                  </div>
+                                )}
+                                
+                                {isLocked && (
+                                  <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">
+                                    <Lock className="h-4 w-4" />
+                                  </div>
+                                )}
+                                
+                                <h3 className={`text-lg font-medium group-hover:text-blue-700 transition-colors ${
+                                  isCompleted ? "text-green-700 dark:text-green-400" : "text-gray-800 dark:text-gray-200"
+                                }`}>
                                   {module.title}
                                 </h3>
+                                
+                                {/* Progress badge if exists */}
+                                {moduleProgress && moduleProgress.progressPercentage > 0 && moduleProgress.progressPercentage < 100 && (
+                                  <Badge className="bg-blue-100 text-blue-800 border-none ml-2">
+                                    {moduleProgress.progressPercentage}% Complete
+                                  </Badge>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-4 w-4" />
+                                <div className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
                                   <span>{module.duration || "1-2 hours"}</span>
                                 </div>
                                 {module.complexityLevel && (
@@ -340,25 +459,163 @@ export default function CourseDetailPage({ params }) {
                                     <span>{module.complexityLevel}</span>
                                   </>
                                 )}
+                                
+                                {/* XP indicator if enrolled */}
+                                {moduleProgress && moduleProgress.earnedXP > 0 && (
+                                  <>
+                                    <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
+                                    <div className="flex items-center">
+                                      <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                                      <span>{moduleProgress.earnedXP} XP</span>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                               <p className="text-gray-600 mt-2 line-clamp-2">
                                 {module.description}
                               </p>
                             </div>
-                            <div className="text-blue-600 group-hover:translate-x-1 transition-transform">
+                            <div className={`text-blue-600 group-hover:translate-x-1 transition-transform ${
+                              isLocked ? "opacity-50" : ""
+                            }`}>
                               <ChevronRight className="h-5 w-5" />
                             </div>
                           </div>
                         </div>
                       </motion.div>
-                    ))}
+                    );
+                  })}
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
+            
+            {/* Progress Tab (only shown when enrolled) */}
+            {courseProgress && (
+              <TabsContent value="progress" className="mt-0">
+                <div className="space-y-6">
+                  {/* Overall Progress Card */}
+                  <Card className="overflow-hidden border-none shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
+                      <CardTitle className="text-xl">Your Learning Journey</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      <div className="space-y-6">
+                        {/* Course completion progress */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200">Course Completion</h3>
+                            <span className="font-medium">{courseProgress.progressPercentage}%</span>
+                          </div>
+                          <Progress value={courseProgress.progressPercentage} className="h-2" />
+                        </div>
+                        
+                        {/* XP earned */}
+                        <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-100 dark:bg-blue-800/50 rounded-full">
+                              <Star className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-gray-800 dark:text-gray-200">Experience Earned</h4>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Keep learning to gain more XP and level up</p>
+                            </div>
+                          </div>
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {courseProgress.earnedXP} XP
+                          </div>
+                        </div>
+                        
+                        {/* Module completion status */}
+                        <div>
+                          <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-4">Module Progress</h3>
+                          <div className="space-y-3">
+                            {getModules().map((module, index) => {
+                              // Get module progress data if available
+                              const moduleProgress = courseProgress.moduleProgressMap
+                                ? courseProgress.moduleProgressMap[module.id || module.moduleId]
+                                : null;
+                              
+                              // Default to locked if no progress data
+                              const moduleState = moduleProgress ? moduleProgress.state : "LOCKED";
+                              const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
+                              
+                              return (
+                                <div key={module.id || module.moduleId} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                                  <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center gap-2">
+                                      {moduleState === "COMPLETED" ? (
+                                        <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
+                                          <CheckCircle className="h-4 w-4" />
+                                        </div>
+                                      ) : moduleState === "IN_PROGRESS" ? (
+                                        <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                                          <Clock className="h-4 w-4" />
+                                        </div>
+                                      ) : moduleState === "UNLOCKED" ? (
+                                        <div className="p-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
+                                          <Unlock className="h-4 w-4" />
+                                        </div>
+                                      ) : (
+                                        <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">
+                                          <Lock className="h-4 w-4" />
+                                        </div>
+                                      )}
+                                      
+                                      <h4 className="font-medium text-gray-800 dark:text-gray-200">
+                                        {module.title}
+                                      </h4>
+                                    </div>
+                                    
+                                    <Badge className={`
+                                      ${moduleState === "COMPLETED" ? "bg-green-100 text-green-800" : 
+                                        moduleState === "IN_PROGRESS" ? "bg-blue-100 text-blue-800" :
+                                        moduleState === "UNLOCKED" ? "bg-yellow-100 text-yellow-800" :
+                                        "bg-gray-100 text-gray-800"}
+                                      border-none
+                                    `}>
+                                      {moduleState.replace("_", " ")}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <Progress value={progressPercentage} className="h-1" />
+                                  
+                                  <div className="flex justify-between items-center mt-2 text-sm">
+                                    <span className="text-gray-500">{progressPercentage}% Complete</span>
+                                    
+                                    {moduleProgress && moduleProgress.earnedXP > 0 && (
+                                      <div className="flex items-center text-yellow-600">
+                                        <Star className="h-3.5 w-3.5 mr-1" />
+                                        <span>{moduleProgress.earnedXP} XP</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         </motion.div>
       </motion.div>
+      
+      {/* Enrollment Modal */}
+      <AnimatePresence>
+        {showEnrollModal && (
+          <EnrollmentModal 
+            isOpen={showEnrollModal}
+            onClose={() => setShowEnrollModal(false)}
+            course={course}
+            onSuccess={handleEnrollSuccess}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

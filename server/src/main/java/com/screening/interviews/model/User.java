@@ -33,4 +33,44 @@ public class User {
     public String getRole() {
         return "USER";
     }
+
+    // These changes should be applied to your existing User.java model
+
+    /**
+     * Calculate the required XP for the next level.
+     * This can be added to your existing User class.
+     * @return XP required for next level
+     */
+    public int getNextLevelXPRequirement() {
+        int currentLevel = getLevel();
+        // Example formula: 100 * level^1.5
+        return (int)(100 * Math.pow(currentLevel, 1.5));
+    }
+
+    /**
+     * Calculate the user's current level based on XP.
+     * This can be added to your existing User class.
+     * @return current level
+     */
+    public int getLevel() {
+        // Simple formula: level = 1 + (XP / 100)
+        // You can use more complex formulas as needed
+        return 1 + (this.xp / 100);
+    }
+
+    /**
+     * Calculate progress towards next level (0-100%).
+     * This can be added to your existing User class.
+     * @return percentage progress towards next level
+     */
+    public int getLevelProgress() {
+        int currentLevel = getLevel();
+        int currentLevelXP = (currentLevel - 1) * 100; // Base XP for current level
+        int nextLevelXP = getNextLevelXPRequirement(); // XP required for next level
+        int levelXPRange = nextLevelXP - currentLevelXP;
+
+        // Calculate progress within current level
+        int levelProgress = ((this.xp - currentLevelXP) * 100) / levelXPRange;
+        return Math.min(100, Math.max(0, levelProgress)); // Clamp between 0-100
+    }
 }
