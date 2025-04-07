@@ -60,19 +60,39 @@ const CustomMarkdownRenderer = ({ markdown }) => {
                 {...props}
               />
             ),
-            code: ({node, inline, ...props}) => 
-              inline ? (
-                <code
-                  className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-sm font-mono"
-                  {...props}
-                />
-              ) : (
-                <pre
-                  className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg overflow-x-auto text-sm font-mono my-4"
-                >
-                  <code {...props} />
-                </pre>
-              ),
+            // Fix for the code component - handle all code elements specifically
+            pre: ({node, ...props}) => {
+              // This captures fenced code blocks ```code```
+              return (
+                <div className="my-4">
+                  <pre
+                    className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg overflow-x-auto text-sm font-mono"
+                    {...props}
+                  />
+                </div>
+              );
+            },
+            code: ({node, inline, className, children, ...props}) => {
+              if (inline) {
+                // This handles inline `code` snippets
+                return (
+                  <code
+                    className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-sm font-mono"
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+              
+              // For non-inline code, return just the code element
+              // The parent <pre> is handled separately
+              return (
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              );
+            },
             blockquote: ({node, ...props}) => (
               <blockquote
                 className="border-l-4 border-primary pl-4 py-2 my-4 bg-slate-50 dark:bg-slate-800/50 italic"
@@ -91,12 +111,53 @@ const CustomMarkdownRenderer = ({ markdown }) => {
                 {...props}
               />
             ),
-            p: ({node, ...props}) => (
-              <p
-                className="mb-4 leading-relaxed"
-                {...props}
-              />
-            )
+            // Completely override how paragraphs are rendered
+            p: ({node, children, ...props}) => {
+              // Check if any of the children are problematic HTML elements
+              const childArray = React.Children.toArray(children);
+              
+              // If there are any pre or div elements as direct children, we need to handle specially
+              const hasInvalidChildren = childArray.some(child => 
+                React.isValidElement(child) && (
+                  child.type === 'pre' || 
+                  child.type === 'div' ||
+                  (typeof child.type === 'function' && child.type.name === 'pre')
+                )
+              );
+              
+              if (hasInvalidChildren) {
+                // Return each child wrapped in its own paragraph or as-is if it's a special element
+                return (
+                  <>
+                    {childArray.map((child, i) => {
+                      if (React.isValidElement(child) && (
+                        child.type === 'pre' || 
+                        child.type === 'div' ||
+                        (typeof child.type === 'function' && child.type.name === 'pre')
+                      )) {
+                        // Return problematic elements as-is without wrapping
+                        return <React.Fragment key={i}>{child}</React.Fragment>;
+                      } else if (child) {
+                        // Wrap text and other valid children in paragraphs
+                        return (
+                          <p key={i} className="mb-4 leading-relaxed" {...props}>
+                            {child}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })}
+                  </>
+                );
+              }
+              
+              // Regular paragraph with no problematic children
+              return (
+                <p className="mb-4 leading-relaxed" {...props}>
+                  {children}
+                </p>
+              );
+            }
           }}
         >
           {markdown}

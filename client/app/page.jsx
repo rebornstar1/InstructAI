@@ -214,7 +214,7 @@ const LandingPage = () => {
                     </div>
                   </div>
                   <img 
-                    src="/api/placeholder/600/400" 
+                    src='./dashboard.png' 
                     alt="InstructAI Dashboard" 
                     className="w-full"
                   />
@@ -457,7 +457,7 @@ const LandingPage = () => {
                   <div className="mx-auto text-sm text-slate-500 font-medium">InstructAI Learning Dashboard</div>
                 </div>
                 <img 
-                  src="/api/placeholder/800/500" 
+                  src="./dashboard.png" 
                   alt="InstructAI Dashboard Interface" 
                   className="w-full"
                 />
@@ -630,23 +630,24 @@ const LandingPage = () => {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
+                quote: "The adaptive quizzes helped identify my knowledge gaps and the system adjusted my course accordingly. I've never experienced such personalized learning.",
+                name: "Sanjay Paul",
+                role: "Software Development Engineer, Oracle",
+                image: "./sanjaypaul.png"
+              },
+              {
                 quote: "InstructAI completely changed how I approach learning. The personalized courses saved me countless hours of searching for the right resources.",
-                name: "Alexandra Chen",
-                role: "Software Engineer",
-                image: "/api/placeholder/100/100"
+                name: "Vraj Shah",
+                role: "Software Developer, Google",
+                image: "./vrajshah.png"
               },
               {
                 quote: "As a manager, I needed to quickly learn new skills for an upcoming project. InstructAI created the perfect learning path that fit my tight schedule.",
-                name: "Michael Rodriguez",
-                role: "Product Manager",
-                image: "/api/placeholder/100/100"
-              },
-              {
-                quote: "The adaptive quizzes helped identify my knowledge gaps and the system adjusted my course accordingly. I've never experienced such personalized learning.",
-                name: "Sarah Johnson",
-                role: "Data Scientist",
-                image: "/api/placeholder/100/100"
+                name: "Akshay Waghmare",
+                role: "Product Manager, Microsoft",
+                image: "./akshaywaghmare.png"
               }
+              
             ].map((testimonial, index) => (
               <div 
                 key={index}

@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react'
 import Dashboard from '../dashboard/page'
 import DashboardComponent from '@/components/dashboard'

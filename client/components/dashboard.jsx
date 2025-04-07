@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Brain, 
@@ -14,16 +15,29 @@ import {
   GraduationCap,
   LayoutDashboard,
   FileText,
-  Settings
+  Settings,
+  Loader2,
+  BookOpen,
+  ArrowRight,
+  Check,
+  Lightbulb
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext"; // Changed from Clerk to our custom auth
+import { useAuth } from "@/context/AuthContext";
 import { fetchWithAuth } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-import CourseCreationComponent from "./CourseCreationComponent";
 import CourseContentComponent from "./CourseContentComponent";
 import AITutorChatComponent from "./AITutorChatComponent";
 
 export default function Dashboard() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [generatedCourse, setGeneratedCourse] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -32,6 +46,9 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const { user } = useAuth();
   
+  const [userCourses, setUserCourses] = useState([]);
+  const [courseCount, setCourseCount] = useState(0);
+  
   const [messages, setMessages] = useState([
     {
       role: "ai",
@@ -39,6 +56,51 @@ export default function Dashboard() {
         "Hello! I'm your AI tutor. Enter a prompt to generate a course on any topic you'd like to learn about.",
     },
   ]);
+
+  // Function to calculate user level based on XP
+  const calculateUserLevel = (xp) => {
+    if (xp < 200) {
+      return {
+        level: 1,
+        currentXP: xp,
+        nextLevelXP: 200,
+        progress: (xp / 200) * 100,
+        title: "Novice"
+      };
+    } else if (xp < 500) {
+      return {
+        level: 2,
+        currentXP: xp,
+        nextLevelXP: 500,
+        progress: ((xp - 200) / 300) * 100,
+        title: "Apprentice"
+      };
+    } else if (xp < 1000) {
+      return {
+        level: 3,
+        currentXP: xp,
+        nextLevelXP: 1000,
+        progress: ((xp - 500) / 500) * 100,
+        title: "Adept"
+      };
+    } else if (xp < 2000) {
+      return {
+        level: 4,
+        currentXP: xp,
+        nextLevelXP: 2000,
+        progress: ((xp - 1000) / 1000) * 100,
+        title: "Expert"
+      };
+    } else {
+      return {
+        level: 5,
+        currentXP: xp,
+        nextLevelXP: null,
+        progress: 100,
+        title: "Master"
+      };
+    }
+  };
 
   // Example raw course suggestions - will still be hardcoded for the UI
   const rawCourses = [
@@ -66,43 +128,51 @@ export default function Dashboard() {
 
   // Fetch user profile data from the backend
   useEffect(() => {
-    console.log("HIII")
-    console.log("USSS" ,user)
     async function fetchUserProfile() {
-      
       try {
-        
         if (!user) return;
-        console.log("doing")
-        
         setLoading(true);
         const response = await fetchWithAuth('/users/profile');
         
         if (!response.ok) {
           throw new Error('Failed to fetch user profile');
         }
-        console.log("REsponse" , response.json)
         const data = await response.json();
         
         setUserProfile(data);
       } catch (err) {
-        
         console.error('Error fetching user profile:', err);
         setError('Could not load user profile data');
       } finally {
-        
         setLoading(false);
         setIsLoaded(true);
       }
     }
 
     fetchUserProfile();
-    
   }, [user]);
   
+  // Fetch courses from the backend
   useEffect(() => {
-    console.log("USerprofile" , userProfile)
-  }, [userProfile])
+    async function fetchUserCourses() {
+      try {
+        const response = await fetch('http://localhost:8007/api/courses/simplified');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch user courses');
+        }
+        
+        const data = await response.json();
+        console.log("Fetched courses:", data);
+        setUserCourses(data);
+        setCourseCount(data.length);
+      } catch (err) {
+        console.error('Error fetching user courses:', err);
+      }
+    }
+
+    fetchUserCourses();
+  }, [user]);
 
   // Animation variants
   const containerVariants = {
@@ -130,6 +200,117 @@ export default function Dashboard() {
     }
   };
 
+  // Stats cards component - updated with XP level system
+  const StatsCards = () => {
+    // Calculate user level information
+    const userXP = userProfile?.xp || 0;
+    const levelInfo = calculateUserLevel(userXP);
+    
+    return (
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
+      >
+        <motion.div variants={itemVariants} className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-md">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-blue-100">Total XP</p>
+              <h3 className="text-3xl font-bold mt-1">{userXP}</h3>
+            </div>
+            <div className="p-2 bg-white/20 rounded-lg">
+              <Star className="h-6 w-6" />
+            </div>
+          </div>
+          
+          {/* Level indicator */}
+          <div className="mt-4 bg-white/10 rounded-lg p-3">
+            <div className="flex justify-between items-center mb-1">
+              <span className="font-bold text-lg flex items-center">
+                Level {levelInfo.level}
+                <span className="ml-2 px-2 py-1 bg-yellow-500 text-yellow-900 text-xs font-bold rounded-md">
+                  {levelInfo.title}
+                </span>
+              </span>
+              {levelInfo.nextLevelXP && (
+                <span className="text-xs text-blue-100">{levelInfo.currentXP}/{levelInfo.nextLevelXP} XP</span>
+              )}
+            </div>
+            
+            <div className="mt-2 bg-white/20 h-2 rounded-full overflow-hidden">
+              <div 
+                className="bg-white h-full rounded-full" 
+                style={{ width: `${levelInfo.progress}%` }}
+              ></div>
+            </div>
+            
+            {levelInfo.nextLevelXP ? (
+              <p className="text-sm mt-2 text-blue-100">
+                {levelInfo.progress.toFixed(0)}% to level {levelInfo.level + 1}
+              </p>
+            ) : (
+              <p className="text-sm mt-2 text-blue-100">
+                Maximum level reached!
+              </p>
+            )}
+          </div>
+        </motion.div>
+        
+        <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500">Your Learning Stats</p>
+            </div>
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <GraduationCap className="h-6 w-6" />
+            </div>
+          </div>
+          
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-700">Courses Started</p>
+                  <h4 className="text-xl font-bold text-blue-900">{courseCount || 0}</h4>
+                </div>
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                  <Book className="h-4 w-4" />
+                </div>
+              </div>
+              <button 
+                className="mt-2 text-xs text-blue-700 flex items-center font-medium"
+                onClick={() => router.push('/courses')}
+                suppressHydrationWarning
+              >
+                View all courses <ChevronRight className="h-3 w-3 ml-1" />
+              </button>
+            </div>
+            
+            <div className="bg-indigo-50 p-3 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-indigo-700">AI Tutor Chats</p>
+                  <h4 className="text-xl font-bold text-indigo-900">12</h4>
+                </div>
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                  <MessageCircle className="h-4 w-4" />
+                </div>
+              </div>
+              <button 
+                className="mt-2 text-xs text-indigo-700 flex items-center font-medium"
+                onClick={() => setActiveTab("chat")}
+                suppressHydrationWarning
+              >
+                Continue conversation <ChevronRight className="h-3 w-3 ml-1" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
   // Suggested courses component
   const SuggestedCourses = () => (
     <motion.div 
@@ -150,7 +331,49 @@ export default function Dashboard() {
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {rawCourses.map((course, index) => (
+        {userCourses.length > 0 ? userCourses.map((course, index) => (
+          <motion.div
+            key={index}
+            variants={itemVariants}
+            whileHover="hover"
+            whileTap={{ scale: 0.98 }}
+            className="cursor-pointer"
+          >
+            <div 
+              className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1"
+              variants={cardHoverVariants}
+              onClick={() => {
+                setGeneratedCourse({
+                  title: course.title,
+                  description: course.description,
+                  modules: course.modules || [{
+                    title: "Introduction",
+                    lessons: [{ title: "Getting Started" }]
+                  }]
+                });
+                setActiveTab("course");
+              }}
+            >
+              <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+              <div className="p-6">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  {course.icon ? (
+                    <span className="text-2xl">{course.icon}</span>
+                  ) : (
+                    <Book className="h-5 w-5 text-blue-500" />
+                  )}
+                  {course.courseMetadata.title}
+                </h3>
+                <p className="text-slate-600 mt-3 line-clamp-6">{course.courseMetadata.description}</p>
+                <div className="mt-4 flex items-center text-blue-600 text-sm font-medium">
+                  Start Course
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )) : rawCourses.map((course, index) => (
+          // Fallback to rawCourses if no courses from backend
           <motion.div
             key={index}
             variants={itemVariants}
@@ -196,61 +419,557 @@ export default function Dashboard() {
     </motion.div>
   );
 
-  // Stats cards component
-  const StatsCards = () => (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-    >
-      <motion.div variants={itemVariants} className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-xl shadow-md">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-blue-100">Total XP</p>
-            <h3 className="text-3xl font-bold mt-1">{userProfile?.xp || 0}</h3>
-          </div>
-          <div className="p-2 bg-white/20 rounded-lg">
-            <Star className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="mt-6 bg-white/20 h-2 rounded-full overflow-hidden">
-          <div className="bg-white h-full rounded-full" style={{ width: "65%" }}></div>
-        </div>
-        <p className="text-sm mt-2 text-blue-100">65% to next level</p>
-      </motion.div>
+  // Update the XP badge in the navigation to show level too
+  const XPBadge = () => {
+    const userXP = userProfile?.xp || 0;
+    const { level } = calculateUserLevel(userXP);
+    
+    return (
+      <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+        <Star className="h-4 w-4 mr-1" />
+        <span>{userXP} XP</span>
+        <span className="ml-1 px-1.5 py-0.5 bg-yellow-500 text-yellow-900 text-xs font-bold rounded-md">Lv.{level}</span>
+      </div>
+    );
+  };
+
+  // Course Creation Component
+  const CourseCreationComponent = ({
+    rawCourses,
+    setGeneratedCourse,
+    setActiveTab,
+    messages,
+    setMessages,
+  }) => {
+    const [coursePrompt, setCoursePrompt] = useState("");
+    const [difficultyLevel, setDifficultyLevel] = useState("Mixed");
+    const [isFormValid, setIsFormValid] = useState(false);
+    const [showValidationError, setShowValidationError] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [componentIsLoaded, setComponentIsLoaded] = useState(false);
+    
+    // Interactive flow states
+    const [interactiveMode, setInteractiveMode] = useState(false);
+    const [currentQuestions, setCurrentQuestions] = useState(null);
+    const [sessionId, setSessionId] = useState(null);
+    const [userAnswers, setUserAnswers] = useState({});
+    const [interactiveStep, setInteractiveStep] = useState(1);
+    const [totalSteps, setTotalSteps] = useState(3); // Assuming 3 steps in the flow
+
+    useEffect(() => {
+      setIsFormValid(coursePrompt.trim() !== "");
+    }, [coursePrompt]);
+
+    useEffect(() => {
+      setComponentIsLoaded(true);
+    }, []);
+
+    const handleSelectRawCourse = async (rawCourse) => {
+      setCoursePrompt(rawCourse.title);
+      await handleStartInteractiveFlow({ preventDefault: () => {} });
+    };
+
+    // Start the interactive course creation flow
+    const handleStartInteractiveFlow = async (event) => {
+      event.preventDefault();
+      if (!isFormValid) {
+        setShowValidationError(true);
+        return;
+      }
       
-      <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-slate-500">Courses Started</p>
-            <h3 className="text-3xl font-bold mt-1 text-slate-800">
-              {userProfile?.completedCourses?.length || 10}
-            </h3>
-          </div>
-          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-            <Book className="h-6 w-6" />
-          </div>
-        </div>
-        <p className="text-sm mt-6 text-blue-600 font-medium">View all courses</p>
-      </motion.div>
+      setIsLoading(true);
+      setInteractiveMode(true);
       
-      <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-slate-500">AI Tutor Chats</p>
-            <h3 className="text-3xl font-bold mt-1 text-slate-800">12</h3>
-          </div>
-          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-            <MessageCircle className="h-6 w-6" />
-          </div>
-        </div>
-        <p className="text-sm mt-6 text-blue-600 font-medium cursor-pointer" onClick={() => setActiveTab("chat")}>
-          Continue conversation
-        </p>
-      </motion.div>
-    </motion.div>
-  );
+      try {
+        const response = await fetch("http://localhost:8007/api/courses/simplified/interactive/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: coursePrompt,
+          }),
+        });
+        
+        const data = await response.json();
+        setCurrentQuestions(data);
+        setSessionId(data.sessionId);
+        setUserAnswers({});
+        setInteractiveStep(1);
+        
+        // Add message to the chat
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: `Generate a course about: ${coursePrompt}` },
+          {
+            role: "ai",
+            content: `I'd like to create a personalized course on "${coursePrompt}" for you. To make it perfect for your needs, I have a few questions.`,
+          },
+        ]);
+        
+      } catch (error) {
+        console.error("Error starting interactive flow:", error);
+        setInteractiveMode(false);
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: `Generate a course about: ${coursePrompt}` },
+          {
+            role: "ai",
+            content: "There was an error starting the interactive course creation. Let's try the standard approach instead.",
+          },
+        ]);
+        // Fall back to non-interactive mode
+        handleGenerateCourse({ preventDefault: () => {} });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    // Handle submitting answers and proceeding to the next step
+    const handleSubmitAnswers = async () => {
+      if (Object.keys(userAnswers).length < currentQuestions.questions.length) {
+        alert("Please answer all questions before proceeding.");
+        return;
+      }
+      
+      setIsLoading(true);
+      
+      try {
+        const response = await fetch(`http://localhost:8007/api/courses/simplified/interactive/continue?sessionId=${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(userAnswers),
+        });
+        
+        const data = await response.json();
+        
+        // Add the current answers to the chat
+        const answerSummary = Object.entries(userAnswers)
+          .map(([id, answer]) => {
+            const question = currentQuestions.questions.find(q => q.id === id);
+            return `${question ? question.question : id}: ${answer}`;
+          })
+          .join("\n");
+          
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: answerSummary },
+          {
+            role: "ai",
+            content: data.complete 
+              ? "Thanks for all your answers! I'll generate your personalized course now."
+              : "Thanks for that information. I have a few more questions to make your course perfect.",
+          },
+        ]);
+        
+        if (data.complete) {
+          // If the flow is complete, generate the final course
+          await finalizeCourse();
+        } else {
+          // Otherwise, move to the next set of questions
+          setCurrentQuestions(data.nextQuestions);
+          setUserAnswers({});
+          setInteractiveStep(interactiveStep + 1);
+        }
+        
+      } catch (error) {
+        console.error("Error continuing interactive flow:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content: "There was an error processing your answers. Let's try to generate the course with what we have so far.",
+          },
+        ]);
+        // Attempt to finalize the course with what we have
+        await finalizeCourse();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    // Finalize and generate the course
+    const finalizeCourse = async () => {
+      setIsLoading(true);
+      
+      try {
+        const response = await fetch(`http://localhost:8007/api/courses/simplified/interactive/finalize?sessionId=${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        
+        const data = await response.json();
+        console.log("Generated Interactive Course Structure:", data);
+        
+        // Set the generated course and switch to the course tab
+        setGeneratedCourse(data);
+        setActiveTab("course");
+        
+        // Count modules by complexity level for informative message
+        const complexityLevels = {};
+        data.modules.forEach(module => {
+          const level = module.complexityLevel || "Unspecified";
+          complexityLevels[level] = (complexityLevels[level] || 0) + 1;
+        });
+        
+        const complexitySummary = Object.entries(complexityLevels)
+          .map(([level, count]) => `${count} ${level}`)
+          .join(", ");
+        
+        // Add final message about the generated course
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content: `I've created a personalized course for you on "${coursePrompt}" with ${data.modules.length} modules (${complexitySummary}). The modules are arranged in a logical progression based on your specific needs and goals. Check out the Course Content tab to explore your customized curriculum.`,
+          },
+        ]);
+        
+        // Reset interactive mode
+        setInteractiveMode(false);
+        
+      } catch (error) {
+        console.error("Error finalizing course:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content: "There was an error generating your personalized course. Let's try the standard approach instead.",
+          },
+        ]);
+        // Fall back to non-interactive mode
+        handleGenerateCourse({ preventDefault: () => {} });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Original non-interactive course generation
+    const handleGenerateCourse = async (event) => {
+      event.preventDefault();
+      if (!isFormValid) {
+        setShowValidationError(true);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:8007/api/courses/simplified/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: coursePrompt,
+            difficultyLevel: difficultyLevel
+          }),
+        });
+        const data = await response.json();
+        console.log("Generated Course Structure:", data);
+        setGeneratedCourse(data);
+        setActiveTab("course");
+        
+        // Count modules by complexity level for informative message
+        const complexityLevels = {};
+        data.modules.forEach(module => {
+          const level = module.complexityLevel || "Unspecified";
+          complexityLevels[level] = (complexityLevels[level] || 0) + 1;
+        });
+        
+        const complexitySummary = Object.entries(complexityLevels)
+          .map(([level, count]) => `${count} ${level}`)
+          .join(", ");
+        
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: `Generate a course about: ${coursePrompt}` },
+          {
+            role: "ai",
+            content: `I've generated a comprehensive course structure for "${coursePrompt}" with ${data.modules.length} modules (${complexitySummary}). The modules are arranged in a logical progression from foundational to advanced concepts. Check out the Course Content tab to explore the full curriculum.`,
+          },
+        ]);
+      } catch (error) {
+        console.error("Error generating course:", error);
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: `Generate a course about: ${coursePrompt}` },
+          {
+            role: "ai",
+            content: "There was an error generating your course. Please try a different topic.",
+          },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Handle changing an answer in the interactive flow
+    const handleAnswerChange = (questionId, value) => {
+      setUserAnswers(prev => ({
+        ...prev,
+        [questionId]: value
+      }));
+    };
+
+    // Render the interactive questions
+    const renderInteractiveQuestions = () => {
+      if (!currentQuestions) return null;
+      
+      return (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="space-y-6"
+        >
+          <motion.div variants={itemVariants} className="text-center space-y-2">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">{currentQuestions.title}</h2>
+            <p className="text-gray-500">{currentQuestions.description}</p>
+            <div className="flex items-center justify-center mt-4 space-x-2">
+              {Array.from({length: totalSteps}, (_, i) => (
+                <div key={i} className="flex flex-col items-center">
+                  <div 
+                    className={`h-3 w-3 rounded-full ${i < interactiveStep ? 'bg-blue-600' : i === interactiveStep ? 'ring-2 ring-blue-400 bg-white' : 'bg-gray-200'}`}
+                  />
+                  <div 
+                    className={`h-1 w-16 ${i < totalSteps - 1 ? (i < interactiveStep - 1 ? 'bg-blue-600' : 'bg-gray-200') : 'bg-transparent'}`}
+                    style={{transform: "translateY(1px)"}}
+                  />
+                </div>
+              ))}
+            </div>
+            <motion.div 
+              variants={itemVariants}
+              className="inline-flex items-center justify-center mt-1 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium"
+            >
+              Step {interactiveStep} of {totalSteps}
+            </motion.div>
+          </motion.div>
+          
+          {currentQuestions.questions.map((question, index) => (
+            <motion.div
+              key={question.id}
+              variants={itemVariants}
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="w-full overflow-hidden border border-gray-200 shadow-md">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-100">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-blue-500" />
+                    {question.question}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <RadioGroup
+                    value={userAnswers[question.id] || ""}
+                    onValueChange={(value) => handleAnswerChange(question.id, value)}
+                    className="space-y-3"
+                  >
+                    <AnimatePresence>
+                      {question.options.map((option, optIndex) => (
+                        <motion.div 
+                          key={optIndex}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: optIndex * 0.05 }}
+                        >
+                          <div className={`flex items-center space-x-2 p-3 rounded-lg border ${userAnswers[question.id] === option ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'}`}>
+                            <RadioGroupItem value={option} id={`${question.id}-${optIndex}`} />
+                            <Label htmlFor={`${question.id}-${optIndex}`} className="flex-1 cursor-pointer">{option}</Label>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+          
+          <motion.div variants={itemVariants}>
+            <Button 
+              onClick={handleSubmitAnswers} 
+              disabled={isLoading || Object.keys(userAnswers).length < currentQuestions.questions.length} 
+              className="w-full py-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+            >
+              {isLoading ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center"
+                >
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processing...
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center"
+                >
+                  {interactiveStep < totalSteps ? (
+                    <>
+                      <ArrowRight className="mr-2 h-5 w-5" />
+                      Continue to Next Step
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      Generate My Personalized Course
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </Button>
+          </motion.div>
+        </motion.div>
+      );
+    };
+
+    return (
+      <AnimatePresence mode="wait">
+        {!interactiveMode ? (
+          <motion.div 
+            className="mx-auto max-w-6xl space-y-8"
+            variants={containerVariants}
+            initial="hidden"
+            animate={componentIsLoaded ? "visible" : "hidden"}
+            exit="exit"
+            key="course-creation-form"
+          >
+            <motion.div 
+              variants={itemVariants} 
+              className="text-center space-y-4"
+            >
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
+                Welcome to Your Learning Journey
+              </h1>
+              <p className="text-gray-500 max-w-2xl mx-auto">
+                Generate a personalized, dynamically structured course on any topic you'd like to learn about, 
+                tailored to your specific learning goals and preferences.
+              </p>
+            </motion.div>
+
+            {/* Generate New Course Section */}
+            <motion.div variants={itemVariants}>
+              <Card className="w-full overflow-hidden border-gray-200 shadow-lg">
+                <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                <CardContent className="p-8">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <Brain className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <label htmlFor="coursePrompt" className="text-xl font-semibold">
+                        Generate a New Course
+                      </label>
+                    </div>
+                    
+                    <p className="text-gray-500 text-sm pl-12">
+                      Enter a topic and we'll ask you a series of questions to create a perfectly tailored course just for you.
+                    </p>
+                    
+                    <div className="relative mt-2">
+                      <Input
+                        id="coursePrompt"
+                        placeholder="e.g., Machine Learning, Web Development, Blockchain"
+                        value={coursePrompt}
+                        onChange={(e) => setCoursePrompt(e.target.value)}
+                        className={`w-full text-lg py-6 pl-4 pr-12 rounded-lg transition-all ${
+                          showValidationError && !coursePrompt.trim() 
+                            ? "border-red-500 focus-visible:ring-red-500" 
+                            : "border-gray-300 focus-visible:ring-blue-500"
+                        }`}
+                      />
+                      {coursePrompt && (
+                        <motion.span 
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        >
+                          <Check className="h-5 w-5 text-green-500" />
+                        </motion.span>
+                      )}
+                    </div>
+                    
+                    {showValidationError && !coursePrompt.trim() && (
+                      <motion.p 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-sm text-red-500 pl-4"
+                      >
+                        Please enter a topic for your course
+                      </motion.p>
+                    )}
+                    
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Button 
+                        onClick={handleStartInteractiveFlow} 
+                        disabled={isLoading} 
+                        className="w-full mt-6 py-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                      >
+                        {isLoading ? (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Starting Your Personal Course Creation...
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <Sparkles className="mr-2 h-5 w-5" />
+                            Start Interactive Course Creation
+                          </motion.div>
+                        )}
+                      </Button>
+                    </motion.div>
+                    
+                    <motion.div 
+                      variants={itemVariants}
+                      className="flex items-center justify-center gap-2 pt-2"
+                    >
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 px-3 py-1">
+                        Personalized Learning
+                      </Badge>
+                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 px-3 py-1">
+                        AI-Powered
+                      </Badge>
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 px-3 py-1">
+                        Interactive
+                      </Badge>
+                    </motion.div>
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-800/30 p-4 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 text-center w-full">
+                    We'll ask you a few questions to understand your exact needs and create a perfectly tailored course.
+                  </p>
+                </CardFooter>
+              </Card>
+            </motion.div>
+          </motion.div>
+        ) : (
+          // Show the interactive questions when in interactive mode
+          <motion.div 
+            key="interactive-questions"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            {renderInteractiveQuestions()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
 
   return (
     <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
@@ -280,10 +999,7 @@ export default function Dashboard() {
               <NavLink href="#" active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>AI Tutor</NavLink>
               
               <div className="ml-8 flex items-center space-x-4">
-                <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
-                  <Star className="h-4 w-4 mr-1" />
-                  <span>{userProfile?.xp} XP</span>
-                </div>
+                <XPBadge />
                 <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
                   <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
                 </div>
@@ -292,7 +1008,7 @@ export default function Dashboard() {
             
             {/* Mobile menu button */}
             <div className="md:hidden">
-              <button className="text-slate-700 hover:text-blue-600 focus:outline-none">
+              <button className="text-slate-700 hover:text-blue-600 focus:outline-none" suppressHydrationWarning>
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
@@ -314,105 +1030,51 @@ export default function Dashboard() {
               transition={{ duration: 0.5 }}
               className="space-y-8"
             >
-              <div className="flex flex-col md:flex-row gap-8 items-start">
-                <div className="md:w-7/12">
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <motion.div className="inline-block mb-3">
-                      <div className="flex items-center">
-                        <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
-                        <span className="text-blue-600 font-medium">Your Learning Dashboard</span>
-                      </div>
-                    </motion.div>
-                    
-                    <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
-                      Welcome back, <span className="relative">
-                        <span className="relative z-10">{userProfile?.username}</span>
-                        <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
-                      </span>
-                    </h1>
-                    
-                    <p className="text-lg text-slate-600 mb-8 max-w-2xl">
-                      Continue your learning journey, explore new courses, or chat with your AI tutor to enhance your skills.
-                    </p>
-                  </motion.div>
-                  
-                  <StatsCards />
-                </div>
-                
-                <div className="md:w-5/12">
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.7, delay: 0.2 }}
-                  >
-                    {/* Activity card */}
-                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-                      <div className="p-6 border-b border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-800">Recent Activity</h3>
-                      </div>
-                      <div className="divide-y divide-slate-200">
-                        {[
-                          {
-                            title: "Completed lesson",
-                            description: "Introduction to Python Variables",
-                            time: "2 hours ago",
-                            icon: <CheckIcon />
-                          },
-                          {
-                            title: "Started new course",
-                            description: "Web Development Fundamentals",
-                            time: "Yesterday",
-                            icon: <PlayIcon />
-                          },
-                          {
-                            title: "Earned achievement",
-                            description: "Coding Streak: 7 Days",
-                            time: "3 days ago",
-                            icon: <TrophyIcon />
-                          }
-                        ].map((activity, i) => (
-                          <div key={i} className="p-4 flex items-start hover:bg-slate-50 transition-colors">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 flex-shrink-0">
-                              {activity.icon}
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium text-slate-800">{activity.title}</h4>
-                              <p className="text-sm text-slate-600">{activity.description}</p>
-                            </div>
-                            <div className="text-xs text-slate-500">{activity.time}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="p-4 bg-slate-50 text-center">
-                        <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
-                          View all activity
-                        </button>
-                      </div>
+              <div className="flex flex-col gap-8 items-start">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6 }}
+                  className="w-full"
+                >
+                  <motion.div className="inline-block mb-3">
+                    <div className="flex items-center">
+                      <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+                      <span className="text-blue-600 font-medium">Your Learning Dashboard</span>
                     </div>
                   </motion.div>
-                </div>
+                  
+                  <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+                    Welcome back, <span className="relative">
+                      <span className="relative z-10">{userProfile?.username}</span>
+                      <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
+                    </span>
+                  </h1>
+                  
+                  <p className="text-lg text-slate-600 mb-8 max-w-3xl">
+                    Continue your learning journey, explore new courses, or chat with your AI tutor to enhance your skills.
+                  </p>
+                  
+                  <StatsCards />
+                </motion.div>
+                
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="w-full"
+                >
+                  <CourseCreationComponent
+                    rawCourses={rawCourses}
+                    setGeneratedCourse={setGeneratedCourse}
+                    setActiveTab={setActiveTab}
+                    messages={messages}
+                    setMessages={setMessages}
+                  />
+                </motion.div>
+                
+                <SuggestedCourses />
               </div>
-
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="bg-white rounded-xl shadow-md p-8 border border-slate-200"
-              >
-                <CourseCreationComponent
-                  rawCourses={rawCourses}
-                  setGeneratedCourse={setGeneratedCourse}
-                  setActiveTab={setActiveTab}
-                  messages={messages}
-                  setMessages={setMessages}
-                />
-              </motion.div>
-              
-              <SuggestedCourses />
             </motion.div>
           )}
 

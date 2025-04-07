@@ -257,6 +257,9 @@ export const completeSubmodule = async (moduleId, submoduleId) => {
     try {
       const userId = parseInt(getCurrentUserId());
       if (!userId) throw new Error('User not authenticated');
+
+      const testone = parseInt(quizId);
+      const testtwo = parseInt(moduleId);
       
       const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/quiz/${quizId}/complete`, {
         method: 'POST',
@@ -264,7 +267,7 @@ export const completeSubmodule = async (moduleId, submoduleId) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ userId, score })
+        body: JSON.stringify({ moduleId : testtwo, score })
       });
       
       if (!response.ok) {

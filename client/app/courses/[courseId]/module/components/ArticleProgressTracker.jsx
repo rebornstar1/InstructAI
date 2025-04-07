@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { completeSubmodule } from "@/services/progressApi";
+import { toast } from "@/components/ui/use-toast"; 
 
 /**
  * ArticleProgressTracker - Tracks and reports article reading progress
@@ -75,12 +76,24 @@ const ArticleProgressTracker = ({
       setCompleted(true);
       setProgress(100);
       
+      // Show success toast
+      toast({
+        title: "Progress updated",
+        description: "Article marked as complete",
+        variant: "success",
+      });
+      
       // Notify parent component
       if (onProgressUpdate && progressData) {
         onProgressUpdate(progressData);
       }
     } catch (error) {
       console.error("Error marking article as complete:", error);
+      toast({
+        title: "Error updating progress",
+        description: "Please try again later",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }

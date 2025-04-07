@@ -125,6 +125,54 @@ const EnhancedQuiz = ({
     return Object.keys(selectedAnswers).length === totalQuestions;
   };
   
+  // Get the correct answer text based on the correctAnswer value
+  const getCorrectAnswerText = (question) => {
+    // If correctAnswer is a direct index (0, 1, 2, 3) or letter (A, B, C, D)
+    if (typeof question.correctAnswer === 'number' || 
+        (typeof question.correctAnswer === 'string' && 
+         question.correctAnswer.match(/^[A-D]$/i))) {
+        
+      // Convert letter to index if needed
+      let correctIndex;
+      if (typeof question.correctAnswer === 'string' && 
+          question.correctAnswer.match(/^[A-D]$/i)) {
+        correctIndex = question.correctAnswer.toUpperCase().charCodeAt(0) - 65; // A=0, B=1, etc.
+      } else {
+        correctIndex = Number(question.correctAnswer);
+      }
+      
+      // Return the actual option text
+      return question.options[correctIndex];
+    }
+    
+    // If correctAnswer is already the full text
+    return question.correctAnswer;
+  };
+  
+  // Check if the selected answer is correct
+  const isAnswerCorrect = (questionIndex, selectedAnswer) => {
+    const question = questions[questionIndex];
+    
+    // If there's a direct match (the answer and correctAnswer are the same text)
+    if (selectedAnswer === question.correctAnswer) {
+      return true;
+    }
+    
+    // If correctAnswer is a letter (A, B, C, D) or index
+    if (typeof question.correctAnswer === 'string' && 
+        question.correctAnswer.match(/^[A-D]$/i)) {
+      const correctIndex = question.correctAnswer.toUpperCase().charCodeAt(0) - 65; // A=0, B=1, etc.
+      return selectedAnswer === question.options[correctIndex];
+    }
+    
+    // If correctAnswer is a numeric index
+    if (typeof question.correctAnswer === 'number') {
+      return selectedAnswer === question.options[question.correctAnswer];
+    }
+    
+    return false;
+  };
+  
   // Submit quiz
   const handleSubmitQuiz = async () => {
     // Check if all questions have been answered
@@ -141,7 +189,7 @@ const EnhancedQuiz = ({
       let correctAnswers = 0;
       
       questions.forEach((question, index) => {
-        if (selectedAnswers[index] === question.correctAnswer) {
+        if (isAnswerCorrect(index, selectedAnswers[index])) {
           correctAnswers++;
         }
       });
@@ -160,7 +208,7 @@ const EnhancedQuiz = ({
       if (onProgressUpdate && progressData) {
         setTimeout(() => {
           onProgressUpdate(progressData);
-        }, 2000); // Delay to show results first
+        }, 10000); // Delay to show results first
       }
     } catch (error) {
       console.error("Error submitting quiz:", error);
@@ -203,8 +251,8 @@ const EnhancedQuiz = ({
           <div className="bg-gray-50 dark:bg-gray-800 p-4 flex justify-between items-center border-b">
             <h3 className="font-bold">Quiz Results</h3>
             <div className="text-sm text-gray-500">
-              {Object.values(selectedAnswers).filter(
-                (answer, index) => answer === questions[index].correctAnswer
+              {Object.keys(selectedAnswers).filter(
+                index => isAnswerCorrect(Number(index), selectedAnswers[index])
               ).length} of {totalQuestions} correct
             </div>
           </div>
@@ -212,7 +260,8 @@ const EnhancedQuiz = ({
             <div className="divide-y">
               {questions.map((question, index) => {
                 const selected = selectedAnswers[index];
-                const isCorrect = selected === question.correctAnswer;
+                const isCorrect = isAnswerCorrect(index, selected);
+                const correctAnswerText = getCorrectAnswerText(question);
                 
                 return (
                   <div 
@@ -241,16 +290,16 @@ const EnhancedQuiz = ({
                         </p>
                         <div className="mt-1 space-y-1 text-sm">
                           <p className={
-                            selected === question.correctAnswer
+                            isCorrect
                               ? "text-green-600 dark:text-green-400 font-medium"
                               : "text-red-600 dark:text-red-400 font-medium"
                           }>
                             Your answer: {selected || "No answer"}
                           </p>
                           
-                          {selected !== question.correctAnswer && (
+                          {!isCorrect && (
                             <p className="text-green-600 dark:text-green-400 font-medium">
-                              Correct answer: {question.correctAnswer}
+                              Correct answer: {correctAnswerText}
                             </p>
                           )}
                           
