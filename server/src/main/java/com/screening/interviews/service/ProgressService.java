@@ -29,6 +29,8 @@ public class ProgressService {
     private final UserCourseProgressRepository userCourseProgressRepository;
     private final UserModuleProgressRepository userModuleProgressRepository;
     private final UserService userService;
+    private final QuizRepository quizRepository;
+    private final SubModuleRepository subModuleRepository;
 
     /**
      * Enroll user in a course and initialize progress
@@ -579,5 +581,56 @@ public class ProgressService {
         }
 
         return userModuleProgressRepository.save(progress);
+    }
+
+
+    @Transactional
+    public int updateTotalSubmodules(Long moduleId) {
+        log.info("Updating total submodules count for module ID: {}", moduleId);
+
+        // Get the module to check if it exists and to get video count
+        Module module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> new RuntimeException("Module not found with ID: " + moduleId));
+
+        // Count all components
+        int subModulesCount = subModuleRepository.countByModuleId(moduleId);
+        int quizzesCount = quizRepository.countByModuleId(moduleId);
+        int videosCount = module.getVideoUrls() != null ? module.getVideoUrls().size() : 0;
+
+        int totalComponents = subModulesCount + quizzesCount + videosCount;
+        log.info("Module ID {} has {} submodules, {} quizzes, and {} videos, total: {}",
+                moduleId, subModulesCount, quizzesCount, videosCount, totalComponents);
+
+        // Get all progress entries for this module
+        List<UserModuleProgress> progressEntries = userModuleProgressRepository.findByModuleId(moduleId);
+
+        if (progressEntries.isEmpty()) {
+            log.info("No progress entries found for module ID: {}", moduleId);
+            return 0;
+        }
+
+        // Update each progress entry
+        for (UserModuleProgress progress : progressEntries) {
+            progress.setTotalSubmodules(totalComponents);
+
+            // Recalculate progress percentage
+            if (totalComponents > 0 && progress.getCompletedSubmodules() > 0) {
+                int newPercentage = Math.min(100,
+                        (int) Math.round(((double) progress.getCompletedSubmodules() / totalComponents) * 100));
+                progress.setProgressPercentage(newPercentage);
+
+                // Update state if needed
+                if (newPercentage >= 100 && progress.getState() != UserModuleProgress.ModuleState.COMPLETED) {
+                    progress.setState(UserModuleProgress.ModuleState.COMPLETED);
+                } else if (progress.getState() == UserModuleProgress.ModuleState.UNLOCKED && newPercentage > 0) {
+                    progress.setState(UserModuleProgress.ModuleState.IN_PROGRESS);
+                }
+            }
+        }
+
+        userModuleProgressRepository.saveAll(progressEntries);
+        log.info("Updated {} progress entries for module ID: {}", progressEntries.size(), moduleId);
+
+        return progressEntries.size();
     }
 }

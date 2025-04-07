@@ -10,6 +10,7 @@ export const enrollInCourse = async (courseId) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ userId, courseId })
       });
@@ -102,7 +103,11 @@ export const getModuleProgress = async (moduleId) => {
       const userId = getCurrentUserId();
       if (!userId) return null;
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}?userId=${userId}`);
+      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}?userId=${userId}`,{
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch module progress: ${response.statusText}`);
@@ -175,6 +180,7 @@ export const startModule = async (moduleId) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ userId })
       });

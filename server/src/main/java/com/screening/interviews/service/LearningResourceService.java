@@ -42,6 +42,7 @@ public class LearningResourceService {
     private final SubModuleRepository subModuleRepository;
     private final ModuleRepository moduleRepository;
     private final QuizRepository quizRepository;
+    private final ProgressService userModuleProgressService;
 
     private static final String YOUTUBE_API_KEY = "AIzaSyCItvhHeCz5v3eQRp3SziAvHk-2XUUKg1Q";
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
@@ -105,6 +106,8 @@ public class LearningResourceService {
                 .subModules(persistedSubModules)
                 .quizzes(persistedQuizzes)
                 .build();
+
+        userModuleProgressService.updateTotalSubmodules(moduleId);
 
         logger.info("Successfully generated learning resource for concept: {}", conceptTitle);
         return result;

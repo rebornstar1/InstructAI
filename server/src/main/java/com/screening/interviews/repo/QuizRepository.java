@@ -8,4 +8,5 @@ import java.util.List;
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
     // Additional query methods if needed.
     List<Quiz> findByModule_Id(Long moduleId);
+    int countByModuleId(Long moduleId);
 }

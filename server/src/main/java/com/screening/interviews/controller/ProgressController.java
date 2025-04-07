@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -24,6 +25,8 @@ public class ProgressController {
     private final ProgressService progressService;
     private final UserService userService;
     private final UserModuleProgressRepository userModuleProgressRepository;
+    private final ProgressService userModuleProgressService;
+
 
     /**
      * Enroll the current user in a course
@@ -226,5 +229,18 @@ public class ProgressController {
         // In a real app, add security check to ensure only admins can call this
         UserModuleProgress progress = progressService.resetModuleProgress(userId, moduleId);
         return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    @PostMapping("/modules/{moduleId}/update-total-submodules")
+    public ResponseEntity<Map<String, Object>> updateTotalSubmodules(@PathVariable Long moduleId) {
+        int updatedCount = userModuleProgressService.updateTotalSubmodules(moduleId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("moduleId", moduleId);
+        response.put("updatedRecords", updatedCount);
+        response.put("message", "Successfully updated total submodules count for " + updatedCount + " progress records");
+
+        return ResponseEntity.ok(response);
     }
 }

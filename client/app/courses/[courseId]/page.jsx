@@ -25,7 +25,7 @@ import {
 // Import our new components and API functions
 import CourseProgressCard from "../components/CourseProgressCard";
 import EnrollmentModal from "../components/EnrollmentModal";
-import { getCourseWithProgress } from "../../../services/progressApi";
+import { getCourseWithProgress, enrollInCourse } from "../../../services/progressApi";
 
 export default function CourseDetailPage({ params }) {
   const { courseId } = params;

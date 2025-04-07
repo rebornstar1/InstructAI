@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface SubModuleRepository extends JpaRepository<SubModule, Long> {
     List<SubModule> findByModule_Id(Long moduleId);
+    int countByModuleId(Long moduleId);
 }

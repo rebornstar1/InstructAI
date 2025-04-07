@@ -17,4 +17,6 @@ public interface UserModuleProgressRepository extends JpaRepository<UserModulePr
 
     @Query("SELECT COUNT(ump) FROM UserModuleProgress ump WHERE ump.user.id = ?1 AND ump.state = 'COMPLETED'")
     int countCompletedModulesByUserId(Long userId);
+
+    List<UserModuleProgress> findByModuleId(Long moduleId);
 }
