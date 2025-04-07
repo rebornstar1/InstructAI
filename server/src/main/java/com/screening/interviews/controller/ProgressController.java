@@ -243,4 +243,112 @@ public class ProgressController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/users/{userId}/modules/{moduleId}/submodules/{submoduleId}/complete")
+    public ResponseEntity<Map<String, Object>> completeSubmodule(
+            @PathVariable Long userId,
+            @PathVariable Long moduleId,
+            @PathVariable Long submoduleId) {
+
+        // Complete the submodule using existing service
+        UserModuleProgress progress = progressService.completeSubmodule(userId, moduleId, submoduleId);
+
+        // Check if this completion triggers module completion
+        UserModuleProgress updatedProgress = progressService.checkAndCompleteModule(userId, moduleId);
+
+        boolean moduleAutoCompleted = updatedProgress != null &&
+                updatedProgress.getState() == UserModuleProgress.ModuleState.COMPLETED;
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("submoduleCompleted", true);
+        response.put("moduleId", moduleId);
+        response.put("moduleProgress", progress.getProgressPercentage());
+        response.put("moduleAutoCompleted", moduleAutoCompleted);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Record completion of a quiz and automatically check for module completion
+     */
+    @PostMapping("/users/{userId}/modules/{moduleId}/quiz/complete")
+    public ResponseEntity<Map<String, Object>> completeQuiz(
+            @PathVariable Long userId,
+            @PathVariable Long moduleId,
+            @RequestParam int score) {
+
+        // Complete the quiz using existing service
+        UserModuleProgress progress = progressService.completeQuiz(userId, moduleId, score);
+
+        // Check if this completion triggers module completion
+        UserModuleProgress updatedProgress = progressService.checkAndCompleteModule(userId, moduleId);
+
+        boolean moduleAutoCompleted = updatedProgress != null &&
+                updatedProgress.getState() == UserModuleProgress.ModuleState.COMPLETED;
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("quizCompleted", true);
+        response.put("score", score);
+        response.put("moduleId", moduleId);
+        response.put("moduleProgress", progress.getProgressPercentage());
+        response.put("moduleAutoCompleted", moduleAutoCompleted);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Record completion of a video and automatically check for module completion
+     */
+    @PostMapping("/users/{userId}/modules/{moduleId}/videos/{videoId}/complete")
+    public ResponseEntity<Map<String, Object>> completeVideo(
+            @PathVariable Long userId,
+            @PathVariable Long moduleId,
+            @PathVariable String videoId) {
+
+        // Complete the video using existing service
+        UserModuleProgress progress = progressService.completeVideo(userId, moduleId, videoId);
+
+        // Check if this completion triggers module completion
+        UserModuleProgress updatedProgress = progressService.checkAndCompleteModule(userId, moduleId);
+
+        boolean moduleAutoCompleted = updatedProgress != null &&
+                updatedProgress.getState() == UserModuleProgress.ModuleState.COMPLETED;
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("videoCompleted", true);
+        response.put("moduleId", moduleId);
+        response.put("moduleProgress", progress.getProgressPercentage());
+        response.put("moduleAutoCompleted", moduleAutoCompleted);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Manually check if a module should be auto-completed (can be called periodically)
+     */
+    @PostMapping("/users/{userId}/modules/{moduleId}/check-completion")
+    public ResponseEntity<Map<String, Object>> checkModuleCompletion(
+            @PathVariable Long userId,
+            @PathVariable Long moduleId) {
+
+        UserModuleProgress progress = progressService.checkAndCompleteModule(userId, moduleId);
+
+        boolean moduleAutoCompleted = progress != null &&
+                progress.getState() == UserModuleProgress.ModuleState.COMPLETED;
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("moduleId", moduleId);
+        response.put("moduleAutoCompleted", moduleAutoCompleted);
+
+        if (progress != null) {
+            response.put("moduleProgress", progress.getProgressPercentage());
+            response.put("moduleState", progress.getState().name());
+        }
+
+        return ResponseEntity.ok(response);
+    }
 }

@@ -3,8 +3,6 @@ package com.screening.interviews.service;
 import com.screening.interviews.model.*;
 import com.screening.interviews.model.Module;
 import com.screening.interviews.repo.*;
-import com.screening.interviews.dto.CourseProgressDto;
-import com.screening.interviews.dto.ModuleProgressDto;
 import com.screening.interviews.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +28,7 @@ public class ProgressService {
     private final UserService userService;
     private final QuizRepository quizRepository;
     private final SubModuleRepository subModuleRepository;
+    private final ModuleService moduleService;
 
     /**
      * Enroll user in a course and initialize progress
@@ -88,31 +86,6 @@ public class ProgressService {
         }
 
         return courseProgress;
-    }
-
-    /**
-     * Count total learning items (submodules, videos, quizzes) in a module
-     */
-    private int countLearningItems(Module module) {
-        int count = 0;
-
-        // Count submodules
-        if (module.getSubModules() != null) {
-            count += module.getSubModules().size();
-        }
-
-        // Count videos
-        if (module.getVideoUrls() != null) {
-            count += module.getVideoUrls().size();
-        }
-
-        // Count quizzes
-        if (module.getQuizzes() != null) {
-            count += module.getQuizzes().size();
-        }
-
-        // Ensure at least 1 item for progress calculation
-        return Math.max(count, 1);
     }
 
     /**
@@ -341,114 +314,6 @@ public class ProgressService {
     }
 
     /**
-     * Unlock the next module
-     */
-    private void unlockNextModule(Long userId, Module completedModule) {
-        Course course = completedModule.getCourse();
-        List<Module> modules = course.getModules();
-
-        // Find the index of the completed module
-        int completedIndex = -1;
-        for (int i = 0; i < modules.size(); i++) {
-            if (modules.get(i).getId().equals(completedModule.getId())) {
-                completedIndex = i;
-                break;
-            }
-        }
-
-        // If there's a next module, unlock it
-        if (completedIndex >= 0 && completedIndex < modules.size() - 1) {
-            Module nextModule = modules.get(completedIndex + 1);
-
-            UserModuleProgress nextModuleProgress = userModuleProgressRepository
-                    .findByUserIdAndModuleId(userId, nextModule.getId())
-                    .orElseGet(() -> {
-                        // Create new progress if it doesn't exist
-                        UserModuleProgress newProgress = new UserModuleProgress();
-                        newProgress.setUser(userRepository.findById(userId).orElseThrow(
-                                () -> new ResourceNotFoundException("User not found")));
-                        newProgress.setModule(nextModule);
-                        newProgress.setTotalSubmodules(countLearningItems(nextModule));
-                        return newProgress;
-                    });
-
-            nextModuleProgress.setState(UserModuleProgress.ModuleState.UNLOCKED);
-            userModuleProgressRepository.save(nextModuleProgress);
-        }
-    }
-
-    /**
-     * Update course progress when a module is completed
-     */
-    @Transactional
-    protected void updateCourseProgress(Long userId, Long courseId) {
-        UserCourseProgress courseProgress = userCourseProgressRepository
-                .findByUserIdAndCourseId(userId, courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course progress not found"));
-
-        Course course = courseProgress.getCourse();
-        List<Module> allModules = course.getModules();
-
-        if (allModules == null || allModules.isEmpty()) {
-            return;
-        }
-
-        // Get all module progress for this course
-        List<UserModuleProgress> moduleProgressList = userModuleProgressRepository
-                .findByUserIdAndModuleCourseId(userId, courseId);
-
-        int completedModules = 0;
-        int totalModules = allModules.size();
-        int totalEarnedXP = 0;
-
-        // Calculate total progress percentage across all modules
-        double totalProgressPercentage = 0;
-
-        for (UserModuleProgress moduleProgress : moduleProgressList) {
-            if (moduleProgress.getState() == UserModuleProgress.ModuleState.COMPLETED) {
-                completedModules++;
-            }
-            totalEarnedXP += moduleProgress.getEarnedXP();
-            totalProgressPercentage += moduleProgress.getProgressPercentage();
-        }
-
-        // Calculate overall course progress percentage
-        // 1. Based on completed modules
-        int completionPercentage = (completedModules * 100) / totalModules;
-
-        // 2. Based on average progress across all modules
-        int averageProgressPercentage =
-                moduleProgressList.isEmpty() ? 0 : (int) (totalProgressPercentage / moduleProgressList.size());
-
-        // Use the combined approach for more accurate tracking
-        int progressPercentage = (completionPercentage + averageProgressPercentage) / 2;
-
-        courseProgress.setProgressPercentage(progressPercentage);
-        courseProgress.setEarnedXP(totalEarnedXP);
-
-        // Check if course is completed
-        if (completedModules == totalModules) {
-            courseProgress.setState(UserCourseProgress.ProgressState.COMPLETED);
-            courseProgress.setCompletedAt(LocalDateTime.now());
-            courseProgress.setProgressPercentage(100); // Ensure it shows as 100% when all modules are done
-
-            // Add course completion XP bonus (100 XP) - only if not already completed
-            if (courseProgress.getState() != UserCourseProgress.ProgressState.COMPLETED) {
-                User user = userRepository.findById(userId)
-                        .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-                user.setXp(user.getXp() + 100);
-                courseProgress.setEarnedXP(courseProgress.getEarnedXP() + 100);
-
-                // Add to user's completed courses set
-                user.getCompletedCourses().add(courseId);
-                userRepository.save(user);
-            }
-        }
-
-        userCourseProgressRepository.save(courseProgress);
-    }
-
-    /**
      * Update last accessed module for a course
      */
     private void updateCourseLastAccessed(Long userId, Long courseId, Long moduleId) {
@@ -632,5 +497,178 @@ public class ProgressService {
         log.info("Updated {} progress entries for module ID: {}", progressEntries.size(), moduleId);
 
         return progressEntries.size();
+    }
+
+    /**
+     * Check and update module completion status if progress is 100%
+     * Also unlocks the next module if available
+     *
+     * @param userId User ID
+     * @param moduleId Module ID
+     * @return Updated UserModuleProgress entity or null if no update was made
+     */
+    @Transactional
+    public UserModuleProgress checkAndCompleteModule(Long userId, Long moduleId) {
+        log.info("Checking if module {} is completed for user {}", moduleId, userId);
+
+        UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Module progress not found for user id: " + userId + " and module id: " + moduleId));
+
+        // If already completed, no need to do anything
+        if (progress.getState() == UserModuleProgress.ModuleState.COMPLETED) {
+            log.info("Module {} is already completed for user {}", moduleId, userId);
+            return progress;
+        }
+
+        // If progress is 100%, mark as completed and unlock next module
+        if (progress.getProgressPercentage() >= 100) {
+            log.info("Progress is 100%, completing module {} for user {}", moduleId, userId);
+
+            // Mark as completed
+            progress.setState(UserModuleProgress.ModuleState.COMPLETED);
+            progress.setCompletedAt(LocalDateTime.now());
+
+            // Save progress
+            userModuleProgressRepository.save(progress);
+
+            // Unlock next module if exists
+            unlockNextModule(userId, progress.getModule());
+
+            // Update course progress
+            updateCourseProgress(userId, progress.getModule().getCourse().getId());
+
+            log.info("Successfully completed module {} for user {} and unlocked next module if available",
+                    moduleId, userId);
+
+            return progress;
+        }
+
+        log.info("Module {} progress for user {} is {}%, not yet complete",
+                moduleId, userId, progress.getProgressPercentage());
+        return null;
+    }
+    /**
+     * Unlocks the next module in sequence
+     */
+    private void unlockNextModule(Long userId, Module completedModule) {
+        Course course = completedModule.getCourse();
+        List<Module> modules = course.getModules();
+
+        long currentModuleId = completedModule.getId();
+
+        long nextModuleId = currentModuleId;
+
+        nextModuleId += 1;
+
+        final long tempModuleId = nextModuleId;
+
+            UserModuleProgress nextModuleProgress = userModuleProgressRepository
+                    .findByUserIdAndModuleId(userId, nextModuleId)
+                    .orElseGet(() -> {
+                        // Create new progress if it doesn't exist
+                        UserModuleProgress newProgress = new UserModuleProgress();
+                        newProgress.setUser(userRepository.findById(userId).orElseThrow(
+                                () -> new ResourceNotFoundException("User not found")));
+                        Module nextModule = moduleService.getModuleById(tempModuleId);
+                        newProgress.setModule(nextModule);
+
+                        // Count all learning content items
+                        int totalSubmodules = countLearningItems(nextModule);
+                        newProgress.setTotalSubmodules(totalSubmodules);
+
+                        return newProgress;
+                    });
+
+            nextModuleProgress.setState(UserModuleProgress.ModuleState.UNLOCKED);
+            userModuleProgressRepository.save(nextModuleProgress);
+
+            log.info("Successfully unlocked module {} for user {}", nextModuleId, userId);
+    }
+
+    /**
+     * Count total learning items in a module
+     */
+    private int countLearningItems(Module module) {
+        int count = 0;
+
+        // Count submodules
+        if (module.getSubModules() != null) {
+            count += module.getSubModules().size();
+        }
+
+        // Count videos
+        if (module.getVideoUrls() != null) {
+            count += module.getVideoUrls().size();
+        }
+
+        // Count quizzes
+        if (module.getQuizzes() != null) {
+            count += module.getQuizzes().size();
+        }
+
+        // Ensure at least 1 item for progress calculation
+        return Math.max(count, 1);
+    }
+
+    /**
+     * Update course progress when a module is completed
+     */
+    private void updateCourseProgress(Long userId, Long courseId) {
+        UserCourseProgress courseProgress = userCourseProgressRepository
+                .findByUserIdAndCourseId(userId, courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course progress not found"));
+
+        Course course = courseProgress.getCourse();
+        List<Module> allModules = course.getModules();
+
+        if (allModules == null || allModules.isEmpty()) {
+            return;
+        }
+
+        // Get all module progress for this course
+        List<UserModuleProgress> moduleProgressList = userModuleProgressRepository
+                .findByUserIdAndModuleCourseId(userId, courseId);
+
+        int completedModules = 0;
+        int totalModules = allModules.size();
+        int totalEarnedXP = 0;
+
+        // Calculate total progress percentage across all modules
+        double totalProgressPercentage = 0;
+
+        for (UserModuleProgress moduleProgress : moduleProgressList) {
+            if (moduleProgress.getState() == UserModuleProgress.ModuleState.COMPLETED) {
+                completedModules++;
+            }
+            totalEarnedXP += moduleProgress.getEarnedXP();
+            totalProgressPercentage += moduleProgress.getProgressPercentage();
+        }
+
+        // Calculate overall course progress percentage
+        int progressPercentage =
+                moduleProgressList.isEmpty() ? 0 : (int) (totalProgressPercentage / moduleProgressList.size());
+
+        courseProgress.setProgressPercentage(progressPercentage);
+        courseProgress.setEarnedXP(totalEarnedXP);
+
+        // Check if course is completed
+        if (completedModules == totalModules) {
+            courseProgress.setState(UserCourseProgress.ProgressState.COMPLETED);
+            courseProgress.setCompletedAt(LocalDateTime.now());
+            courseProgress.setProgressPercentage(100);
+
+            // Add course completion XP bonus (100 XP)
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            user.setXp(user.getXp() + 100);
+            courseProgress.setEarnedXP(courseProgress.getEarnedXP() + 100);
+
+            // Add to user's completed courses set
+            user.getCompletedCourses().add(courseId);
+            userRepository.save(user);
+        }
+
+        userCourseProgressRepository.save(courseProgress);
     }
 }

@@ -2,6 +2,7 @@ package com.screening.interviews.service;
 
 import com.screening.interviews.dto.CourseCompletionDto;
 import com.screening.interviews.dto.XpUpdateDto;
+import com.screening.interviews.exception.ResourceNotFoundException;
 import com.screening.interviews.model.User;
 import com.screening.interviews.repo.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -53,5 +54,10 @@ public class UserService {
 
     public User getUserProfile() {
         return getCurrentUser();
+    }
+
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
 }

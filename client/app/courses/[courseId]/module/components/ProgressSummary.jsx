@@ -14,29 +14,26 @@ import {
   Clock,
   Star,
   TrendingUp,
-  Users
+  Users,
+  ArrowRight
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import progressService from "@/services/progressService";
 
 /**
  * Component for displaying a user's progress summary on dashboard
+ * with auto module completion integration
  */
 export default function ProgressSummary({ userId }) {
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProgressSummary = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/progress/summary", {
-          credentials: "include" // Include credentials for auth
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch progress summary");
-        }
-
-        const data = await response.json();
+        const data = await progressService.getProgressSummary();
         setSummary(data);
       } catch (error) {
         console.error("Error fetching progress summary:", error);
@@ -47,6 +44,11 @@ export default function ProgressSummary({ userId }) {
 
     fetchProgressSummary();
   }, [userId]);
+
+  // Navigate to course
+  const goToCourse = (courseId, moduleId) => {
+    router.push(`/courses/${courseId}/modules/${moduleId}`);
+  };
 
   if (isLoading) {
     return (
@@ -75,6 +77,14 @@ export default function ProgressSummary({ userId }) {
       </Card>
     );
   }
+
+  // Find any module that is almost complete (95%+) but not yet marked as completed
+  const almostCompleteModule = summary.recentCourses?.find(course => 
+    course.state !== "COMPLETED" && 
+    course.activeModule && 
+    course.activeModule.progressPercentage >= 95 && 
+    course.activeModule.state !== "COMPLETED"
+  );
 
   return (
     <motion.div
@@ -165,6 +175,38 @@ export default function ProgressSummary({ userId }) {
               </div>
             </div>
 
+            {/* Almost Complete Module Alert */}
+            {almostCompleteModule && (
+              <motion.div 
+                className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-100 dark:border-yellow-800/30"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="font-bold text-yellow-800 dark:text-yellow-400 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Almost Complete!
+                    </h4>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
+                      You're {almostCompleteModule.activeModule.progressPercentage}% done with "{almostCompleteModule.activeModule.title}"
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300"
+                    onClick={() => goToCourse(
+                      almostCompleteModule.course.id, 
+                      almostCompleteModule.activeModule.id
+                    )}
+                  >
+                    Continue <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
             {/* Recent Courses */}
             {summary.recentCourses && summary.recentCourses.length > 0 && (
               <div>
@@ -173,7 +215,11 @@ export default function ProgressSummary({ userId }) {
                   {summary.recentCourses.map((course, idx) => (
                     <div 
                       key={idx}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 transition-colors"
+                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700 transition-colors cursor-pointer"
+                      onClick={() => goToCourse(
+                        course.course.id, 
+                        course.activeModule ? course.activeModule.id : course.lastAccessedModule.id
+                      )}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-full ${
@@ -201,7 +247,10 @@ export default function ProgressSummary({ userId }) {
                       <div>
                         <Progress 
                           value={course.progressPercentage} 
-                          className="h-2 w-20" 
+                          className={`h-2 w-20 ${
+                            course.progressPercentage >= 95 && course.state !== "COMPLETED" 
+                              ? "animate-pulse" : ""
+                          }`}
                         />
                       </div>
                     </div>

@@ -204,7 +204,7 @@ export const startModule = async (moduleId) => {
  */
 export const completeSubmodule = async (moduleId, submoduleId) => {
     try {
-      const userId = getCurrentUserId();
+      const userId = parseInt(getCurrentUserId());
       if (!userId) throw new Error('User not authenticated');
       
       const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/submodule/${submoduleId}/complete`, {
@@ -255,7 +255,7 @@ export const completeSubmodule = async (moduleId, submoduleId) => {
 
   export const completeQuiz = async (moduleId, quizId, score) => {
     try {
-      const userId = getCurrentUserId();
+      const userId = parseInt(getCurrentUserId());
       if (!userId) throw new Error('User not authenticated');
       
       const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/quiz/${quizId}/complete`, {
