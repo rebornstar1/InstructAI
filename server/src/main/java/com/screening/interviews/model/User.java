@@ -5,7 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -29,6 +31,10 @@ public class User {
     @CollectionTable(name = "completed_courses", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "course_id")
     private Set<Long> completedCourses = new HashSet<>();
+
+    @ManyToMany(mappedBy = "members")
+    @OrderBy("name ASC")
+    private List<Thread> threads = new ArrayList<>();
 
     public String getRole() {
         return "USER";

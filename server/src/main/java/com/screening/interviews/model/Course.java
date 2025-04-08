@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,6 +42,10 @@ public class Course {
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<Module> modules;
+
+    @ManyToMany(mappedBy = "relatedCourses")
+    @OrderBy("name ASC")
+    private List<Thread> relatedThreads = new ArrayList<>();
 
     /**
      * Before inserting, generate a random UUID for the business key:
