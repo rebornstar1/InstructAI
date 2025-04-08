@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -33,5 +35,10 @@ public class UserController {
     @DeleteMapping("/courses/complete")
     public ResponseEntity<User> removeCourseCompletion(@RequestBody CourseCompletionDto courseCompletionDto) {
         return ResponseEntity.ok(userService.removeCourseCompletion(courseCompletionDto));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(userService.getAllUsers());
     }
 }

@@ -32,6 +32,7 @@ public class CourseController {
         CourseResponseDto courseResponse = courseService.generateCourse(request);
         return ResponseEntity.ok(courseResponse);
     }
+
     
     // GET all request
     @GetMapping

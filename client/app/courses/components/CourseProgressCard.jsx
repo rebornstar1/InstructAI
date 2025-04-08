@@ -15,7 +15,7 @@ import {
   Play
 } from "lucide-react";
 import { enrollInCourse } from "@/services/progressApi";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/components/ui/use-toast";
 
 /**
  * CourseProgressCard - Displays course progress and enrollment options
