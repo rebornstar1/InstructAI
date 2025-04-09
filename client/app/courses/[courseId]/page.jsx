@@ -21,6 +21,7 @@ import {
   Lock,
   Unlock
 } from "lucide-react";
+import { toast } from "@/components/ui/use-toast"; 
 
 // Import our new components and API functions
 import CourseProgressCard from "../components/CourseProgressCard";

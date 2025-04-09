@@ -2,6 +2,7 @@ package com.screening.interviews.service;
 
 import com.screening.interviews.model.*;
 import com.screening.interviews.model.Module;
+import com.screening.interviews.model.Thread;
 import com.screening.interviews.repo.*;
 import com.screening.interviews.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class ProgressService {
     private final QuizRepository quizRepository;
     private final SubModuleRepository subModuleRepository;
     private final ModuleService moduleService;
+    private final ThreadRepository threadRepository;
 
     /**
      * Enroll user in a course and initialize progress
@@ -85,9 +87,24 @@ public class ProgressService {
             }
         }
 
+        // Add user to threads associated with this course
+        addUserToThreadsByCourse(user, course);
+
         return courseProgress;
     }
 
+
+    private void addUserToThreadsByCourse(User user, Course course) {
+        // Find all threads related to this course
+        List<Thread> relatedThreads = threadRepository.findByCourseId(course.getId());
+
+        // Add user to each thread
+        for (Thread thread : relatedThreads) {
+            thread.addMember(user);
+            threadRepository.save(thread);
+            log.info("Added user {} to thread {} after course enrollment", user.getId(), thread.getId());
+        }
+    }
     /**
      * Get all course progress for a user
      */

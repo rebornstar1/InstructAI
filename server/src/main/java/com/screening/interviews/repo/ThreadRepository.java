@@ -25,4 +25,7 @@ public interface ThreadRepository extends JpaRepository<Thread, Long> {
 
     @Query("SELECT t FROM Thread t JOIN t.members m WHERE m.id = :userId")
     List<Thread> findByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT t FROM Thread t WHERE t.parentThread IS NULL ORDER BY t.name")
+    List<Thread> findAllMainThreads();
 }

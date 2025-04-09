@@ -19,9 +19,37 @@ export const enrollInCourse = async (courseId) => {
         throw new Error(`Failed to enroll in course: ${response.statusText}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+    
+    try {
+      await fetchThreadsForCourse(courseId);
+    } catch (threadError) {
+      console.error("Error fetching threads after enrollment:", threadError);
+    }
+    
+    return data;
     } catch (error) {
       console.error('Error enrolling in course:', error);
+      throw error;
+    }
+  };
+
+  export const fetchThreadsForCourse = async(courseId) => {
+    try {
+      const response = await fetch(`/api/threads/course/${courseId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch threads for course");
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching threads for course:", error);
       throw error;
     }
   };
