@@ -99,7 +99,7 @@ export default function ThreadDetailPage({ params }) {
         }
 
         // Fetch thread members
-        const membersResponse = await fetch(`/api/threads/${threadId}/members`);
+        const membersResponse = await fetch(`http://localhost:8007/api/threads/${threadId}/users`);
         if (membersResponse.ok) {
           const membersData = await membersResponse.json();
           setMembers(membersData);
