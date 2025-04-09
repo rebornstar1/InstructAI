@@ -1,5 +1,8 @@
 package com.screening.interviews.model;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIdentityReference;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -10,6 +13,7 @@ import java.util.List;
 @Entity
 @Data
 @Table(name = "threads")
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Thread {
 
     @Id
@@ -24,10 +28,12 @@ public class Thread {
 
     @ManyToOne
     @JoinColumn(name = "parent_thread_id")
+    @JsonIdentityReference(alwaysAsId = true)
     private Thread parentThread;
 
     @OneToMany(mappedBy = "parentThread", cascade = CascadeType.ALL)
     @OrderBy("name ASC")
+    @JsonIdentityReference(alwaysAsId = true)
     private List<Thread> subThreads = new ArrayList<>();
 
     @Column(nullable = false)

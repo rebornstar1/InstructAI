@@ -158,6 +158,7 @@ export default function ThreadManagementDashboard() {
       
       const data = await response.json();
       setAvailableCourses(data);
+      console.log("availableCourses", data);
     } catch (error) {
       console.error("Error fetching courses:", error);
     }
@@ -183,6 +184,12 @@ export default function ThreadManagementDashboard() {
   const handleSelectThread = async (thread) => {
     setSelectedThread(thread);
     await fetchThreadUsers(thread.id);
+  };
+
+  const handleOpenAddCourseDialog = () => {
+    console.log("Available courses:", availableCourses);
+    console.log("Selected thread courses:", selectedThread?.relatedCourseIds);
+    setIsAddCourseDialogOpen(true);
   };
 
   // Create new thread
@@ -375,6 +382,8 @@ export default function ThreadManagementDashboard() {
       minute: '2-digit'
     });
   };
+
+  console.log("available Courses",availableCourses);
 
   // Render thread list items
   const renderThreadItems = () => {
@@ -1161,11 +1170,11 @@ export default function ThreadManagementDashboard() {
               <SelectTrigger>
                 <SelectValue placeholder="Select a course" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="text-gray-800">
                 {availableCourses
                   .filter(course => !selectedThread?.relatedCourseIds?.includes(course.id))
                   .map(course => (
-                    <SelectItem key={course.id} value={String(course.id)}>
+                    <SelectItem key={course.id} value={String(course.id)} className="text-gray-800">
                       {course.title}
                     </SelectItem>
                   ))

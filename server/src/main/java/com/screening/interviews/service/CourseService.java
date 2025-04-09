@@ -32,6 +32,7 @@ public class CourseService {
     private final @Qualifier("geminiWebClient") WebClient geminiWebClient;
     private final ObjectMapper objectMapper;
     private final CourseRepository courseRepository;
+    private final ThreadMatcherService threadMatcherService;
 
     /**
      * ============ CREATE ============
@@ -90,6 +91,11 @@ public class CourseService {
 
         // Persist the data in the DB
         Course savedCourse = saveCourse(result);
+
+        List<Long> relevantThreadIds = threadMatcherService.findRelevantThreads(result);
+
+        // Associate the course with these threads
+        threadMatcherService.associateCourseWithThreads(savedCourse, relevantThreadIds);
 
         // Optionally return the saved course mapped back to a response.
         return mapEntityToCourseResponseDto(savedCourse);
