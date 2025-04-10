@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -59,6 +59,36 @@ import { getThreadById, getUsersByThreadId } from "@/services/threadApi";
 import { getConversationsByThreadId } from "@/services/conversationApi.js";
 import { getMessagesByConversationId, createMessage, createReply } from "@/services/messageApi";
 
+const API_URL = 'http://localhost:8007/api';
+
+// User Profile Service
+async function fetchUserProfile() {
+  try {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
+    const response = await fetch(`${API_URL}/users/profile`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch user profile');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    throw error;
+  }
+}
+
 export default function ThreadDetailPage({ params }) {
   const { threadId } = params;
   const [thread, setThread] = useState(null);
@@ -72,18 +102,41 @@ export default function ThreadDetailPage({ params }) {
   const [isNewConversationDialogOpen, setIsNewConversationDialogOpen] = useState(false);
   const [relatedCourses, setRelatedCourses] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [currentUser, setCurrentUser] = useState({id: null, username: ""});
+  const [isUserLoading, setIsUserLoading] = useState(true);
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
-  
+
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      setIsUserLoading(true);
+      try {
+        const userProfile = await fetchUserProfile();
+        setCurrentUser({
+          id: userProfile.id,
+          username: userProfile.username || userProfile.name || userProfile.email.split('@')[0]
+        });
+      } catch (error) {
+        console.error("Error loading user profile:", error);
+        toast({
+          title: "Authentication Error",
+          description: "Unable to load your profile. Please log in again.",
+          variant: "destructive"
+        });
+        
+        // Redirect to login page if authentication fails
+        router.push('/login');
+      } finally {
+        setIsUserLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, [router]);
 
 
 
-  // Current user simulation - in a real app, this would come from authentication
-  const currentUser = {
-    id: 1, // Replace with actual user ID from your auth system
-    username: "Current User"
-  };
 
   // Fetch thread data
   useEffect(() => {

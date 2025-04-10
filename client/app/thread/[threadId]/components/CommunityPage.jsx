@@ -16,14 +16,18 @@ import {
   ChevronRight,
   RefreshCcw,
   Plus,
-  X
+  X,
+  LogIn,
+  LogOut,
+  Bell,
+  BellOff
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Tabs,
   TabsContent,
@@ -47,19 +51,47 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 
 // Import API services
 import { getAllMainThreads, getThreadsByUserId, createThread } from "@/services/threadApi";
+import { 
+  getConversationsByThreadId, 
+  getConversationsByParticipantId,
+  addParticipantToConversation,
+  removeParticipantFromConversation
+} from "@/services/conversationApi";
 
 export default function CommunityPage() {
   const [allThreads, setAllThreads] = useState([]);
   const [userThreads, setUserThreads] = useState([]);
+  const [userConversations, setUserConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBy, setFilterBy] = useState("all");
   const [isNewThreadDialogOpen, setIsNewThreadDialogOpen] = useState(false);
+  const [isJoiningConversation, setIsJoiningConversation] = useState(false);
+  const [isLeavingConversation, setIsLeavingConversation] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [notificationPreferences, setNotificationPreferences] = useState({});
+  const [currentUser, setCurrentUser] = useState({id: null, username: ""});
+
   const [newThreadData, setNewThreadData] = useState({
     name: "",
     description: "",
@@ -67,16 +99,45 @@ export default function CommunityPage() {
     conceptTags: []
   });
   const [newTagInput, setNewTagInput] = useState("");
+  const [conversationsView, setConversationsView] = useState("all"); // "all", "joined", "available"
   const router = useRouter();
 
-  // Current user simulation - in a real app, this would come from authentication
-  const currentUser = {
-    id: 1, // Replace with actual user ID from your auth system
-    username: "Current User"
-  };
+  useEffect(() => {
+      const loadUserProfile = async () => {
+        setIsUserLoading(true);
+        try {
+          const userProfile = await fetchUserProfile();
+          setCurrentUser({
+            id: userProfile.id,
+            username: userProfile.username || userProfile.name || userProfile.email.split('@')[0]
+          });
+        } catch (error) {
+          console.error("Error loading user profile:", error);
+          toast({
+            title: "Authentication Error",
+            description: "Unable to load your profile. Please log in again.",
+            variant: "destructive"
+          });
+          
+          // Redirect to login page if authentication fails
+          router.push('/login');
+        } finally {
+          setIsUserLoading(false);
+        }
+      };
+  
+      loadUserProfile();
+    }, [router]);
+
+  // // Current user simulation - in a real app, this would come from authentication
+  // const currentUser = {
+  //   id: 1, // Replace with actual user ID from your auth system
+  //   username: "Current User"
+  // };
 
   useEffect(() => {
     fetchThreads();
+    fetchUserConversations();
   }, []);
 
   const fetchThreads = async () => {
@@ -103,6 +164,96 @@ export default function CommunityPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Fetch user's conversations
+  const fetchUserConversations = async () => {
+    try {
+      const userConversationsData = await getConversationsByParticipantId(currentUser.id);
+      setUserConversations(userConversationsData);
+      
+      // Initialize notification preferences
+      const preferences = {};
+      userConversationsData.forEach(conv => {
+        preferences[conv.id] = true; // Default to receiving notifications
+      });
+      setNotificationPreferences(preferences);
+    } catch (error) {
+      console.error("Error fetching user conversations:", error);
+    }
+  };
+
+  // Check if user is participant in conversation
+  const isUserParticipant = (conversation) => {
+    if (!conversation || !conversation.participantIds) return false;
+    return conversation.participantIds.includes(currentUser.id);
+  };
+
+  // Join a conversation
+  const joinConversation = async (conversationId) => {
+    setIsJoiningConversation(true);
+    try {
+      await addParticipantToConversation(conversationId, currentUser.id);
+      
+      // Update the local state
+      fetchUserConversations();
+      
+      toast({
+        title: "Joined conversation",
+        description: "You've successfully joined this conversation.",
+      });
+    } catch (error) {
+      console.error("Error joining conversation:", error);
+      toast({
+        title: "Failed to join",
+        description: "Could not join the conversation. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsJoiningConversation(false);
+      setSelectedConversation(null);
+    }
+  };
+
+  // Leave a conversation
+  const leaveConversation = async (conversationId) => {
+    setIsLeavingConversation(true);
+    try {
+      await removeParticipantFromConversation(conversationId, currentUser.id);
+      
+      // Update the local state
+      fetchUserConversations();
+      
+      toast({
+        title: "Left conversation",
+        description: "You've successfully left this conversation.",
+      });
+    } catch (error) {
+      console.error("Error leaving conversation:", error);
+      toast({
+        title: "Failed to leave",
+        description: "Could not leave the conversation. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLeavingConversation(false);
+      setSelectedConversation(null);
+    }
+  };
+
+  // Toggle notification preference for a conversation
+  const toggleNotificationPreference = (conversationId) => {
+    setNotificationPreferences(prev => ({
+      ...prev,
+      [conversationId]: !prev[conversationId]
+    }));
+
+    // In a real app, you would save this to the user's preferences
+    toast({
+      title: notificationPreferences[conversationId] ? 
+        "Notifications disabled" : "Notifications enabled",
+      description: `You'll ${notificationPreferences[conversationId] ? 'no longer' : 'now'} receive notifications for this conversation.`,
+    });
   };
 
   // Filter threads based on search term and filter option
@@ -218,6 +369,52 @@ export default function CommunityPage() {
     });
   };
 
+  // Get conversations based on the selected view filter
+  const getFilteredConversations = () => {
+    const userConversationIds = userConversations.map(conv => conv.id);
+    
+    // Get conversations from threads
+    let allConversationsFromThreads = [];
+    filteredThreads.forEach(thread => {
+      // This would be a real API call in a production app
+      // For now, we'll simulate by creating mock conversations for each thread
+      const mockConversations = [
+        { 
+          id: `${thread.id}-conv1`, 
+          title: `${thread.name} - General Discussion`,
+          threadId: thread.id,
+          participantIds: [1, 2, 3], // Mock IDs including current user
+          createdAt: thread.createdAt,
+          lastActivityAt: new Date().toISOString(),
+          messageCount: Math.floor(Math.random() * 100)
+        },
+        { 
+          id: `${thread.id}-conv2`, 
+          title: `${thread.name} - Q&A Session`,
+          threadId: thread.id,
+          participantIds: [2, 4, 5], // Mock IDs not including current user
+          createdAt: thread.createdAt,
+          lastActivityAt: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+          messageCount: Math.floor(Math.random() * 50)
+        }
+      ];
+      allConversationsFromThreads = [...allConversationsFromThreads, ...mockConversations];
+    });
+    
+    // Filter based on view mode
+    if (conversationsView === "joined") {
+      return allConversationsFromThreads.filter(conv => 
+        conv.participantIds.includes(currentUser.id)
+      );
+    } else if (conversationsView === "available") {
+      return allConversationsFromThreads.filter(conv => 
+        !conv.participantIds.includes(currentUser.id)
+      );
+    }
+    
+    return allConversationsFromThreads;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-12">
       {/* Header */}
@@ -230,13 +427,15 @@ export default function CommunityPage() {
                 Connect with peers, ask questions, and participate in discussions about courses, concepts, and learning resources.
               </p>
             </div>
-            <Button 
-              onClick={() => setIsNewThreadDialogOpen(true)}
-              className="bg-white text-blue-700 hover:bg-blue-50 gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Thread
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => setIsNewThreadDialogOpen(true)}
+                className="bg-white text-blue-700 hover:bg-blue-50 gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New Thread
+              </Button>
+            </div>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4">
@@ -271,6 +470,7 @@ export default function CommunityPage() {
           <TabsList className="mb-8">
             <TabsTrigger value="all" className="text-base py-2 px-4">All Threads</TabsTrigger>
             <TabsTrigger value="my" className="text-base py-2 px-4">My Threads</TabsTrigger>
+            <TabsTrigger value="conversations" className="text-base py-2 px-4">Conversations</TabsTrigger>
           </TabsList>
           
           <TabsContent value="all" className="mt-0">
@@ -279,6 +479,25 @@ export default function CommunityPage() {
           
           <TabsContent value="my" className="mt-0">
             {renderThreadsList(userThreads, isLoading, errorMessage, filteredThreads)}
+          </TabsContent>
+          
+          <TabsContent value="conversations" className="mt-0">
+            <div className="mb-6 flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-slate-800">Conversations</h2>
+              <div className="flex gap-2">
+                <Select value={conversationsView} onValueChange={setConversationsView}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="View" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Conversations</SelectItem>
+                    <SelectItem value="joined">My Conversations</SelectItem>
+                    <SelectItem value="available">Available to Join</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {renderConversationsList(getFilteredConversations(), isLoading)}
           </TabsContent>
         </Tabs>
       </div>
@@ -366,6 +585,80 @@ export default function CommunityPage() {
               disabled={!newThreadData.name.trim()}
             >
               Create Thread
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Join Conversation Confirmation Dialog */}
+      <Dialog open={selectedConversation && !isUserParticipant(selectedConversation)} onOpenChange={() => setSelectedConversation(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Join Conversation</DialogTitle>
+            <DialogDescription>
+              You're about to join this conversation. You'll receive notifications and be able to participate.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="font-medium text-slate-800">{selectedConversation?.title}</p>
+            <div className="mt-4 flex items-center space-x-2">
+              <Switch 
+                id="notifications" 
+                defaultChecked={true}
+                onCheckedChange={(checked) => {
+                  if (selectedConversation) {
+                    setNotificationPreferences(prev => ({
+                      ...prev, 
+                      [selectedConversation.id]: checked
+                    }));
+                  }
+                }}
+              />
+              <label htmlFor="notifications" className="text-sm">
+                Receive notifications for this conversation
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedConversation(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => joinConversation(selectedConversation.id)}
+              disabled={isJoiningConversation}
+              className="gap-2"
+            >
+              {isJoiningConversation ? 'Joining...' : 'Join Conversation'}
+              <LogIn className="h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Leave Conversation Confirmation Dialog */}
+      <Dialog open={selectedConversation && isUserParticipant(selectedConversation)} onOpenChange={() => setSelectedConversation(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Leave Conversation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to leave this conversation? You'll no longer receive notifications or be able to participate.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="font-medium text-slate-800">{selectedConversation?.title}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedConversation(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => leaveConversation(selectedConversation.id)}
+              disabled={isLeavingConversation}
+              variant="destructive"
+              className="gap-2"
+            >
+              {isLeavingConversation ? 'Leaving...' : 'Leave Conversation'}
+              <LogOut className="h-4 w-4" />
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -521,6 +814,192 @@ export default function CommunityPage() {
             </Card>
           </Link>
         ))}
+      </div>
+    );
+  }
+
+  // Helper function to render the conversations list
+  function renderConversationsList(conversations, isLoading) {
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-1 gap-4">
+          {Array(5).fill(0).map((_, index) => (
+            <Card key={index} className="border border-slate-200">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Skeleton className="h-5 w-5 rounded-full" />
+                      <Skeleton className="h-6 w-64" />
+                    </div>
+                    <Skeleton className="h-4 w-full my-2" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    if (conversations.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <MessageSquare className="h-8 w-8 text-blue-600" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">No conversations found</h3>
+          <p className="text-slate-600 max-w-md mb-6">
+            {conversationsView === "joined" 
+              ? "You haven't joined any conversations yet. Browse 'All Conversations' to find and join discussions."
+              : conversationsView === "available"
+                ? "There are no available conversations to join at this time."
+                : "There are no conversations available right now."}
+          </p>
+          {conversationsView !== "all" && (
+            <Button 
+              onClick={() => setConversationsView("all")}
+              className="gap-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              View All Conversations
+            </Button>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        {conversations.map(conversation => {
+          const isParticipant = conversation.participantIds.includes(currentUser.id);
+          return (
+            <Card key={conversation.id} className="border border-slate-200 hover:border-blue-200 hover:shadow-sm transition-all">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="p-1.5 rounded-full bg-blue-100 text-blue-600">
+                        <MessageSquare className="h-4 w-4" />
+                      </div>
+                      <h3 className="font-bold text-lg text-slate-800">{conversation.title}</h3>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 my-3">
+                      {isParticipant && (
+                        <Badge className="bg-green-100 text-green-700 border-none gap-1">
+                          <Users className="h-3.5 w-3.5 mr-0.5" />
+                          Member
+                        </Badge>
+                      )}
+                      
+                      <Badge className="bg-blue-100 text-blue-700 border-none gap-1">
+                        <Users className="h-3.5 w-3.5 mr-0.5" />
+                        {conversation.participantIds.length} Participants
+                      </Badge>
+                      
+                      <Badge className="bg-indigo-100 text-indigo-700 border-none gap-1">
+                        <MessageSquare className="h-3.5 w-3.5 mr-0.5" />
+                        {conversation.messageCount} Messages
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm text-slate-500">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center">
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                          <span>Created: {formatDate(conversation.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                          <span>Last activity: {formatDate(conversation.lastActivityAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 items-end">
+                    {isParticipant ? (
+                      <>
+                        <Link href={`/conversations/${conversation.id}`}>
+                          <Button className="gap-2">
+                            View Conversation 
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        
+                        <div className="flex gap-2 mt-2">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    toggleNotificationPreference(conversation.id);
+                                  }}
+                                >
+                                  {notificationPreferences[conversation.id] ? (
+                                    <Bell className="h-4 w-4 text-slate-600" />
+                                  ) : (
+                                    <BellOff className="h-4 w-4 text-slate-600" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {notificationPreferences[conversation.id] 
+                                  ? "Disable notifications" 
+                                  : "Enable notifications"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                Options
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem>Mark as read</DropdownMenuItem>
+                              <DropdownMenuItem>Hide from list</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setSelectedConversation(conversation);
+                                }}
+                              >
+                                Leave conversation
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
+                    ) : (
+                      <Button 
+                        className="gap-2"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedConversation(conversation);
+                        }}
+                      >
+                        Join Conversation 
+                        <LogIn className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     );
   }
