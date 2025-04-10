@@ -568,6 +568,95 @@ public class LearningResourceService {
     }
 
 
+    private QuizDto generateQuiz(String conceptTitle) {
+        QuizDto quiz = null;
+        logger.info("Generating quiz for concept: {}", conceptTitle);
+
+        // Basic concepts quiz
+//        String basicQuizPrompt = String.format(
+//                "Create a quiz to test basic understanding of '%s' with 5 multiple-choice questions. " +
+//                        "For each question: " +
+//                        "1. Write a clear question focused on fundamental concepts " +
+//                        "2. Provide 4 answer options (A, B, C, D) " +
+//                        "3. Indicate the correct answer " +
+//                        "4. Include a brief explanation for why the answer is correct " +
+//                        "5. Ensure questions progress from simple recall to basic application " +
+//                        "Format as a structured JSON object with these exact fields: " +
+//                        "{ " +
+//                        "  \"questions\": [ " +
+//                        "    { " +
+//                        "      \"question\": \"What is...?\", " +
+//                        "      \"options\": [\"A. option 1\", \"B. option 2\", \"C. option 3\", \"D. option 4\"], " +
+//                        "      \"correctAnswer\": \"B\", " +
+//                        "      \"explanation\": \"Explanation why B is correct...\" " +
+//                        "    } " +
+//                        "  ] " +
+//                        "} " +
+//                        "Focus on essential terminology and foundational principles that every beginner should master.",
+//                conceptTitle
+//        );
+//
+//        String basicQuizJson = callGeminiApi(basicQuizPrompt);
+//        List<QuestionDto> basicQuestions = parseQuizQuestions(basicQuizJson);
+//
+//        quizzes.add(QuizDto.builder()
+//                .quizTitle("Basic Concepts: " + conceptTitle)
+//                .description("Test your understanding of the fundamental concepts of " + conceptTitle)
+//                .difficulty("Beginner")
+//                .timeLimit("5 minutes")
+//                .questions(basicQuestions)
+//                .passingScore(60)
+//                .build());
+
+        // Advanced concepts quiz
+        String advancedQuizPrompt = String.format(
+                "Create a quiz to test advanced understanding of '%s' with 5 challenging multiple-choice questions. " +
+                        "For each question: " +
+                        "1. Write a question that tests deeper understanding or application of complex concepts " +
+                        "2. Provide 4 answer options (A, B, C, D) with plausible distractors " +
+                        "3. Indicate the correct answer " +
+                        "4. Include a detailed explanation that clarifies misconceptions " +
+                        "5. Ensure questions require analysis, evaluation, or synthesis of knowledge " +
+                        "Format as a structured JSON object with these exact fields: " +
+                        "{ " +
+                        "  \"questions\": [ " +
+                        "    { " +
+                        "      \"question\": \"In a complex scenario where...?\", " +
+                        "      \"options\": [\"A. option 1\", \"B. option 2\", \"C. option 3\", \"D. option 4\"], " +
+                        "      \"correctAnswer\": \"C\", " +
+                        "      \"explanation\": \"C is correct because...\" " +
+                        "    } " +
+                        "  ] " +
+                        "} " +
+                        "Focus on nuanced understanding, common misconceptions, and practical applications of advanced principles.",
+                conceptTitle
+        );
+
+        String advancedQuizJson = callGeminiApi(advancedQuizPrompt);
+        List<QuestionDto> advancedQuestions = parseQuizQuestions(advancedQuizJson);
+
+        quiz = QuizDto.builder()
+                .quizTitle("Advanced Concepts: " + conceptTitle)
+                .description("Challenge yourself with these advanced questions about " + conceptTitle)
+                .difficulty("Advanced")
+                .timeLimit("10 minutes")
+                .questions(advancedQuestions)
+                .passingScore(70)
+                .build();
+
+        return quiz;
+    }
+
+    public List<QuizDto> generateMultipleQuiz(List<String> conceptTitles) {
+        List<QuizDto> quizzes = new ArrayList<>();
+        for (String conceptTitle : conceptTitles) {
+            QuizDto quiz = generateQuiz(conceptTitle);
+            quizzes.add(quiz);
+        }
+        return quizzes;
+    }
+
+
 
     private List<QuestionDto> parseQuizQuestions(String quizJson) {
         List<QuestionDto> questions = new ArrayList<>();
