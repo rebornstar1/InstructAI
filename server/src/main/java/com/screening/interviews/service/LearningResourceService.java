@@ -180,20 +180,36 @@ public class LearningResourceService {
         // Parse the JSON response to extract key terms and definitions
         Map<String, String> keyTerms = new HashMap<>();
         try {
-            // Clean up the response to ensure it's valid JSON
-            analysisResult = analysisResult.replaceAll("```(json)?", "")
+            // More robust cleanup of the response to ensure it's valid JSON
+            // First, remove any markdown code block indicators
+            analysisResult = analysisResult.replaceAll("```json", "")
                     .replaceAll("```", "")
                     .trim();
 
-            JsonNode termsNode = objectMapper.readTree(analysisResult);
+            // Find the first '{' and the last '}' to extract just the JSON object
+            int firstBrace = analysisResult.indexOf('{');
+            int lastBrace = analysisResult.lastIndexOf('}');
 
-            termsNode.fields().forEachRemaining(entry -> {
-                keyTerms.put(entry.getKey(), entry.getValue().asText());
-            });
+            if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+                // Extract only the JSON part
+                analysisResult = analysisResult.substring(firstBrace, lastBrace + 1);
 
-            logger.info("Extracted {} key terms for topic: {}", keyTerms.size(), conceptTitle);
+                // Parse the JSON
+                JsonNode termsNode = objectMapper.readTree(analysisResult);
+
+                termsNode.fields().forEachRemaining(entry -> {
+                    keyTerms.put(entry.getKey(), entry.getValue().asText());
+                });
+
+                logger.info("Extracted {} key terms for topic: {}", keyTerms.size(), conceptTitle);
+            } else {
+                throw new Exception("Could not find valid JSON object in response");
+            }
         } catch (Exception e) {
             logger.error("Error parsing key terms JSON: {}", e.getMessage());
+            // Log the actual response for debugging
+            logger.debug("Raw response from Gemini API: {}", analysisResult);
+
             // Provide some default terms if parsing fails
             keyTerms.put(conceptTitle + " basics", "Fundamental concepts of " + conceptTitle);
             keyTerms.put(conceptTitle + " implementation", "How to implement " + conceptTitle + " in practice");
