@@ -7,7 +7,7 @@
  */
 export async function getThreadById(threadId) {
     try {
-      const response = await fetch(`/api/threads/${threadId}`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -32,7 +32,7 @@ export async function getThreadById(threadId) {
    */
   export async function getThreadConversations(threadId) {
     try {
-      const response = await fetch(`/api/threads/${threadId}/conversations`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -57,7 +57,7 @@ export async function getThreadById(threadId) {
    */
   export async function getThreadMembers(threadId) {
     try {
-      const response = await fetch(`/api/threads/${threadId}/members`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/members`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -83,7 +83,7 @@ export async function getThreadById(threadId) {
    */
   export async function createConversation(threadId, conversationData) {
     try {
-      const response = await fetch(`/api/threads/${threadId}/conversations`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +110,7 @@ export async function getThreadById(threadId) {
    */
   export async function getConversationMessages(conversationId) {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/messages`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -136,7 +136,7 @@ export async function getThreadById(threadId) {
    */
   export async function sendMessage(conversationId, messageData) {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ export async function getThreadById(threadId) {
    */
   export async function joinThread(threadId) {
     try {
-      const response = await fetch(`/api/threads/${threadId}/join`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ export async function getThreadById(threadId) {
    */
   export async function leaveThread(threadId) {
     try {
-      const response = await fetch(`/api/threads/${threadId}/leave`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/leave`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +214,7 @@ export async function getThreadById(threadId) {
    */
   export async function getUserThreads() {
     try {
-      const response = await fetch('/api/user/threads', {
+      const response = await fetch('http://localhost:8007/api/user/threads', {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -231,3 +231,169 @@ export async function getThreadById(threadId) {
       throw error;
     }
   }
+
+  export const getAllMainThreads = async () => {
+    try {
+      const response = await fetch("http://localhost:8007/api/threads/main");
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching main threads:", error);
+      throw error;
+    }
+  };
+
+  // Create a new thread
+export const createThread = async (threadData) => {
+  try {
+    const response = await fetch("http://localhost:8007/api/threads", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: threadData.name,
+        description: threadData.description,
+        active: threadData.active !== false,
+        parentThreadId: threadData.parentThreadId || null,
+        relatedCourseIds: threadData.relatedCourseIds || []
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error creating thread:", error);
+    throw error;
+  }
+};
+
+export const updateThread = async (threadId, threadData) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/${threadId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: threadData.name,
+        description: threadData.description,
+        active: threadData.active,
+        parentThreadId: threadData.parentThreadId || null,
+        relatedCourseIds: threadData.relatedCourseIds || []
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating thread:", error);
+    throw error;
+  }
+};
+
+
+export const deleteThread = async (threadId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/${threadId}`, {
+      method: "DELETE"
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error deleting thread:", error);
+    throw error;
+  }
+};
+
+export const addUserToThread = async (threadId, userId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/${threadId}/users/${userId}`, {
+      method: "POST"
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error adding user to thread:", error);
+    throw error;
+  }
+};
+
+export const removeUserFromThread = async (threadId, userId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/${threadId}/users/${userId}`, {
+      method: "DELETE"
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error removing user from thread:", error);
+    throw error;
+  }
+};
+
+export const getThreadsByCourseId = async (courseId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/course/${courseId}`);
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching course threads:", error);
+    throw error;
+  }
+};
+
+
+export const getThreadsByUserId = async (userId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/user/${userId}`);
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching user threads:", error);
+    throw error;
+  }
+};
+
+export const getUsersByThreadId = async (threadId) => {
+  try {
+    const response = await fetch(`http://localhost:8007/api/threads/${threadId}/users`);
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching thread members:", error);
+    throw error;
+  }
+};

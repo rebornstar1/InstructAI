@@ -54,6 +54,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
 
+// Import API services
+import { getThreadById, getUsersByThreadId } from "@/services/threadApi";
+import { getConversationsByThreadId } from "@/services/conversationApi.js";
+import { getMessagesByConversationId, createMessage, createReply } from "@/services/messageApi";
+
 export default function ThreadDetailPage({ params }) {
   const { threadId } = params;
   const [thread, setThread] = useState(null);
@@ -66,8 +71,19 @@ export default function ThreadDetailPage({ params }) {
   const [newConversationTitle, setNewConversationTitle] = useState("");
   const [isNewConversationDialogOpen, setIsNewConversationDialogOpen] = useState(false);
   const [relatedCourses, setRelatedCourses] = useState([]);
+  const [replyingTo, setReplyingTo] = useState(null);
   const messagesEndRef = useRef(null);
   const router = useRouter();
+
+  
+
+
+
+  // Current user simulation - in a real app, this would come from authentication
+  const currentUser = {
+    id: 1, // Replace with actual user ID from your auth system
+    username: "Current User"
+  };
 
   // Fetch thread data
   useEffect(() => {
@@ -75,15 +91,11 @@ export default function ThreadDetailPage({ params }) {
       setIsLoading(true);
       try {
         // Fetch thread details
-        const threadResponse = await fetch(`/api/threads/${threadId}`);
-        if (!threadResponse.ok) throw new Error("Failed to fetch thread");
-        const threadData = await threadResponse.json();
+        const threadData = await getThreadById(threadId);
         setThread(threadData);
 
         // Fetch conversations in this thread
-        const conversationsResponse = await fetch(`/api/threads/${threadId}/conversations`);
-        if (!conversationsResponse.ok) throw new Error("Failed to fetch conversations");
-        const conversationsData = await conversationsResponse.json();
+        const conversationsData = await getConversationsByThreadId(threadId);
         setConversations(conversationsData);
 
         // Set first conversation as active if available
@@ -91,26 +103,24 @@ export default function ThreadDetailPage({ params }) {
           setCurrentConversation(conversationsData[0]);
           
           // Fetch messages for this conversation
-          const messagesResponse = await fetch(`/api/conversations/${conversationsData[0].id}/messages`);
-          if (messagesResponse.ok) {
-            const messagesData = await messagesResponse.json();
-            setMessages(messagesData);
-          }
+          const messagesData = await getMessagesByConversationId(conversationsData[0].id);
+          setMessages(messagesData);
         }
 
         // Fetch thread members
-        const membersResponse = await fetch(`http://localhost:8007/api/threads/${threadId}/users`);
-        if (membersResponse.ok) {
-          const membersData = await membersResponse.json();
-          setMembers(membersData);
-        }
+        const membersData = await getUsersByThreadId(threadId);
+        setMembers(membersData);
 
         // Fetch related courses
         if (threadData.relatedCourseIds && threadData.relatedCourseIds.length > 0) {
-          const coursesResponse = await fetch(`/api/courses/simplified?ids=${threadData.relatedCourseIds.join(',')}`);
-          if (coursesResponse.ok) {
-            const coursesData = await coursesResponse.json();
-            setRelatedCourses(coursesData);
+          try {
+            const coursesResponse = await fetch(`http://localhost:8007/api/courses/simplified?ids=${threadData.relatedCourseIds.join(',')}`);
+            if (coursesResponse.ok) {
+              const coursesData = await coursesResponse.json();
+              setRelatedCourses(coursesData);
+            }
+          } catch (error) {
+            console.error("Error fetching related courses:", error);
           }
         }
 
@@ -140,14 +150,20 @@ export default function ThreadDetailPage({ params }) {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !currentConversation) return;
 
+    const messageContent = replyingTo 
+    ? `${newMessage} (Re: ${messages.find(m => m.id === replyingTo)?.content?.text?.substring(0, 50)}...)`
+    : newMessage;
+
     // Temporary message to show immediately
     const tempMessage = {
-      id: Date.now().toString(),
-      userId: "current-user", // Replace with actual current user ID
-      content: { text: newMessage },
+      id: `temp-${Date.now()}`,
+      userId: currentUser.id,
+      content: messageContent,
       messageType: "text",
       timestamp: new Date().toISOString(),
-      isTemporary: true
+      isTemporary: true,
+      isTopLevelMessage: !replyingTo,
+      replyToMessageId: replyingTo || null
     };
 
     // Update UI optimistically
@@ -155,27 +171,33 @@ export default function ThreadDetailPage({ params }) {
     setNewMessage("");
 
     try {
-      const response = await fetch(`/api/conversations/${currentConversation.id}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: { text: newMessage },
+      let responseMessage;
+      
+      if (replyingTo) {
+        // Create a reply
+        responseMessage = await createReply(replyingTo, {
+          userId: currentUser.id,
+          content: messageContent,
+          messageType: "text",
+          conversationId: currentConversation.id
+        });
+        setReplyingTo(null);
+      } else {
+        // Create a top-level message
+        responseMessage = await createMessage(currentConversation.id, {
+          userId: currentUser.id,
+          content: messageContent,
           messageType: "text"
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to send message");
+        });
       }
 
-      // Fetch updated messages to ensure consistency
-      const updatedMessagesResponse = await fetch(`/api/conversations/${currentConversation.id}/messages`);
-      if (updatedMessagesResponse.ok) {
-        const messagesData = await updatedMessagesResponse.json();
-        setMessages(messagesData);
-      }
+      // Replace temporary message with real one
+      setMessages(messages => 
+        messages.map(msg => 
+          msg.id === tempMessage.id ? responseMessage : msg
+        )
+      );
+      
     } catch (error) {
       console.error("Error sending message:", error);
       toast({
@@ -185,7 +207,7 @@ export default function ThreadDetailPage({ params }) {
       });
       
       // Remove temporary message on error
-      setMessages(messages.filter(msg => !msg.isTemporary));
+      setMessages(messages => messages.filter(msg => msg.id !== tempMessage.id));
     }
   };
 
@@ -194,13 +216,14 @@ export default function ThreadDetailPage({ params }) {
     if (!newConversationTitle.trim()) return;
 
     try {
-      const response = await fetch(`/api/threads/${threadId}/conversations`, {
+      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: newConversationTitle
+          title: newConversationTitle,
+          participantIds: [currentUser.id]
         }),
       });
 
@@ -235,14 +258,10 @@ export default function ThreadDetailPage({ params }) {
   const handleConversationChange = async (conversation) => {
     setCurrentConversation(conversation);
     setMessages([]);
+    setReplyingTo(null);
     
     try {
-      const messagesResponse = await fetch(`/api/conversations/${conversation.id}/messages`);
-      if (!messagesResponse.ok) {
-        throw new Error("Failed to fetch messages");
-      }
-      
-      const messagesData = await messagesResponse.json();
+      const messagesData = await getMessagesByConversationId(conversation.id);
       setMessages(messagesData);
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -260,6 +279,11 @@ export default function ThreadDetailPage({ params }) {
     return member ? member.username : "Unknown User";
   };
 
+  // Check if a message is from the current user
+  const isCurrentUserMessage = (message) => {
+    return message.userId === currentUser.id;
+  };
+
   // Format timestamp to readable date
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return "";
@@ -274,35 +298,79 @@ export default function ThreadDetailPage({ params }) {
     });
   };
 
-  // Render message content based on type
+  // Handle reply to a message
+  const handleReplyClick = (messageId) => {
+    setReplyingTo(messageId);
+    // Focus the message input
+    document.getElementById('message-input')?.focus();
+  };
+
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  // Render message content based on type and JSON structure
   const renderMessageContent = (message) => {
-    switch (message.messageType) {
+    // Parse content if it's a string containing JSON
+    let contentObj = message.content;
+    if (typeof message.content === 'string') {
+      try {
+        contentObj = JSON.parse(message.content);
+      } catch (e) {
+        // If not valid JSON, use as is
+        contentObj = { text: message.content };
+      }
+    }
+
+    // Handle reply context if present
+    const replyContext = contentObj.replyContext ? (
+      <div className="text-xs italic text-slate-500 mb-1 pb-1 border-b border-slate-200">
+        {contentObj.replyContext}
+      </div>
+    ) : null;
+
+    switch (message.messageType?.toLowerCase()) {
       case "text":
-        return <p className="whitespace-pre-wrap">{message.content.text}</p>;
+        return (
+          <div>
+            {replyContext}
+            <p className="whitespace-pre-wrap">{contentObj.text}</p>
+          </div>
+        );
       case "image":
         return (
           <div>
+            {replyContext}
             <img 
-              src={message.content.imageUrl} 
+              src={contentObj.imageUrl} 
               alt="Shared image" 
               className="max-w-xs rounded-lg border border-slate-200 my-2"
             />
-            {message.content.caption && <p className="text-sm text-slate-600 mt-1">{message.content.caption}</p>}
+            {contentObj.caption && <p className="text-sm text-slate-600 mt-1">{contentObj.caption}</p>}
           </div>
         );
       case "code":
         return (
-          <div className="bg-slate-900 text-slate-50 p-3 rounded-md my-2 font-mono text-sm overflow-x-auto">
-            <pre>{message.content.code}</pre>
-            {message.content.language && (
-              <div className="text-xs text-slate-400 mt-2 pb-1">
-                {message.content.language}
-              </div>
-            )}
+          <div>
+            {replyContext}
+            <div className="bg-slate-900 text-slate-50 p-3 rounded-md my-2 font-mono text-sm overflow-x-auto">
+              <pre>{contentObj.code}</pre>
+              {contentObj.language && (
+                <div className="text-xs text-slate-400 mt-2 pb-1">
+                  {contentObj.language}
+                </div>
+              )}
+            </div>
           </div>
         );
       default:
-        return <p>{JSON.stringify(message.content)}</p>;
+        // Handle plain strings
+        if (typeof message.content === 'string' && !contentObj.text) {
+          return <p className="whitespace-pre-wrap">{message.content}</p>;
+        }
+        // Fallback for any unhandled content type
+        return <p>{typeof contentObj === 'object' ? JSON.stringify(contentObj) : contentObj}</p>;
     }
   };
 
@@ -551,18 +619,18 @@ export default function ThreadDetailPage({ params }) {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {messages.map((message, index) => (
-                          <div key={message.id} className={`flex gap-3 ${message.userId === 'current-user' ? 'justify-end' : ''}`}>
-                            {message.userId !== 'current-user' && (
+                        {messages.map((message) => (
+                          <div key={message.id} className={`flex gap-3 ${isCurrentUserMessage(message) ? 'justify-end' : ''}`}>
+                            {!isCurrentUserMessage(message) && (
                               <Avatar className="h-8 w-8 flex-shrink-0">
                                 <AvatarImage src={`https://avatar.vercel.sh/${message.userId}`} />
                                 <AvatarFallback>{getUserNameById(message.userId).substring(0, 2).toUpperCase()}</AvatarFallback>
                               </Avatar>
                             )}
                             
-                            <div className={`max-w-[80%] ${message.userId === 'current-user' ? 'order-first' : 'order-last'}`}>
+                            <div className={`max-w-[80%] ${isCurrentUserMessage(message) ? 'order-first' : 'order-last'}`}>
                               <div className={`px-4 py-3 rounded-lg ${
-                                message.userId === 'current-user'
+                                isCurrentUserMessage(message)
                                   ? 'bg-blue-600 text-white ml-auto'
                                   : 'bg-white border border-slate-200'
                               }`}>
@@ -570,9 +638,9 @@ export default function ThreadDetailPage({ params }) {
                               </div>
                               
                               <div className={`flex items-center gap-2 mt-1 text-xs ${
-                                message.userId === 'current-user' ? 'justify-end text-slate-500' : 'text-slate-500'
+                                isCurrentUserMessage(message) ? 'justify-end text-slate-500' : 'text-slate-500'
                               }`}>
-                                {message.userId !== 'current-user' && (
+                                {!isCurrentUserMessage(message) && (
                                   <span className="font-medium">{getUserNameById(message.userId)}</span>
                                 )}
                                 <span>{formatTimestamp(message.timestamp)}</span>
@@ -595,7 +663,12 @@ export default function ThreadDetailPage({ params }) {
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6">
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6"
+                                            onClick={() => handleReplyClick(message.id)}
+                                          >
                                             <Reply className="h-3.5 w-3.5" />
                                           </Button>
                                         </TooltipTrigger>
@@ -609,7 +682,7 @@ export default function ThreadDetailPage({ params }) {
                               </div>
                             </div>
                             
-                            {message.userId === 'current-user' && (
+                            {isCurrentUserMessage(message) && (
                               <Avatar className="h-8 w-8 flex-shrink-0">
                                 <AvatarImage src="/avatar-placeholder.png" />
                                 <AvatarFallback>ME</AvatarFallback>
@@ -624,11 +697,31 @@ export default function ThreadDetailPage({ params }) {
                   
                   {/* Message Input */}
                   <div className="p-4 border-t border-slate-200">
+                    {replyingTo && (
+                      <div className="flex items-center justify-between bg-blue-50 p-2 rounded mb-2 text-sm">
+                        <div className="flex items-center">
+                          <Reply className="h-3.5 w-3.5 text-blue-500 mr-2" />
+                          <span className="text-slate-700">
+                            Replying to {getUserNameById(messages.find(m => m.id === replyingTo)?.userId)}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={cancelReply}
+                        >
+                          <span className="sr-only">Cancel reply</span>
+                          <span aria-hidden>×</span>
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex items-end gap-3">
                       <Textarea
+                        id="message-input"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Type your message..."
+                        placeholder={replyingTo ? "Type your reply..." : "Type your message..."}
                         className="min-h-[80px] flex-1"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
@@ -643,7 +736,7 @@ export default function ThreadDetailPage({ params }) {
                         className="bg-blue-600 hover:bg-blue-700 gap-2 h-10 px-4"
                       >
                         <Send className="h-4 w-4" />
-                        Send
+                        {replyingTo ? "Reply" : "Send"}
                       </Button>
                     </div>
                     <div className="text-xs text-slate-500 mt-2">

@@ -14,7 +14,9 @@ import {
   Tag,
   AlertCircle,
   ChevronRight,
-  RefreshCcw
+  RefreshCcw,
+  Plus,
+  X
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getUserThreads } from "../services/threadApi";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
+
+// Import API services
+import { getAllMainThreads, getThreadsByUserId, createThread } from "@/services/threadApi";
 
 export default function CommunityPage() {
   const [allThreads, setAllThreads] = useState([]);
@@ -45,7 +59,21 @@ export default function CommunityPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBy, setFilterBy] = useState("all");
+  const [isNewThreadDialogOpen, setIsNewThreadDialogOpen] = useState(false);
+  const [newThreadData, setNewThreadData] = useState({
+    name: "",
+    description: "",
+    active: true,
+    conceptTags: []
+  });
+  const [newTagInput, setNewTagInput] = useState("");
   const router = useRouter();
+
+  // Current user simulation - in a real app, this would come from authentication
+  const currentUser = {
+    id: 1, // Replace with actual user ID from your auth system
+    username: "Current User"
+  };
 
   useEffect(() => {
     fetchThreads();
@@ -57,18 +85,12 @@ export default function CommunityPage() {
     
     try {
       // Fetch all main threads
-      const allResponse = await fetch("/api/threads/main");
-      
-      if (!allResponse.ok) {
-        throw new Error(`API responded with status: ${allResponse.status}`);
-      }
-      
-      const allData = await allResponse.json();
-      setAllThreads(allData);
+      const allThreadsData = await getAllMainThreads();
+      setAllThreads(allThreadsData);
       
       // Fetch user's threads
       try {
-        const userThreadsData = await getUserThreads();
+        const userThreadsData = await getThreadsByUserId(currentUser.id);
         setUserThreads(userThreadsData);
       } catch (userThreadsError) {
         console.error("Error fetching user threads:", userThreadsError);
@@ -124,23 +146,109 @@ export default function CommunityPage() {
     });
   };
 
+  // Handle creating a new thread
+  const handleCreateThread = async () => {
+    if (!newThreadData.name.trim()) {
+      toast({
+        title: "Thread name required",
+        description: "Please provide a name for your thread.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const createdThread = await createThread({
+        ...newThreadData,
+        // Add any additional data needed
+      });
+
+      // Update the threads list
+      setAllThreads([...allThreads, createdThread]);
+      
+      // If the user is the creator, also add to user threads
+      setUserThreads([...userThreads, createdThread]);
+      
+      // Reset form and close dialog
+      setNewThreadData({
+        name: "",
+        description: "",
+        active: true,
+        conceptTags: []
+      });
+      setIsNewThreadDialogOpen(false);
+      
+      toast({
+        title: "Thread created",
+        description: "Your new thread has been created successfully."
+      });
+      
+      // Optionally navigate to the new thread
+      router.push(`/threads/${createdThread.id}`);
+    } catch (error) {
+      console.error("Error creating thread:", error);
+      toast({
+        title: "Failed to create thread",
+        description: "Could not create your thread. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle adding tags to the new thread
+  const handleAddTag = () => {
+    if (!newTagInput.trim()) return;
+    
+    // Check if tag already exists
+    if (!newThreadData.conceptTags.includes(newTagInput.trim())) {
+      setNewThreadData({
+        ...newThreadData,
+        conceptTags: [...newThreadData.conceptTags, newTagInput.trim()]
+      });
+    }
+    
+    setNewTagInput("");
+  };
+
+  // Handle removing tags from the new thread
+  const handleRemoveTag = (tagToRemove) => {
+    setNewThreadData({
+      ...newThreadData,
+      conceptTags: newThreadData.conceptTags.filter(tag => tag !== tagToRemove)
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-12">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 md:py-16">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">Community Discussions</h1>
-          <p className="text-blue-100 text-lg max-w-3xl mb-6">
-            Connect with peers, ask questions, and participate in discussions about courses, concepts, and learning resources.
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold mb-4">Community Discussions</h1>
+              <p className="text-blue-100 text-lg max-w-3xl mb-6">
+                Connect with peers, ask questions, and participate in discussions about courses, concepts, and learning resources.
+              </p>
+            </div>
+            <Button 
+              onClick={() => setIsNewThreadDialogOpen(true)}
+              className="bg-white text-blue-700 hover:bg-blue-50 gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Thread
+            </Button>
+          </div>
           
           <div className="flex flex-col sm:flex-row gap-4">
-            <Input 
-              placeholder="Search threads..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white/10 border-transparent placeholder:text-blue-200 text-white"
-            />
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300" />
+              <Input 
+                placeholder="Search threads..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-white/10 border-transparent placeholder:text-blue-200 text-white pl-10"
+              />
+            </div>
             <Select value={filterBy} onValueChange={setFilterBy}>
               <SelectTrigger className="w-full sm:w-48 bg-white/10 border-transparent text-white">
                 <SelectValue placeholder="Filter by" />
@@ -174,6 +282,94 @@ export default function CommunityPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Create New Thread Dialog */}
+      <Dialog open={isNewThreadDialogOpen} onOpenChange={setIsNewThreadDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Create New Thread</DialogTitle>
+            <DialogDescription>
+              Start a new discussion thread in the community. Provide details to help others understand the topic.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label htmlFor="thread-name" className="font-medium text-sm">
+                Thread Name
+              </label>
+              <Input
+                id="thread-name"
+                value={newThreadData.name}
+                onChange={(e) => setNewThreadData({...newThreadData, name: e.target.value})}
+                placeholder="Give your thread a descriptive title"
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <label htmlFor="thread-description" className="font-medium text-sm">
+                Description
+              </label>
+              <Textarea
+                id="thread-description"
+                value={newThreadData.description}
+                onChange={(e) => setNewThreadData({...newThreadData, description: e.target.value})}
+                placeholder="Describe what this thread is about"
+                rows={4}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <label className="font-medium text-sm">Concept Tags</label>
+              <div className="flex gap-2">
+                <Input
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  placeholder="Add relevant tags"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={handleAddTag}>
+                  Add
+                </Button>
+              </div>
+              
+              {newThreadData.conceptTags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newThreadData.conceptTags.map(tag => (
+                    <Badge key={tag} className="bg-slate-100 text-slate-800 gap-1 pl-2">
+                      {tag}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 ml-1 hover:bg-slate-200"
+                        onClick={() => handleRemoveTag(tag)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewThreadDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              type="button"
+              onClick={handleCreateThread}
+              disabled={!newThreadData.name.trim()}
+            >
+              Create Thread
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -241,13 +437,21 @@ export default function CommunityPage() {
                 "You haven't joined any threads yet. Browse the 'All Threads' tab to find discussions." : 
                 "There are no community threads available right now.")}
           </p>
-          {activeTab === "my" && (
+          {activeTab === "my" ? (
             <Button 
               onClick={() => setActiveTab("all")}
               className="gap-2"
             >
               <MessageSquare className="h-4 w-4" />
               Browse All Threads
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => setIsNewThreadDialogOpen(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Thread
             </Button>
           )}
         </div>
