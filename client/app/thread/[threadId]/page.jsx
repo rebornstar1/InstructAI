@@ -53,6 +53,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
+import SocketIOService from '../../../services/socketIOService.js';
 
 // Import API services
 import { getThreadById, getUsersByThreadId } from "@/services/threadApi";
@@ -106,6 +107,9 @@ export default function ThreadDetailPage({ params }) {
   const [isUserLoading, setIsUserLoading] = useState(true);
   const messagesEndRef = useRef(null);
   const router = useRouter();
+  const [isConnected, setIsConnected] = useState(false);
+  const [typingUsers, setTypingUsers] = useState(new Map());
+  const typingTimeoutRef = useRef(null);
 
 
   useEffect(() => {
@@ -134,6 +138,32 @@ export default function ThreadDetailPage({ params }) {
 
     loadUserProfile();
   }, [router]);
+
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      console.log("Attempting to connect to Socket.IO with user:", currentUser);
+      SocketIOService.connect(currentUser.id, currentUser.username)
+        .then(() => {
+          console.log("Socket.IO Connection successful");
+          setIsConnected(true);
+        })
+        .catch(error => {
+          console.error('Failed to connect to Socket.IO:', error);
+          toast({
+            title: "Connection Error",
+            description: "Could not connect to chat server. Some features may be unavailable.",
+            variant: "destructive"
+          });
+        });
+    }
+    
+    return () => {
+      // Disconnect on component unmount
+      console.log("Disconnecting Socket.IO");
+      SocketIOService.disconnect();
+    };
+  }, [currentUser]);
 
 
 
@@ -194,6 +224,129 @@ export default function ThreadDetailPage({ params }) {
     }
   }, [threadId]);
 
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      SocketIOService.connect(currentUser.id, currentUser.username)
+        .then(() => {
+          setIsConnected(true);
+        })
+        .catch(error => {
+          console.error('Failed to connect to WebSocket:', error);
+        });
+    }
+    
+    return () => {
+      // Disconnect on component unmount
+      SocketIOService.disconnect();
+    };
+  }, [currentUser]);
+  
+  // Add this effect to join conversation when it changes
+  useEffect(() => {
+    if (isConnected && currentUser?.id && currentConversation?.id) {
+      SocketIOService.joinConversation(
+        currentConversation.id,
+        currentUser.id,
+        currentUser.username,
+        handleWebSocketMessage
+      );
+      
+      // Leave conversation when it changes or component unmounts
+      return () => {
+        if (currentConversation?.id) {
+          SocketIOService.leaveConversation(
+            currentConversation.id,
+            currentUser.id,
+            currentUser.username
+          );
+        }
+      };
+    }
+  }, [isConnected, currentConversation, currentUser]);
+
+  const typingTimeoutsRef = useRef({});
+  
+  // Add this function to handle WebSocket messages
+  const handleWebSocketMessage = (message) => {
+    console.log('Received Socket.IO message:', message);
+    
+    switch (message.type) {
+      case 'CHAT':
+        // If the message is not from the current user (to avoid duplicates)
+        if (message.userId !== currentUser.id) {
+          const newMessage = {
+            id: message.messageId || `ws-${Date.now()}`,
+            userId: message.userId,
+            content: message.content,
+            messageType: message.messageType || 'text',
+            timestamp: message.timestamp,
+            replyToMessageId: message.replyToMessageId,
+            isTopLevelMessage: !message.replyToMessageId
+          };
+          
+          // Use functional update to ensure we're working with the latest state
+          setMessages(prevMessages => [...prevMessages, newMessage]);
+        }
+        break;
+        
+      case 'TYPING':
+        // Handle typing indicator
+        if (message.userId !== currentUser.id) {
+          setTypingUsers(prev => {
+            // Create a new Map to ensure state update triggers
+            const newMap = new Map(prev);
+            newMap.set(message.userId, message.username);
+            return newMap;
+          });
+          
+          // Clear after 3 seconds with a unique timeout for each user
+          const userId = message.userId;
+          if (typingTimeoutsRef.current[userId]) {
+            clearTimeout(typingTimeoutsRef.current[userId]);
+          }
+          
+          typingTimeoutsRef.current[userId] = setTimeout(() => {
+            setTypingUsers(prev => {
+              // Only remove if still present
+              if (prev.has(userId)) {
+                const newMap = new Map(prev);
+                newMap.delete(userId);
+                return newMap;
+              }
+              return prev;
+            });
+            delete typingTimeoutsRef.current[userId];
+          }, 3000);
+        }
+        break;
+        
+      case 'JOIN':
+      case 'LEAVE':
+        // Handle join/leave notifications
+        if (message.userId !== currentUser.id) {
+          const action = message.type === 'JOIN' ? 'joined' : 'left';
+          toast({
+            title: `${message.username} ${action} the conversation`,
+            duration: 2000,
+          });
+          
+          // Update participants list if available
+          if (currentConversation) {
+            // This would typically come from an API, but we're simulating it here
+            const updatedConversation = {...currentConversation};
+            if (message.type === 'JOIN' && !updatedConversation.participantIds.includes(message.userId)) {
+              updatedConversation.participantIds = [...updatedConversation.participantIds, message.userId];
+            } else if (message.type === 'LEAVE') {
+              updatedConversation.participantIds = updatedConversation.participantIds.filter(id => id !== message.userId);
+            }
+            setCurrentConversation(updatedConversation);
+          }
+        }
+        break;
+    }
+  };
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -202,11 +355,11 @@ export default function ThreadDetailPage({ params }) {
   // Handle sending a new message
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !currentConversation) return;
-
+  
     const messageContent = replyingTo 
-    ? `${newMessage} (Re: ${messages.find(m => m.id === replyingTo)?.content?.text?.substring(0, 50)}...)`
-    : newMessage;
-
+      ? `${newMessage} (Re: ${messages.find(m => m.id === replyingTo)?.content?.text?.substring(0, 50)}...)`
+      : newMessage;
+  
     // Temporary message to show immediately
     const tempMessage = {
       id: `temp-${Date.now()}`,
@@ -218,12 +371,34 @@ export default function ThreadDetailPage({ params }) {
       isTopLevelMessage: !replyingTo,
       replyToMessageId: replyingTo || null
     };
-
+  
     // Update UI optimistically
-    setMessages([...messages, tempMessage]);
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
     setNewMessage("");
-
+    
     try {
+      // Send via Socket.IO
+      console.log("Sending message via Socket.IO:", {
+        conversationId: currentConversation.id,
+        userId: currentUser.id,
+        username: currentUser.username,
+        content: messageContent
+      });
+      
+      const socketSent = SocketIOService.sendMessage(
+        currentConversation.id,
+        currentUser.id, 
+        currentUser.username,
+        messageContent,
+        "text",
+        replyingTo
+      );
+      
+      if (!socketSent) {
+        console.warn("Failed to send message via Socket.IO, falling back to API only");
+      }
+      
+      // Also save to database with REST API
       let responseMessage;
       
       if (replyingTo) {
@@ -243,14 +418,13 @@ export default function ThreadDetailPage({ params }) {
           messageType: "text"
         });
       }
-
+  
       // Replace temporary message with real one
-      setMessages(messages => 
-        messages.map(msg => 
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
           msg.id === tempMessage.id ? responseMessage : msg
         )
       );
-      
     } catch (error) {
       console.error("Error sending message:", error);
       toast({
@@ -260,7 +434,7 @@ export default function ThreadDetailPage({ params }) {
       });
       
       // Remove temporary message on error
-      setMessages(messages => messages.filter(msg => msg.id !== tempMessage.id));
+      setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempMessage.id));
     }
   };
 
@@ -304,6 +478,26 @@ export default function ThreadDetailPage({ params }) {
         description: "Could not create a new conversation. Please try again.",
         variant: "destructive"
       });
+    }
+  };
+
+
+  const handleInputChange = (e) => {
+    setNewMessage(e.target.value);
+    
+    // Send typing indicator, but not too frequently
+    if (!typingTimeoutRef.current && currentConversation && isConnected) {
+      console.log("Sending typing indicator");
+      SocketIOService.sendTypingIndicator(
+        currentConversation.id,
+        currentUser.id,
+        currentUser.username
+      );
+      
+      // Set a timeout to prevent sending too many events
+      typingTimeoutRef.current = setTimeout(() => {
+        typingTimeoutRef.current = null;
+      }, 2000);
     }
   };
 
@@ -770,10 +964,19 @@ export default function ThreadDetailPage({ params }) {
                       </div>
                     )}
                     <div className="flex items-end gap-3">
+                    {typingUsers.size > 0 && (
+                        <div className="text-xs text-slate-500 italic">
+                          {Array.from(typingUsers.values()).join(", ")} 
+                          {typingUsers.size === 1 ? " is" : " are"} typing...
+                        </div>
+                      )}
                       <Textarea
                         id="message-input"
                         value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
+                        onChange={(e) => {
+                          setNewMessage(e.target.value);
+                          handleInputChange(e);
+                        }}
                         placeholder={replyingTo ? "Type your reply..." : "Type your message..."}
                         className="min-h-[80px] flex-1"
                         onKeyDown={(e) => {
