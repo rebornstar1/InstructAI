@@ -13,13 +13,17 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function CourseCreationComponent({
+  initialPrompt = "",
   rawCourses,
   setGeneratedCourse,
   setActiveTab,
   messages,
   setMessages,
 }) {
-  const [coursePrompt, setCoursePrompt] = useState("");
+
+  // Initialize coursePrompt state with initialPrompt
+  const [coursePrompt, setCoursePrompt] = useState(initialPrompt);
+
   const [difficultyLevel, setDifficultyLevel] = useState("Mixed");
   const [isFormValid, setIsFormValid] = useState(false);
   const [showValidationError, setShowValidationError] = useState(false);
@@ -33,6 +37,14 @@ export default function CourseCreationComponent({
   const [userAnswers, setUserAnswers] = useState({});
   const [interactiveStep, setInteractiveStep] = useState(1);
   const [totalSteps, setTotalSteps] = useState(3); // Assuming 3 steps in the flow
+
+  // Using useEffect to update the form validation when initialPrompt changes
+  useEffect(() => {
+    if (initialPrompt) {
+      setCoursePrompt(initialPrompt);
+      setIsFormValid(true);
+    }
+  }, [initialPrompt]);
 
   useEffect(() => {
     setIsFormValid(coursePrompt.trim() !== "");

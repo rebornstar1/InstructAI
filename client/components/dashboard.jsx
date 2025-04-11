@@ -19,11 +19,14 @@ import {
 import { useAuth } from "@/context/AuthContext"; // Changed from Clerk to our custom auth
 import { fetchWithAuth } from "@/lib/api";
 
-import CourseCreationComponent from "./CourseCreationComponent";
-import CourseContentComponent from "./CourseContentComponent";
-import AITutorChatComponent from "./AITutorChatComponent";
+import { usePathname } from 'next/navigation';
+
+
+
 
 export default function Dashboard() {
+  const pathname = usePathname();
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [generatedCourse, setGeneratedCourse] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -275,20 +278,33 @@ export default function Dashboard() {
             
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center space-x-1">
-              <NavLink href="#" active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")}>Dashboard</NavLink>
-              <NavLink href="#" active={activeTab === "course"} onClick={() => generatedCourse && setActiveTab("course")} disabled={!generatedCourse}>Courses</NavLink>
-              <NavLink href="#" active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>AI Tutor</NavLink>
-              
-              <div className="ml-8 flex items-center space-x-4">
-                <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
-                  <Star className="h-4 w-4 mr-1" />
-                  <span>{userProfile?.xp} XP</span>
-                </div>
-                <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
-                  <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
-                </div>
-              </div>
-            </div>
+  <Link 
+    href="/generate-course"
+    className="mr-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center group"
+  >
+    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-white bg-opacity-20 mr-2 group-hover:scale-110 transition-transform">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
+    </span>
+    <span className="text-sm font-medium">New Course</span>
+  </Link>
+
+  <NavLink href="/home" active={pathname === "/home"}>Dashboard</NavLink>
+<NavLink href="/course-content" active={pathname === "/course-content"} disabled={!generatedCourse}>Courses</NavLink>
+<NavLink href="/ai-tutor" active={pathname === "/ai-tutor"}>AI Tutor</NavLink>
+<NavLink href="/resume-analyser" active={pathname === "/resume-analyser"}>Analyze Resume</NavLink>
+  
+  <div className="ml-8 flex items-center space-x-4">
+    <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+      <Star className="h-4 w-4 mr-1" />
+      <span>{userProfile?.xp || 0} XP</span>
+    </div>
+    <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
+      <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
+    </div>
+  </div>
+</div>
             
             {/* Mobile menu button */}
             <div className="md:hidden">
@@ -305,177 +321,144 @@ export default function Dashboard() {
       {/* MAIN CONTENT */}
       <main className="pt-32 md:pt-32 pb-16 px-6 md:px-8 max-w-screen-xl mx-auto">
         <AnimatePresence mode="wait">
-          {activeTab === "dashboard" && (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5 }}
-              className="space-y-8"
-            >
-              <div className="flex flex-col md:flex-row gap-8 items-start">
-                <div className="md:w-7/12">
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <motion.div className="inline-block mb-3">
-                      <div className="flex items-center">
-                        <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
-                        <span className="text-blue-600 font-medium">Your Learning Dashboard</span>
-                      </div>
-                    </motion.div>
-                    
-                    <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
-                      Welcome back, <span className="relative">
-                        <span className="relative z-10">{userProfile?.username}</span>
-                        <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
-                      </span>
-                    </h1>
-                    
-                    <p className="text-lg text-slate-600 mb-8 max-w-2xl">
-                      Continue your learning journey, explore new courses, or chat with your AI tutor to enhance your skills.
-                    </p>
-                  </motion.div>
-                  
-                  <StatsCards />
-                </div>
-                
-                <div className="md:w-5/12">
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.7, delay: 0.2 }}
-                  >
-                    {/* Activity card */}
-                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-                      <div className="p-6 border-b border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-800">Recent Activity</h3>
-                      </div>
-                      <div className="divide-y divide-slate-200">
-                        {[
-                          {
-                            title: "Completed lesson",
-                            description: "Introduction to Python Variables",
-                            time: "2 hours ago",
-                            icon: <CheckIcon />
-                          },
-                          {
-                            title: "Started new course",
-                            description: "Web Development Fundamentals",
-                            time: "Yesterday",
-                            icon: <PlayIcon />
-                          },
-                          {
-                            title: "Earned achievement",
-                            description: "Coding Streak: 7 Days",
-                            time: "3 days ago",
-                            icon: <TrophyIcon />
-                          }
-                        ].map((activity, i) => (
-                          <div key={i} className="p-4 flex items-start hover:bg-slate-50 transition-colors">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 flex-shrink-0">
-                              {activity.icon}
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium text-slate-800">{activity.title}</h4>
-                              <p className="text-sm text-slate-600">{activity.description}</p>
-                            </div>
-                            <div className="text-xs text-slate-500">{activity.time}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="p-4 bg-slate-50 text-center">
-                        <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
-                          View all activity
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-              </div>
 
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="bg-white rounded-xl shadow-md p-8 border border-slate-200"
-              >
-                <CourseCreationComponent
-                  rawCourses={rawCourses}
-                  setGeneratedCourse={setGeneratedCourse}
-                  setActiveTab={setActiveTab}
-                  messages={messages}
-                  setMessages={setMessages}
-                />
+        <motion.div
+          key="dashboard"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.5 }}
+          className="space-y-8"
+        >
+          {/* Header Section */}
+          <div className="w-full">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6 }}
+            >
+              <motion.div className="inline-block mb-3">
+                <div className="flex items-center">
+                  <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+                  <span className="text-blue-600 font-medium">Your Learning Dashboard</span>
+                </div>
               </motion.div>
-              
-              <SuggestedCourses />
-            </motion.div>
-          )}
 
-          {activeTab === "course" && (
-            <motion.div 
-              key="course"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="inline-block mb-3">
-                <div className="flex items-center">
-                  <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
-                  <span className="text-blue-600 font-medium">Course Content</span>
-                </div>
-              </div>
-              
-              <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
-                {generatedCourse?.title || "Course Content"}
-              </h1>
-              
-              <p className="text-lg text-slate-600 mb-8">
-                {generatedCourse?.description || "Explore your course materials and track your progress."}
-              </p>
-              
-              <div className="bg-white rounded-xl shadow-md p-8 border border-slate-200">
-                <CourseContentComponent
-                  generatedCourse={generatedCourse}
-                  setMessages={setMessages}
-                />
-              </div>
-            </motion.div>
-          )}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                <h1 className="text-4xl font-bold text-slate-900 leading-tight">
+                  Welcome back, <span className="relative">
+                    <span className="relative z-10">{userProfile?.username}</span>
+                    <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 z-0"></span>
+                  </span>
+                </h1>
 
-          {activeTab === "chat" && (
-            <motion.div 
-              key="chat"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="inline-block mb-3">
-                <div className="flex items-center">
-                  <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
-                  <span className="text-blue-600 font-medium">AI Tutor</span>
-                </div>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 500, 
+                    damping: 30,
+                    delay: 0.2
+                  }}
+                >
+                  <a 
+                    href="/generate-course"
+                    className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-md shadow-sm relative overflow-hidden"
+                    style={{
+                      background: "linear-gradient(45deg, #3b82f6, #2563eb)"
+                    }}
+                  >
+                    <motion.div 
+                      className="absolute inset-0 w-full h-full"
+                      animate={{
+                        background: [
+                          "linear-gradient(45deg, #3b82f6, #2563eb)", 
+                          "linear-gradient(45deg, #2563eb, #4f46e5)",
+                          "linear-gradient(45deg, #4f46e5, #2563eb)",
+                          "linear-gradient(45deg, #2563eb, #3b82f6)"
+                        ]
+                      }}
+                      transition={{
+                        duration: 6,
+                        repeat: Infinity,
+                        repeatType: "reverse"
+                      }}
+                    />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 relative z-10" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span className="relative z-10">Generate New Course</span>
+                  </a>
+                </motion.div>
               </div>
-              
-              <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
-                Chat with Your AI Tutor
-              </h1>
-              
-              <p className="text-lg text-slate-600 mb-8">
-                Ask questions, get explanations, and deepen your understanding with your personal AI tutor.
+                    
+              <p className="text-lg text-slate-600 mb-8 max-w-2xl">
+                Continue your learning journey, explore new courses, or chat with your AI tutor to enhance your skills.
               </p>
-              
-              <div className="bg-white rounded-xl shadow-md p-8 border border-slate-200">
-                <AITutorChatComponent messages={messages} setMessages={setMessages} />
-              </div>
             </motion.div>
-          )}
+          </div>
+                    
+          {/* Stats Cards Section */}
+          <StatsCards />
+                    
+          {/* Recent Activity Section - Moved here */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="w-full"
+          >
+            <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+              <div className="p-6 border-b border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800">Recent Activity</h3>
+              </div>
+              <div className="divide-y divide-slate-200">
+                {[
+                  {
+                    title: "Completed lesson",
+                    description: "Introduction to Python Variables",
+                    time: "2 hours ago",
+                    icon: <CheckIcon />
+                  },
+                  {
+                    title: "Started new course",
+                    description: "Web Development Fundamentals",
+                    time: "Yesterday",
+                    icon: <PlayIcon />
+                  },
+                  {
+                    title: "Earned achievement",
+                    description: "Coding Streak: 7 Days",
+                    time: "3 days ago",
+                    icon: <TrophyIcon />
+                  }
+                ].map((activity, i) => (
+                  <div key={i} className="p-4 flex items-start hover:bg-slate-50 transition-colors">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 flex-shrink-0">
+                      {activity.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-slate-800">{activity.title}</h4>
+                      <p className="text-sm text-slate-600">{activity.description}</p>
+                    </div>
+                    <div className="text-xs text-slate-500">{activity.time}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 bg-slate-50 text-center">
+                <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
+                  View all activity
+                </button>
+              </div>
+            </div>
+          </motion.div>
+              
+              
+        </motion.div>
+
         </AnimatePresence>
       </main>
 
@@ -572,23 +555,22 @@ export default function Dashboard() {
 }
 
 // Helper component for navigation links
-const NavLink = ({ href, active, onClick, disabled, children }) => (
-  <a 
-    href={href} 
-    onClick={(e) => {
-      e.preventDefault();
-      if (!disabled && onClick) onClick();
-    }} 
+const NavLink = ({ href, active, disabled, children }) => (
+  <Link 
+    href={disabled ? "#" : href}
     className={`px-3 py-2 rounded-md transition-colors relative group ${
       disabled ? 'text-slate-400 cursor-not-allowed' :
       active ? 'text-blue-700' : 'text-slate-700 hover:text-blue-600'
     }`}
+    onClick={(e) => {
+      if (disabled) e.preventDefault();
+    }}
   >
     {children}
     <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 transform origin-left transition-transform ${
       active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
     }`}></span>
-  </a>
+  </Link>
 );
 
 // Simple icon components for activity feed

@@ -22,7 +22,8 @@ import {
  *  - quiz: Quiz data with questions. (It may or may not include a topics property.)
  *  - onClose: Callback to close the quiz.
  *  - onProgressUpdate: Callback when progress updates (unused).
- *  - onQuizFail: Callback that receives an array of topics when the user’s score is below the passing score.
+ *  - onQuizFail: Callback that receives an array of topics when the user's score is below the passing score.
+ *  - onQuizComplete: Callback that receives quiz result data when quiz is completed (regardless of pass/fail).
  *
  * This version computes the score locally. If the score is below the passing score,
  * onQuizFail is called with quiz.topics if provided and non-empty; otherwise, it falls back
@@ -33,7 +34,8 @@ const EnhancedQuiz = ({
   quiz, 
   onClose,
   onProgressUpdate,
-  onQuizFail
+  onQuizFail,
+  onQuizComplete
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState({});
@@ -165,24 +167,58 @@ const EnhancedQuiz = ({
     }
     setErrorMessage('');
     setIsSubmitting(true);
+    
+    // Calculate score
     let correctAnswers = 0;
     questions.forEach((question, index) => {
       if (isAnswerCorrect(index, selectedAnswers[index])) {
         correctAnswers++;
       }
     });
+    
     const calculatedScore = Math.round((correctAnswers / totalQuestions) * 100);
+    const passingScore = quiz.passingScore || 60;
+    const isPassed = calculatedScore >= passingScore;
+    
     setScore(calculatedScore);
     setShowResults(true);
     setQuizCompleted(true);
-    setIsSubmitting(false);
-    const passingScore = quiz.passingScore || 60;
-    if (calculatedScore < passingScore && onQuizFail) {
+    
+    // Prepare result data
+    const resultData = {
+      quizId: quiz.id || quiz.quizId || moduleId,
+      quizTitle: quiz.quizTitle || 'Quiz',
+      score: calculatedScore,
+      totalQuestions,
+      correctAnswers,
+      passed: isPassed,
+      timeSpent: 600 - timeRemaining, // Calculate time spent in seconds
+      timestamp: new Date().toISOString(),
+      answers: selectedAnswers
+    };
+    
+    // Call appropriate callbacks
+    if (!isPassed && onQuizFail) {
       // Use quiz.topics if available and non-empty; otherwise use the quiz title.
       const topicsToFail = (quiz.topics && quiz.topics.length > 0) ? quiz.topics : [quiz.quizTitle];
-      console.log("Calling onQuizFail with topics:", topicsToFail);
       onQuizFail(topicsToFail);
     }
+    
+    // Call onQuizComplete regardless of pass/fail status
+    if (onQuizComplete) {
+      onQuizComplete(resultData);
+    }
+    
+    // Call onProgressUpdate with a similar result structure if it exists
+    if (onProgressUpdate) {
+      onProgressUpdate({
+        score: calculatedScore,
+        completed: true,
+        passed: isPassed
+      });
+    }
+    
+    setIsSubmitting(false);
   };
 
   if (showResults) {

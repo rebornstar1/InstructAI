@@ -290,9 +290,10 @@ export default function CoursesPage() {
             
             {/* Desktop navigation */}
             <div className="hidden md:flex items-center space-x-1">
-              <NavLink href="/home" active={false}>Dashboard</NavLink>
-              <NavLink href="/courses" active={true}>Courses</NavLink>
-              <NavLink href="#" active={false}>AI Tutor</NavLink>
+              <NavLink href="/home">Dashboard</NavLink>
+              <NavLink href="/course-content">Courses</NavLink>
+              <NavLink href="/ai-tutor">AI Tutor</NavLink>
+              <NavLink href="/resume-analyzer" active={true}>Resume Analyzer</NavLink>
               
               <div className="ml-8 flex items-center space-x-4">
                 <button className="font-medium text-slate-700 hover:text-blue-700 transition-colors">

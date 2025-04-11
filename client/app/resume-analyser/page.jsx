@@ -1,10 +1,35 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import EnhancedQuiz from "./EnhancedQuiz"; // adjust the import path as needed
+import Link from "next/link";
+import { Star } from "lucide-react";
+import EnhancedQuiz from "./EnhancedQuiz"; 
+import { usePathname } from 'next/navigation';
+
+
+// Helper component for navigation links
+const NavLink = ({ href, active, disabled, children }) => (
+  <Link 
+    href={disabled ? "#" : href}
+    className={`px-3 py-2 rounded-md transition-colors relative group ${
+      disabled ? 'text-slate-400 cursor-not-allowed' :
+      active ? 'text-blue-700' : 'text-slate-700 hover:text-blue-600'
+    }`}
+    onClick={(e) => {
+      if (disabled) e.preventDefault();
+    }}
+  >
+    {children}
+    <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 transform origin-left transition-transform ${
+      active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+    }`}></span>
+  </Link>
+);
 
 const ResumeAnalyzerPage = () => {
+  const pathname = usePathname();
+  const [generatedCourse, setGeneratedCourse] = useState(null);
   const [file, setFile] = useState(null);
   const [topics, setTopics] = useState([]);
   const [analysisState, setAnalysisState] = useState({
@@ -26,6 +51,7 @@ const ResumeAnalyzerPage = () => {
     totalQuestions: 0,
   });
   const [failedQuizTopics, setFailedQuizTopics] = useState([]);
+  const [userProfile, setUserProfile] = useState({ username: "User", xp: 0 });
 
   // File handling functions
   const handleFileChange = (e) => {
@@ -222,6 +248,7 @@ const ResumeAnalyzerPage = () => {
 
   const handleQuizComplete = (result) => {
     setCompletedQuizResults((prev) => [...prev, result]);
+    console.log("Quizes completed:", completedQuizResults);
     setQuizProgress((prev) => ({
       ...prev,
       completedQuizzes: prev.completedQuizzes + 1,
@@ -241,42 +268,43 @@ const ResumeAnalyzerPage = () => {
   };
 
   const renderQuizResults = () => {
+    console.log("HIOO")
     if (generatedQuizzes.length === 0) return null;
     return (
-      <div className="mt-8 p-6 bg-white rounded-lg shadow-md">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">
+      <div className="mt-8 bg-white rounded-xl shadow-md p-8 border border-slate-200">
+        <h3 className="text-xl font-bold text-slate-800 mb-4">
           Your Personalized Quizzes
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {generatedQuizzes.map((quiz, index) => {
-            const quizId = quiz.id || String(index);
-            const completed = completedQuizResults.find((q) => q.quizId === quizId);
+            const quizId = quiz.quizTitle || String(index);
+            const completed = completedQuizResults.find((q) => q.quizTitle === quizId);
             return (
               <div
                 key={quizId}
-                className="p-4 border rounded-lg transition-all border-gray-200 hover:border-blue-300 hover:shadow-md"
+                className="p-6 border rounded-xl transition-all border-slate-200 hover:border-blue-300 hover:shadow-md"
               >
                 <div className="flex justify-between items-start">
-                  <h4 className="font-medium text-gray-800">{quiz.quizTitle}</h4>
+                  <h4 className="font-medium text-slate-800">{quiz.quizTitle}</h4>
                   {completed && (
-                    <span className="text-sm text-green-600">
-                      Score: {completed.score}/{completed.totalQuestions}
+                    <span className="text-sm bg-green-100 text-green-800 px-4 py-1 rounded-full">
+                      Score: {completed.score}/100
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-600 my-2">{quiz.description}</p>
+                <p className="text-sm text-slate-600 my-4">{quiz.description}</p>
                 <div className="mt-4 flex items-center justify-end">
                   {completed ? (
                     <button
                       disabled
-                      className="text-sm px-3 py-1 rounded font-medium bg-gray-400 text-white cursor-not-allowed"
+                      className="text-sm px-4 py-2 rounded-md font-medium bg-slate-200 text-slate-500 cursor-not-allowed"
                     >
                       Quiz Completed
                     </button>
                   ) : (
                     <button
                       onClick={() => handleOpenQuiz(quiz)}
-                      className="text-sm px-3 py-1 rounded font-medium bg-blue-600 text-white hover:bg-blue-700"
+                      className="text-sm px-4 py-2 rounded-md font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     >
                       Start Quiz
                     </button>
@@ -290,32 +318,118 @@ const ResumeAnalyzerPage = () => {
     );
   };
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Add effect to refresh quiz results when completedQuizResults changes
+  useEffect(() => {
+    // Increment refreshKey to force re-render of quiz results
+    setRefreshKey(prevKey => prevKey + 1);
+    console.log('refreshing')
+    renderQuizResults();
+
+    
+    // Update the profile XP whenever a quiz is completed
+    // if (completedQuizResults.length > 0) {
+    //   // Calculate total XP gained from all completed quizzes
+    //   const totalXP = completedQuizResults.reduce((sum, result) => sum + result.score, 0) * 10;
+      
+    //   // Update the user profile with new XP
+    //   setUserProfile(prev => ({
+    //     ...prev,
+    //     xp: totalXP
+    //   }));
+    // }
+  }, [completedQuizResults]);
+
+  // useEffect(() => {
+
+  // } , [completedQuizResults]);
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-blue-50 py-12">
-      <div className="container mx-auto px-4 max-w-5xl">
+    <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
+      {/* Navbar */}
+      <nav className="fixed w-full z-50 backdrop-blur-sm bg-white/80 border-b border-slate-200">
+        <div className="max-w-screen-xl mx-auto px-6 md:px-8">
+          <div className="flex items-center justify-between h-20">
+            {/* Logo */}
+            <Link href="/">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="h-10 w-10 bg-blue-600 rounded-tl-2xl rounded-br-2xl rotate-12"></div>
+                  <div className="absolute top-1 left-1 h-8 w-8 bg-indigo-500 rounded-tl-xl rounded-br-xl rotate-12 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg -rotate-12">C</span>
+                  </div>
+                </div>
+                <span className="font-extrabold tracking-tight text-slate-800">
+                  Instruct<span className="text-blue-600">AI</span>
+                </span>
+              </div>
+            </Link>
+            
+            {/* Desktop navigation */}
+            <div className="hidden md:flex items-center space-x-1">
+              <Link 
+                href="/generate-course"
+                className="mr-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center group"
+              >
+                <span className="flex items-center justify-center h-5 w-5 rounded-full bg-white bg-opacity-20 mr-2 group-hover:scale-110 transition-transform">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                <span className="text-sm font-medium">New Course</span>
+              </Link>
+              
+              <NavLink href="/home" active={pathname === "/home"}>Dashboard</NavLink>
+<NavLink href="/course-content" active={pathname === "/course-content"} disabled={!generatedCourse}>Courses</NavLink>
+<NavLink href="/ai-tutor" active={pathname === "/ai-tutor"}>AI Tutor</NavLink>
+<NavLink href="/resume-analyser" active={pathname === "/resume-analyser"}>Analyze Resume</NavLink>
+              
+              <div className="ml-8 flex items-center space-x-4">
+                <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
+                  <Star className="h-4 w-4 mr-1" />
+                  <span>{userProfile?.xp || 0} XP</span>
+                </div>
+                <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
+                  <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Mobile menu button */}
+            <div className="md:hidden">
+              <button className="text-slate-700 hover:text-blue-600 focus:outline-none">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main content with proper padding to avoid navbar overlap */}
+      <div className="pt-28 px-6 md:px-8 max-w-screen-xl mx-auto pb-16">
+        <div className="inline-block mb-3">
+          <div className="flex items-center">
+            <div className="h-0.5 w-10 bg-blue-600 mr-3"></div>
+            <span className="text-blue-600 font-medium">Resume Analyzer</span>
+          </div>
+        </div>
+        
+        <h1 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+          Analyze Your Resume
+        </h1>
+        
+        <p className="text-lg text-slate-600 mb-8 max-w-2xl">
+          Upload your resume to generate personalized quizzes based on your skills and experience.
+        </p>
+
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="bg-white rounded-lg shadow-lg p-8 mb-8"
+          className="bg-white rounded-xl shadow-md border border-slate-200 p-8 mb-8"
         >
-          <motion.h2
-            className="text-3xl font-bold text-center text-blue-700 mb-2"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            Welcome to Your Learning Journey
-          </motion.h2>
-          <motion.p
-            className="text-center text-gray-600 mb-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            Upload your resume to generate a personalized quiz based on your skills and experience.
-          </motion.p>
-
           <AnimatePresence mode="wait">
             {analysisState.stage === "initial" && (
               <motion.div
@@ -326,7 +440,7 @@ const ResumeAnalyzerPage = () => {
                 className="mb-8"
               >
                 <motion.div
-                  className={`border-2 border-dashed ${error ? "border-red-300" : "border-blue-300"} rounded-lg p-8 text-center transition-colors ${file ? "" : "cursor-pointer hover:border-blue-500"}`}
+                  className={`border-2 border-dashed ${error ? "border-red-300" : "border-blue-200"} rounded-xl p-8 text-center transition-colors ${file ? "" : "cursor-pointer hover:border-blue-500"}`}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                   onClick={() => {
@@ -367,10 +481,10 @@ const ResumeAnalyzerPage = () => {
                           ></path>
                         </svg>
                       </motion.div>
-                      <h3 className="text-lg font-medium text-gray-700 mb-1">
+                      <h3 className="text-lg font-medium text-slate-800 mb-1">
                         Drag and drop your resume here
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-500">
                         or click to select a file (PDF, DOC, DOCX)
                       </p>
                     </div>
@@ -390,10 +504,10 @@ const ResumeAnalyzerPage = () => {
                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                         ></path>
                       </svg>
-                      <h3 className="text-lg font-medium text-gray-700 mb-1">
+                      <h3 className="text-lg font-medium text-slate-800 mb-1">
                         {file.name}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-500">
                         {(file.size / 1024 / 1024).toFixed(2)} MB · {file.type.split("/")[1] || "Unknown"}
                       </p>
                     </div>
@@ -418,7 +532,7 @@ const ResumeAnalyzerPage = () => {
                     transition={{ delay: 0.2 }}
                   >
                     <motion.button
-                      className="bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors flex items-center justify-center mx-auto"
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center mx-auto"
                       onClick={handleAnalyzeResume}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -475,14 +589,14 @@ const ResumeAnalyzerPage = () => {
                     </svg>
                   </motion.div>
                   
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  <h3 className="text-xl font-semibold text-slate-800 mb-2">
                     {analysisState.stage === "uploading" ? "Uploading Resume..." : "Analyzing Your Resume..."}
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-slate-600 mb-6">
                     {analysisState.stage === "uploading" ? "Securely uploading your document" : "Identifying your skills and experience"}
                   </p>
                   
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2 max-w-md mx-auto">
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 mb-2 max-w-md mx-auto">
                     <motion.div 
                       className="bg-blue-600 h-2.5 rounded-full"
                       initial={{ width: "0%" }}
@@ -490,7 +604,7 @@ const ResumeAnalyzerPage = () => {
                       transition={{ duration: 0.5 }}
                     ></motion.div>
                   </div>
-                  <p className="text-sm text-gray-500">{analysisState.progress}%</p>
+                  <p className="text-sm text-slate-500">{analysisState.progress}%</p>
                 </div>
               </motion.div>
             )}
@@ -503,19 +617,19 @@ const ResumeAnalyzerPage = () => {
                 exit={{ opacity: 0 }}
                 className="py-4"
               >
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Identified Topics</h3>
-                <p className="text-gray-600 mb-4">
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">Identified Topics</h3>
+                <p className="text-slate-600 mb-4">
                   These topics were identified from your resume. Feel free to edit, add, or remove topics.
                 </p>
                 <div className="space-y-3 mb-6">
                   {topics.map((topic) => (
                     <motion.div
                       key={topic.id}
-                      className="flex items-center p-3 bg-blue-50 rounded-lg group relative"
+                      className="flex items-center p-4 bg-slate-50 rounded-lg group relative"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
-                      whileHover={{ scale: 1.01, backgroundColor: "#E6F0FF" }}
+                      whileHover={{ scale: 1.01, backgroundColor: "#EFF6FF" }}
                       transition={{ duration: 0.2 }}
                     >
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium shrink-0">
@@ -531,7 +645,7 @@ const ResumeAnalyzerPage = () => {
                       {topics.length > 0 && (
                         <button 
                           onClick={() => removeTopic(topic.id)}
-                          className="ml-2 p-1 text-gray-400 hover:text-red-500 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="ml-2 p-1 text-slate-400 hover:text-red-500 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
                           aria-label="Remove topic"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -553,7 +667,7 @@ const ResumeAnalyzerPage = () => {
                       className="flex items-center text-blue-600 hover:text-blue-800 transition-colors focus:outline-none"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
                       </svg>
                       Add Topic
                     </button>
@@ -561,7 +675,7 @@ const ResumeAnalyzerPage = () => {
                 )}
                 <div className="text-center">
                   <motion.button
-                    className="bg-blue-600 text-white px-8 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors flex items-center justify-center mx-auto"
+                    className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center mx-auto shadow-md"
                     onClick={handleGenerateQuiz}
                     disabled={topics.some(topic => topic.name.trim() === "")}
                     whileHover={{ scale: 1.05 }}
@@ -596,14 +710,14 @@ const ResumeAnalyzerPage = () => {
                   </svg>
                 </motion.div>
                 
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">
                   Generating Your Personalized Quiz
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-slate-600 mb-6">
                   Creating quiz questions based on the selected topics
                 </p>
                 
-                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2 max-w-md mx-auto">
+                <div className="w-full bg-slate-200 rounded-full h-2.5 mb-2 max-w-md mx-auto">
                   <motion.div 
                     className="bg-blue-600 h-2.5 rounded-full"
                     initial={{ width: "0%" }}
@@ -611,7 +725,7 @@ const ResumeAnalyzerPage = () => {
                     transition={{ duration: 0.5 }}
                   ></motion.div>
                 </div>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-slate-500">
                   {analysisState.progress}%
                 </p>
               </motion.div>
@@ -621,39 +735,66 @@ const ResumeAnalyzerPage = () => {
           {renderQuizResults()}
         </motion.div>
 
-        {/* Changed bottom area */}
+        {/* Weak Topics Area */}
         {failedQuizTopics.length > 0 && (
-          <div className="mt-8 p-4 border-l-4 border-amber-400 bg-amber-50">
-            <h4 className="font-medium text-amber-800 mb-2">Weak Topics</h4>
-            <ul className="list-disc pl-5 space-y-1">
-              {failedQuizTopics.map((topic, index) => (
-                <li key={index} className="text-amber-700">{topic}</li>
-              ))}
-            </ul>
-            <div className="text-right mt-2">
-              <button
-                onClick={handleGenerateCourses}
-                className="bg-amber-400 text-white px-4 py-2 rounded"
-              >
-                Generate Courses
-              </button>
+  <motion.div 
+    className="mt-8 bg-white rounded-xl shadow-md border-l-4 border-amber-500 overflow-hidden"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5 }}
+  >
+    <div className="p-6">
+      <h3 className="text-xl font-bold text-slate-800 mb-4">Topics to Improve</h3>
+      <p className="text-slate-600 mb-4">
+        Based on your quiz results, these are areas where you could benefit from additional learning.
+      </p>
+
+      <div className="space-y-4">
+        {failedQuizTopics.map((topic, index) => (
+          <div key={index} className="bg-amber-50 rounded-lg p-4 flex justify-between items-center">
+            <div className="flex items-start">
+              <svg className="h-5 w-5 text-amber-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <span className="text-amber-800">{topic}</span>
             </div>
+            <Link 
+              href={`/generate-course?prompt=${encodeURIComponent(topic)}`}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:shadow-md transition-all"
+            >
+              <div className="flex justify-end my-1">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+          </svg>
+          Generate Courses
           </div>
-        )}
+            </Link>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  </motion.div>
+)}
       </div>
       
       {/* Quiz Modal */}
       {showQuizModal && activeQuiz && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-auto">
+          <motion.div 
+            className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-auto"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+          >
             <button
               onClick={handleCloseQuizModal}
-              className="absolute top-2 right-2 z-10 p-2 bg-gray-100 rounded-full hover:bg-gray-200"
+              className="absolute top-3 right-3 z-10 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
               aria-label="Close Quiz"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-gray-600"
+                className="h-5 w-5 text-slate-600"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -668,9 +809,14 @@ const ResumeAnalyzerPage = () => {
               onClose={handleCloseQuizModal}
               onProgressUpdate={(data) => console.log("Progress updated:", data)}
               onQuizFail={handleQuizFail}
-              onQuizComplete={handleQuizComplete}
+              onQuizComplete={(resultData) => {
+                handleQuizComplete(resultData);
+                console.log("Quiz completed:", resultData);
+
+              }}
+              
             />
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
