@@ -11,7 +11,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/learning-resources")
@@ -51,6 +53,25 @@ public class LearningResourceController {
 //        return ResponseEntity.ok(quizzes);
 //    }
 
+    @GetMapping("/key-terms")
+    public ResponseEntity<Map<String, String>> analyzeTopicAndExtractKeyTerms(
+            @RequestParam String conceptTitle,
+            @RequestParam String moduleTitle) {
+
+        logger.info("Received request to analyze topic and extract key terms for concept: {}, module: {}",
+                conceptTitle, moduleTitle);
+
+        Map<String, String> keyTerms = learningResourceService.analyzeTopicAndExtractKeyTerms(conceptTitle, moduleTitle);
+
+        if (keyTerms.isEmpty()) {
+            logger.warn("No key terms extracted for the provided concept and module");
+            return ResponseEntity.noContent().build();
+        }
+
+        logger.info("Successfully extracted {} key terms", keyTerms.size());
+        return ResponseEntity.ok(keyTerms);
+    }
+
     @PostMapping("/generate-multiple-quizzes")
     public ResponseEntity<List<QuizDto>> generateMultipleQuizzes(@RequestBody List<String> concepts) {
         logger.info("Received request to generate quizzes for concepts: {}", concepts);
@@ -63,6 +84,38 @@ public class LearningResourceController {
         return ResponseEntity.ok(quizzes);
     }
 
+    /**
+     * Finds relevant educational videos for a specific term based on its definition
+     *
+     * @param term The technical term to find videos for
+     * @param definition The definition of the term (will help improve search precision)
+     * @return A list of YouTube video URLs related to the term and its definition
+     */
+    @GetMapping("/definition-videos")
+    public ResponseEntity<Map<String, Object>> getDefinitionVideos(
+            @RequestParam String term,
+            @RequestParam(required = false) String definition) {
+
+        logger.info("Received request to find definition videos for term: {}", term);
+
+        // Use empty string if definition is null
+        String definitionText = definition != null ? definition : "";
+
+        List<String> videos = learningResourceService.findDefinitionVideos(term, definitionText);
+
+        if (videos.isEmpty()) {
+            logger.warn("No videos found for term: {}", term);
+            return ResponseEntity.noContent().build();
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("term", term);
+        response.put("definition", definitionText);
+        response.put("videos", videos);
+
+        logger.info("Found {} videos for term: {}", videos.size(), term);
+        return ResponseEntity.ok(response);
+    }
 }
 
 

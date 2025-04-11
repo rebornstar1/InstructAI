@@ -79,22 +79,21 @@ public class LearningResourceService {
         List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
         List<QuizDto> persistedQuizzes = persistQuizzes(quizzes, moduleId);
 
-        // 7) Find relevant YouTube videos for main concept and key terms
-        Map<String, List<String>> allVideos = new HashMap<>();
-        List<String> mainConceptVideos = findRelevantYouTubeVideos(conceptTitle, 3);
 
-        module.setVideoUrls(mainConceptVideos);
-        moduleRepository.save(module);
+        List<String> allVideos = new ArrayList<>();
 
-        allVideos.put(conceptTitle, mainConceptVideos);
-
-        // Find definition videos for each key term
+        // Find definition videos for each key term and add them to the combined list
         keyTerms.forEach((term, definition) -> {
-            List<String> termVideos = findDefinitionVideos(term);
+            List<String> termVideos = findDefinitionVideos(term,definition);
             if (!termVideos.isEmpty()) {
-                allVideos.put(term, termVideos);
+                // Take the first video for each term and add it directly to allVideos
+                termVideos.stream().findFirst().ifPresent(allVideos::add);
             }
         });
+
+        module.setVideoUrls(allVideos);
+        moduleRepository.save(module);
+
 
         // 8) Build the final learning resource DTO
         LearningResourceDto result = LearningResourceDto.builder()
@@ -102,7 +101,7 @@ public class LearningResourceService {
                 .moduleTitle(moduleTitle)
                 .content(mainContent)
                 .transcript(transcript)
-                .videoUrls(mainConceptVideos)
+                .videoUrls(allVideos)
                 .subModules(persistedSubModules)
                 .quizzes(persistedQuizzes)
                 .build();
@@ -155,24 +154,32 @@ public class LearningResourceService {
         return callGeminiApi(transcriptPrompt);
     }
 
-    private Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
+    public Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
         logger.info("Analyzing topic complexity and extracting key terms for: {}", conceptTitle);
 
         String analysisPrompt = String.format(
-                "Analyze the topic '%s' in the context of module '%s' and identify 5-10 key terms or concepts " +
-                        "that would benefit from detailed explanation. For each term, provide a short 1-2 sentence definition. " +
+                "Analyze the topic '%s' in the context of module '%s' and identify 5-7 key terms or concepts " +
+                        "that would benefit from detailed explanation. " +
+                        "IMPORTANT: Focus on WELL-KNOWN, FUNDAMENTAL concepts that most beginners would need to understand. " +
+                        "Avoid highly specialized or advanced technical terms. " +
+                        "Each key term MUST be specific to the domain and maintain full context. " +
+                        "For example, if the topic is 'Web Development', use 'Web Hooks' instead of just 'Hooks', " +
+                        "or 'JavaScript Closures' instead of just 'Closures'. " +
+                        "For each term, provide a short 1-2 sentence definition that is accessible to beginners. " +
                         "Format your response as a JSON object with the term as key and definition as value: " +
                         "{ " +
-                        "  \"term1\": \"definition1\", " +
-                        "  \"term2\": \"definition2\" " +
+                        "  \"Domain-Specific Term 1\": \"definition1\", " +
+                        "  \"Domain-Specific Term 2\": \"definition2\" " +
                         "} " +
                         "Focus on identifying terms that are: " +
-                        "1. Foundational to understanding the topic " +
-                        "2. Potentially unfamiliar to beginners " +
-                        "3. Technical or domain-specific " +
-                        "4. Frequently referenced when discussing this topic " +
-                        "5. Important for practical implementation",
-                conceptTitle, moduleTitle
+                        "1. Core foundational concepts that everyone in this field should know " +
+                        "2. Commonly referenced in introductory materials " +
+                        "3. Broadly applicable rather than niche or specialized " +
+                        "4. Important for building a solid understanding of the topic " +
+                        "5. Frequently used in everyday discussions about this subject " +
+                        "Remember: Every term MUST include the proper domain-specific context (e.g., '%s Hooks' not just 'Hooks') " +
+                        "and should be recognizable to most people with basic knowledge of the field.",
+                conceptTitle, moduleTitle, conceptTitle
         );
 
         String analysisResult = callGeminiApi(analysisPrompt);
@@ -198,7 +205,16 @@ public class LearningResourceService {
                 JsonNode termsNode = objectMapper.readTree(analysisResult);
 
                 termsNode.fields().forEachRemaining(entry -> {
-                    keyTerms.put(entry.getKey(), entry.getValue().asText());
+                    String term = entry.getKey();
+                    String definition = entry.getValue().asText();
+
+                    // Additional check to ensure term has proper context
+                    if (!term.toLowerCase().contains(conceptTitle.toLowerCase()) && !isFullyQualifiedTerm(term, conceptTitle)) {
+                        // Add domain context if missing
+                        term = addDomainContext(term, conceptTitle);
+                    }
+
+                    keyTerms.put(term, definition);
                 });
 
                 logger.info("Extracted {} key terms for topic: {}", keyTerms.size(), conceptTitle);
@@ -216,6 +232,65 @@ public class LearningResourceService {
         }
 
         return keyTerms;
+    }
+
+    /**
+     * Checks if a term already has proper domain-specific context
+     */
+    private boolean isFullyQualifiedTerm(String term, String domain) {
+        // Consider a term fully qualified if:
+        // 1. It includes any part of the domain name
+        // 2. It's a common technical term that doesn't need domain qualification
+
+        String lowercaseTerm = term.toLowerCase();
+        String lowercaseDomain = domain.toLowerCase();
+
+        // Split domain into words and check if any are in the term
+        String[] domainWords = lowercaseDomain.split("\\s+");
+        for (String word : domainWords) {
+            if (word.length() > 3 && lowercaseTerm.contains(word)) {
+                return true;
+            }
+        }
+
+        // List of common technical terms that don't need domain qualification
+        List<String> commonTechnicalTerms = Arrays.asList(
+                "api", "rest", "json", "xml", "http", "tcp/ip", "database",
+                "algorithm", "interface", "framework", "architecture", "protocol"
+        );
+
+        for (String commonTerm : commonTechnicalTerms) {
+            if (lowercaseTerm.equals(commonTerm) || lowercaseTerm.startsWith(commonTerm + " ")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Adds domain context to terms that lack it
+     */
+    private String addDomainContext(String term, String domain) {
+        // For multi-word domains, use the first word as prefix if appropriate
+        String contextPrefix = domain.split("\\s+")[0];
+
+        // Check if term already starts with some context
+        if (term.toLowerCase().startsWith(contextPrefix.toLowerCase())) {
+            return term;
+        }
+
+        // For certain terms, use the full domain
+        if (term.toLowerCase().equals("basics") ||
+                term.toLowerCase().equals("fundamentals") ||
+                term.toLowerCase().equals("principles") ||
+                term.toLowerCase().equals("concepts") ||
+                term.toLowerCase().equals("introduction")) {
+            return domain + " " + term;
+        }
+
+        // For other technical terms, use the domain as prefix
+        return contextPrefix + " " + term;
     }
 
     private List<SubModuleDto> generateDynamicSubModules(String conceptTitle, String moduleTitle,
@@ -358,14 +433,14 @@ public class LearningResourceService {
         return persistedQuizzes;
     }
 
-    private List<String> findDefinitionVideos(String term) {
+    public List<String> findDefinitionVideos(String term,String definition) {
         logger.info("Searching for definition videos for term: {}", term);
         // Search for definition-style videos for key terms
-        String searchQuery = term + " definition explained";
-        return findRelevantYouTubeVideos(searchQuery, 2);
+        String searchQuery = term + " " + definition;
+        return findRelevantYouTubeVideos(searchQuery, 1);
     }
 
-    private List<String> findRelevantYouTubeVideos(String topic, int maxResults) {
+    public List<String> findRelevantYouTubeVideos(String topic, int maxResults) {
         List<String> videoUrls = new ArrayList<>();
         try {
             String searchQuery = URLEncoder.encode(topic, StandardCharsets.UTF_8);
@@ -744,6 +819,10 @@ public class LearningResourceService {
         // Fix property names without quotes
         cleaned = cleaned.replaceAll("([{,]\\s*)(\\w+)(:)", "$1\"$2\"$3");
 
+        // Fix colons used instead of commas in array elements
+        // Pattern matches after a closing quote, bracket, or brace followed by a colon (when a comma should be used)
+        cleaned = cleaned.replaceAll("(\"[^\"]*\"|\\}|\\])\\s*:\\s*(\"|\\\"|\\{|\\[)", "$1,$2");
+
         // Make sure array elements have commas between them
         cleaned = cleaned.replaceAll("\"\\s*\\{", "\",{");
 
@@ -762,6 +841,9 @@ public class LearningResourceService {
                 (cleaned.contains("\"question\"") || cleaned.contains("\"options\""))) {
             cleaned = "{\"questions\":" + cleaned + "}";
         }
+
+        // Log the cleaned JSON for debugging
+        logger.debug("Cleaned JSON: {}", cleaned);
 
         return cleaned;
     }
