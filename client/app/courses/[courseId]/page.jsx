@@ -23,10 +23,11 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast"; 
 
-// Import our new components and API functions
+// Import our components and API functions
 import CourseProgressCard from "../components/CourseProgressCard";
 import EnrollmentModal from "../components/EnrollmentModal";
 import { getCourseWithProgress, enrollInCourse } from "../../../services/progressApi";
+import { extractKeyTerms, saveKeyTermsToModule } from "../../../services/KeyTermService";
 
 export default function CourseDetailPage({ params }) {
   const { courseId } = params;
@@ -84,8 +85,57 @@ export default function CourseDetailPage({ params }) {
     }
   }, [courseId]);
 
-  const navigateToModule = (id) => {
-    router.push(`/courses/${courseId}/module/${id}`);
+  const navigateToModule = async (moduleId) => {
+    try {
+      // Find the module to get its data
+      const module = getModules().find(m => (m.id || m.moduleId) === moduleId);
+      
+      // Check if the module already has key terms and definitions
+      // Only proceed with extraction if both are empty or not present
+      const hasExistingKeyTerms = module && 
+        module.keyTerms && 
+        module.keyTerms.length > 0 && 
+        module.definitions && 
+        module.definitions.length > 0;
+      
+      // Skip key terms extraction if the module already has them
+      if (!hasExistingKeyTerms) {
+        // Extract the course title from metadata
+        const courseTitle = course?.courseMetadata?.title || 'Course';
+        const moduleTitle = module?.title || 'Module';
+        
+        // Call the key terms extraction API
+        const keyTermsData = await extractKeyTerms(
+          moduleId,
+          moduleTitle,
+          courseTitle
+        );
+        
+        // Save the extracted key terms to the module
+        if (keyTermsData && keyTermsData.keyTerms && keyTermsData.keyTerms.length > 0) {
+          await saveKeyTermsToModule(moduleId, keyTermsData);
+          
+          // Show success message
+          toast({
+            title: "Key Terms Extracted",
+            description: `${keyTermsData.keyTerms.length} key terms have been extracted and saved.`,
+          });
+        }
+      } else {
+        console.log(`Module ${moduleId} already has key terms. Skipping extraction.`);
+      }
+    } catch (error) {
+      console.error("Error processing key terms:", error);
+      // Show error message but continue navigation
+      toast({
+        title: "Key Terms Processing Failed",
+        description: "Failed to process key terms, but navigation will continue.",
+        variant: "destructive",
+      });
+    } finally {
+      // Navigate to the module regardless of key terms success/failure
+      router.push(`/courses/${courseId}/module/${moduleId}`);
+    }
   };
 
   const navigateBack = () => {
@@ -281,7 +331,7 @@ export default function CourseDetailPage({ params }) {
                         // Navigate to first module if no last accessed
                         const firstModule = getModules()[0];
                         if (firstModule) {
-                          navigateToModule(firstModule.id);
+                          navigateToModule(firstModule.id || firstModule.moduleId);
                         }
                       }
                     }}
@@ -466,7 +516,7 @@ export default function CourseDetailPage({ params }) {
                                   <>
                                     <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
                                     <div className="flex items-center">
-                                      <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                                    <Star className="h-4 w-4 mr-1 text-yellow-500" />
                                       <span>{moduleProgress.earnedXP} XP</span>
                                     </div>
                                   </>

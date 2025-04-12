@@ -72,7 +72,6 @@ public class CourseService {
                    - description: Detailed content description (4-6 sentences)
                    - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
                    - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
-                   - keyTerms: 4-5 important terms or concepts covered in this module
                    - learningObjectives: 3-5 specific, measurable objectives
                    - prerequisites: Any specific modules that should be completed before this one
                 
@@ -156,7 +155,6 @@ public class CourseService {
                - description: Detailed content description (4-6 sentences)
                - complexityLevel: Individual module complexity (Foundational, Basic, Intermediate, Advanced, Expert)
                - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
-               - keyTerms: 4-5 important terms or concepts covered in this module
                - learningObjectives: 3-5 specific, measurable objectives
                - prerequisites: Any specific modules that should be completed before this one
             
@@ -207,7 +205,6 @@ public class CourseService {
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
                     // Add new fields
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
-                    module.setKeyTerms(moduleDto.getKeyTerms());
                     module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(existingCourse);
                     return module;
@@ -270,7 +267,6 @@ public class CourseService {
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
                     // Add new fields
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
-                    module.setKeyTerms(moduleDto.getKeyTerms());
                     module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(course);
                     return module;
@@ -304,6 +300,7 @@ public class CourseService {
                         .learningObjectives(module.getLearningObjectives())
                         .complexityLevel(module.getComplexityLevel())
                         .keyTerms(module.getKeyTerms())
+                        .definitions(module.getDefinitions())
                         .prerequisiteModules(module.getPrerequisiteModules())
                         .build())
                 .collect(Collectors.toList());

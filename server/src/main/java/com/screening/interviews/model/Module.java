@@ -54,6 +54,11 @@ public class Module {
     private List<String> keyTerms;  // Important terms or concepts in this module
 
     @ElementCollection
+    @CollectionTable(name = "module_definitions", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "definition", columnDefinition = "text")
+    private List<String> definitions;  // Definitions for key terms that could be lengthy
+
+    @ElementCollection
     private List<String> prerequisiteModules;  // Modules that should be completed before this one
 
     // One Module can have many Submodules.

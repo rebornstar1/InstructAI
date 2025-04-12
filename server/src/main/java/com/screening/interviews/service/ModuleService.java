@@ -28,4 +28,19 @@ public class ModuleService {
         return moduleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + id));
     }
+
+    public Module updateModuleKeyTerms(Long id, List<String> keyTerms, List<String> definitions) {
+        Module module = getModuleById(id);
+
+        // Update the key terms and definitions
+        module.setKeyTerms(keyTerms);
+        module.setDefinitions(definitions);
+
+        // Save and return the updated module
+        return moduleRepository.save(module);
+    }
+
+    public Module saveModule(Module module) {
+        return moduleRepository.save(module);
+    }
 }

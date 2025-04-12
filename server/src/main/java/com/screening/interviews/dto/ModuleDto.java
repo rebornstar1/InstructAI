@@ -21,6 +21,7 @@ public class ModuleDto {
     // New fields for improved gradation and organization
     private String complexityLevel;  // Foundational, Basic, Intermediate, Advanced, Expert
     private List<String> keyTerms;  // Important terms or concepts in this module
+    private List<String> definitions;  // Concepts that are related to this module
     private List<String> learningObjectives;
     private List<String> prerequisiteModules;  // Modules that should be completed before this one
 }
