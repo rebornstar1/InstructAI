@@ -25,6 +25,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,6 +46,8 @@ public class ModuleContentService {
 
     private static final String YOUTUBE_API_KEY = "AIzaSyCItvhHeCz5v3eQRp3SziAvHk-2XUUKg1Q";
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
+
+    private final ExecutorService executorService = Executors.newFixedThreadPool(3);
 
     /**
      * Generate content for a single term and definition
@@ -71,55 +77,85 @@ public class ModuleContentService {
         Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Module not found with ID: " + moduleId));
 
-        // 1. Create term-specific submodule article
-        SubModuleDto subModule = createTermSubModule(term, definition, request.getContextTitle());
+        try {
+            // Execute the three main tasks in parallel using CompletableFuture
+            CompletableFuture<SubModuleDto> subModuleFuture = CompletableFuture.supplyAsync(
+                    () -> createTermSubModule(term, definition, request.getContextTitle()),
+                    executorService
+            );
 
-        // 2. Find relevant video for the term
-        List<String> videoUrls = findDefinitionVideos(term, definition);
-        String videoUrl = videoUrls.isEmpty() ? null : videoUrls.get(0);
+            CompletableFuture<List<String>> videoUrlsFuture = CompletableFuture.supplyAsync(
+                    () -> findDefinitionVideos(term, definition),
+                    executorService
+            );
 
-        // 3. Create a quiz focused on this term
-        QuizDto quiz = createTermQuiz(term, definition, request.getContextTitle());
+            CompletableFuture<QuizDto> quizFuture = CompletableFuture.supplyAsync(
+                    () -> createTermQuiz(term, definition, request.getContextTitle()),
+                    executorService
+            );
 
-        // 4. Persist the content if requested
-        if (Boolean.TRUE.equals(request.getSaveContent())) {
-            // Save the submodule
-            subModule.setModuleId(moduleId);
-            SubModule savedSubModule = subModuleRepository.save(convertToSubModule(subModule));
-            subModule = convertToSubModuleDto(savedSubModule);
+            // Wait for all tasks to complete
+            CompletableFuture.allOf(subModuleFuture, videoUrlsFuture, quizFuture).join();
 
-            // Save the quiz
-            Quiz quizEntity = convertToQuiz(quiz, moduleId);
-            Quiz savedQuiz = quizRepository.save(quizEntity);
-            quiz = convertToQuizDto(savedQuiz);
+            // Retrieve results from completed futures
+            SubModuleDto subModule = subModuleFuture.get();
+            List<String> videoUrls = videoUrlsFuture.get();
+            QuizDto quiz = quizFuture.get();
 
-            // Add video URL to module if not already present
-            if (videoUrl != null) {
-                List<String> existingVideos = module.getVideoUrls();
-                if (existingVideos == null) {
-                    existingVideos = new ArrayList<>();
+            String videoUrl = videoUrls.isEmpty() ? null : videoUrls.get(0);
+
+            // 4. Persist the content if requested
+            if (Boolean.TRUE.equals(request.getSaveContent())) {
+                // Save the submodule
+                subModule.setModuleId(moduleId);
+                SubModule savedSubModule = subModuleRepository.save(convertToSubModule(subModule));
+                subModule = convertToSubModuleDto(savedSubModule);
+
+                // Save the quiz
+                Quiz quizEntity = convertToQuiz(quiz, moduleId);
+                Quiz savedQuiz = quizRepository.save(quizEntity);
+                quiz = convertToQuizDto(savedQuiz);
+
+                // Add video URL to module if not already present
+                if (videoUrl != null) {
+                    List<String> existingVideos = module.getVideoUrls();
+                    if (existingVideos == null) {
+                        existingVideos = new ArrayList<>();
+                    }
+
+                    if (!existingVideos.contains(videoUrl)) {
+                        existingVideos.add(videoUrl);
+                        module.setVideoUrls(existingVideos);
+                        moduleRepository.save(module);
+                    }
                 }
 
-                if (!existingVideos.contains(videoUrl)) {
-                    existingVideos.add(videoUrl);
-                    module.setVideoUrls(existingVideos);
-                    moduleRepository.save(module);
-                }
+                // Update module progress trackers
+                userModuleProgressService.updateTotalSubmodules(moduleId);
             }
 
-            // Update module progress trackers
-            userModuleProgressService.updateTotalSubmodules(moduleId);
-        }
+            // 5. Build and return the response
+            return TermContentResponseDto.builder()
+                    .term(term)
+                    .definition(definition)
+                    .subModule(subModule)
+                    .quiz(quiz)
+                    .videoUrl(videoUrl)
+                    .build();
 
-        // 5. Build and return the response
-        return TermContentResponseDto.builder()
-                .term(term)
-                .definition(definition)
-                .subModule(subModule)
-                .quiz(quiz)
-                .videoUrl(videoUrl)
-                .build();
+        } catch (InterruptedException | ExecutionException e) {
+            logger.error("Error during parallel processing of term content: {}", e.getMessage());
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to generate term content due to concurrent execution error", e);
+        }
     }
+
+    public void shutdown() {
+        executorService.shutdown();
+    }
+
+
+
 
     public KeyTermResponseDto extractTheKeyTerms(KeyTermRequestDto request) {
         String conceptTitle = request.getConceptTitle() != null ? request.getConceptTitle() : request.getModuleTitle();
