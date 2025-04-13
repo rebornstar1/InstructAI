@@ -9,7 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/modules")
@@ -25,44 +27,34 @@ public class ModuleController {
         this.moduleContentService = moduleContentService;
     }
 
-    // Get all modules
+    /**
+     * Get all modules
+     */
     @GetMapping
     public ResponseEntity<List<Module>> getAllModules() {
-        List<Module> modules = moduleService.getAllModules();
-        return new ResponseEntity<>(modules, HttpStatus.OK);
-    }
-
-    // Get a module by ID
-    @GetMapping("/{id}")
-    public ResponseEntity<Module> getModuleById(@PathVariable Long id) {
-        Module module = moduleService.getModuleById(id);
-        return new ResponseEntity<>(module, HttpStatus.OK);
-    }
-
-    @PostMapping("/{id}/key-terms")
-    public ResponseEntity<Module> updateModuleKeyTerms(
-            @PathVariable Long id,
-            @RequestBody KeyTermsUpdateDto keyTermsUpdateDto) {
-        Module updatedModule = moduleService.updateModuleKeyTerms(
-                id,
-                keyTermsUpdateDto.getKeyTerms(),
-                keyTermsUpdateDto.getDefinitions()
-        );
-        return new ResponseEntity<>(updatedModule, HttpStatus.OK);
-    }
-
-    @PostMapping("/keyterms/extract")
-    public ResponseEntity<KeyTermResponseDto> extractKeyTerms(@RequestBody KeyTermRequestDto request) {
-        KeyTermResponseDto response = moduleContentService.extractTheKeyTerms(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(moduleService.getAllModules());
     }
 
     /**
-     * Generate educational content for a specific term
-     * Creates a submodule, quiz, and finds relevant video content
-     *
-     * @param request The term content generation request
-     * @return A response containing the generated content
+     * Get a specific module by ID
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Module> getModuleById(@PathVariable Long id) {
+        return ResponseEntity.ok(moduleService.getModuleById(id));
+    }
+
+    /**
+     * Update key terms for a module
+     */
+    @PutMapping("/{id}/key-terms")
+    public ResponseEntity<Module> updateModuleKeyTerms(
+            @PathVariable Long id,
+            @RequestBody KeyTermsUpdateDto request) {
+        return ResponseEntity.ok(moduleService.updateModuleKeyTerms(id, request.getKeyTerms(), request.getDefinitions()));
+    }
+
+    /**
+     * Generate content for a key term
      */
     @PostMapping("/term/generate")
     public ResponseEntity<TermContentResponseDto> generateTermContent(
@@ -77,19 +69,50 @@ public class ModuleController {
     }
 
     /**
-     * Generate educational content for a specific term without saving to database
-     * Creates a submodule, quiz, and finds relevant video content
-     *
-     * @param request The term content generation request
-     * @return A response containing the generated content
+     * Extract key terms for a module
      */
-    @PostMapping("/term/preview")
-    public ResponseEntity<TermContentResponseDto> previewTermContent(
-            @RequestBody TermContentRequestDto request) {
-        // Force saveContent to false for preview
-        request.setSaveContent(false);
+    @PostMapping("/key-terms/extract")
+    public ResponseEntity<KeyTermResponseDto> extractKeyTerms(
+            @RequestBody KeyTermRequestDto request) {
+        KeyTermResponseDto response = moduleContentService.extractTheKeyTerms(request);
+        return ResponseEntity.ok(response);
+    }
 
-        TermContentResponseDto response = moduleContentService.generateTermContent(request);
+    /**
+     * Save a module (create or update)
+     */
+    @PostMapping
+    public ResponseEntity<Module> saveModule(@RequestBody Module module) {
+        return ResponseEntity.ok(moduleService.saveModule(module));
+    }
+
+    /**
+     * Update a term's content that was generated
+     */
+    @PutMapping("/{id}/terms/{termIndex}/content")
+    public ResponseEntity<Map<String, Object>> updateTermContent(
+            @PathVariable Long id,
+            @PathVariable Integer termIndex,
+            @RequestBody TermContentUpdateDto request) {
+
+        Module module = moduleService.getModuleById(id);
+
+        // Verify the term index is valid
+        if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", "Invalid term index: " + termIndex
+            ));
+        }
+
+        // Update content as needed (this would be implemented in ModuleService)
+        // For now we just return success
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("moduleId", id);
+        response.put("termIndex", termIndex);
+
         return ResponseEntity.ok(response);
     }
 }

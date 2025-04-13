@@ -1,84 +1,98 @@
 package com.screening.interviews.model;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "modules")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Module {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-    // Unique business key for the module.
-    @Column(name = "module_uuid", nullable = false, updatable = false, unique = true)
-    private String moduleUuid;
+    @Column(name = "module_id", nullable = false)
+    private String moduleId; // e.g., M1, M2, etc.
 
-    @Column(name = "content", columnDefinition = "text")
-    private String content;
-
-    // A plain string for moduleId (e.g. "M01").
-    private String moduleId;
-
+    @Column(nullable = false)
     private String title;
 
-    @Column(name = "description", columnDefinition = "text")
+    @Column(columnDefinition = "text")
     private String description;
 
     private String duration;
 
+    @Column(columnDefinition = "text")
+    private String content;
+
+    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SubModule> subModules = new ArrayList<>();
+
+    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Quiz> quizzes = new ArrayList<>();
+
     @ElementCollection
     @CollectionTable(name = "module_learning_objectives", joinColumns = @JoinColumn(name = "module_id"))
-    @Column(name = "objective")
-    private List<String> learningObjectives;
+    @Column(name = "objective", columnDefinition = "text")
+    private List<String> learningObjectives = new ArrayList<>();
 
-    // Each Module belongs to one Course.
+    @ElementCollection
+    @CollectionTable(name = "module_video_urls", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "video_url", columnDefinition = "text")
+    private List<String> videoUrls = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "module_prerequisite_modules", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "prerequisite_module_id")
+    private List<Long> prerequisiteModules = new ArrayList<>();
+
+    private String complexityLevel;
+
+    // Key terms support
+    @ElementCollection
+    @CollectionTable(name = "module_key_terms", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "key_term", columnDefinition = "text")
+    private List<String> keyTerms = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "module_definitions", joinColumns = @JoinColumn(name = "module_id"))
+    @Column(name = "definition", columnDefinition = "text")
+    private List<String> definitions = new ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
     @JsonBackReference
     private Course course;
 
-    // New fields for improved gradation and organization
-    private String complexityLevel;  // Foundational, Basic, Intermediate, Advanced, Expert
+    // Helper methods
+    public void addSubModule(SubModule subModule) {
+        subModules.add(subModule);
+        subModule.setModule(this);
+    }
 
-    @ElementCollection
-    private List<String> keyTerms;  // Important terms or concepts in this module
+    public void removeSubModule(SubModule subModule) {
+        subModules.remove(subModule);
+        subModule.setModule(null);
+    }
 
-    @ElementCollection
-    @CollectionTable(name = "module_definitions", joinColumns = @JoinColumn(name = "module_id"))
-    @Column(name = "definition", columnDefinition = "text")
-    private List<String> definitions;  // Definitions for key terms that could be lengthy
+    public void addQuiz(Quiz quiz) {
+        quizzes.add(quiz);
+        quiz.setModule(this);
+    }
 
-    @ElementCollection
-    private List<String> prerequisiteModules;  // Modules that should be completed before this one
-
-    // One Module can have many Submodules.
-    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference
-    private List<SubModule> subModules;
-
-    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference
-    private List<Quiz> quizzes;
-
-    @ElementCollection
-    @CollectionTable(name = "module_video_urls", joinColumns = @JoinColumn(name = "module_id"))
-    @Column(name = "video_url")
-    private List<String> videoUrls;
-
-    @PrePersist
-    public void prePersist() {
-        if (moduleUuid == null) {
-            this.moduleUuid = UUID.randomUUID().toString();
-        }
+    public void removeQuiz(Quiz quiz) {
+        quizzes.remove(quiz);
+        quiz.setModule(null);
     }
 }

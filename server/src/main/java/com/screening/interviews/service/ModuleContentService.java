@@ -10,6 +10,7 @@ import com.screening.interviews.model.SubModule;
 import com.screening.interviews.repo.ModuleRepository;
 import com.screening.interviews.repo.QuizRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ModuleContentService {
 
     private static final Logger logger = LoggerFactory.getLogger(ModuleContentService.class);
@@ -52,6 +54,11 @@ public class ModuleContentService {
     /**
      * Generate content for a single term and definition
      * Creates a submodule, quiz, and finds relevant video content
+     */
+    /**
+     * Generate content for a single term and definition
+     * Creates a submodule, quiz, and finds relevant video content
+     * Now includes submodule ID in the response
      */
     public TermContentResponseDto generateTermContent(TermContentRequestDto request) {
         logger.info("Starting term content generation for term: {}", request.getTerm());
@@ -85,7 +92,7 @@ public class ModuleContentService {
             );
 
             CompletableFuture<List<String>> videoUrlsFuture = CompletableFuture.supplyAsync(
-                    () -> findDefinitionVideos(term, definition),
+                    () -> findDefinitionVideos(term, ""),
                     executorService
             );
 
@@ -102,7 +109,13 @@ public class ModuleContentService {
             List<String> videoUrls = videoUrlsFuture.get();
             QuizDto quiz = quizFuture.get();
 
+            log.info("subModule is created {}", subModule);
+
             String videoUrl = videoUrls.isEmpty() ? null : videoUrls.get(0);
+
+            // Variables to store IDs for the response
+            Long subModuleId = null;
+            Long quizId = null;
 
             // 4. Persist the content if requested
             if (Boolean.TRUE.equals(request.getSaveContent())) {
@@ -110,11 +123,13 @@ public class ModuleContentService {
                 subModule.setModuleId(moduleId);
                 SubModule savedSubModule = subModuleRepository.save(convertToSubModule(subModule));
                 subModule = convertToSubModuleDto(savedSubModule);
+                subModuleId = savedSubModule.getId(); // Store the generated ID
 
                 // Save the quiz
                 Quiz quizEntity = convertToQuiz(quiz, moduleId);
                 Quiz savedQuiz = quizRepository.save(quizEntity);
                 quiz = convertToQuizDto(savedQuiz);
+                quizId = savedQuiz.getId(); // Store the generated ID
 
                 // Add video URL to module if not already present
                 if (videoUrl != null) {
@@ -134,13 +149,15 @@ public class ModuleContentService {
                 userModuleProgressService.updateTotalSubmodules(moduleId);
             }
 
-            // 5. Build and return the response
+            // 5. Build and return the response with IDs included
             return TermContentResponseDto.builder()
                     .term(term)
                     .definition(definition)
                     .subModule(subModule)
                     .quiz(quiz)
                     .videoUrl(videoUrl)
+                    .subModuleId(subModuleId) // Include submodule ID in response
+                    .quizId(quizId) // Include quiz ID in response
                     .build();
 
         } catch (InterruptedException | ExecutionException e) {

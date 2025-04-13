@@ -5,12 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class QuizCompletionDto {
-    private int score;
-    private Long quizId;
-    private boolean passed;
+public class TermContentUpdateDto {
+    private String article;
+    private QuizDto quiz;
+    private String videoUrl;
+    private Map<String, Object> metadata;
 }

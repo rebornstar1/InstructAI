@@ -1,58 +1,61 @@
-import React, { useState, useEffect } from 'react';
+"use client";
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { CheckCircle, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
-import { completeSubmodule } from "@/services/progressApi";
-import { toast } from "@/components/ui/use-toast"; 
+import { CheckCircle, Clock } from "lucide-react";
+import { updateArticleProgress, completeArticle } from "@/services/progressApi";
 
 /**
- * ArticleProgressTracker - Tracks and reports article reading progress
+ * Component to track and update article completion progress with the new step-based progress API
  * 
- * @param {Object} props - Component props
- * @param {string} props.moduleId - ID of the current module
- * @param {Object} props.subModule - The submodule with id and title
- * @param {boolean} props.isCompleted - Whether the article has already been marked as completed
- * @param {Function} props.onProgressUpdate - Callback when progress updates with progress data
+ * @param {Object} props
+ * @param {string|number} props.moduleId - The ID of the module
+ * @param {Object} props.subModule - The submodule object containing at minimum id and title
+ * @param {boolean} props.isCompleted - Whether the article is already completed
+ * @param {Function} props.onProgressUpdate - Callback when progress is updated
  */
-const ArticleProgressTracker = ({ 
+export default function ArticleProgressTracker({ 
   moduleId, 
   subModule, 
   isCompleted = false,
   onProgressUpdate 
-}) => {
-  const [progress, setProgress] = useState(isCompleted ? 100 : 0);
+}) {
   const [completed, setCompleted] = useState(isCompleted);
-  const [loading, setLoading] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [expanded, setExpanded] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [readPercentage, setReadPercentage] = useState(0);
+  const [scrollDetected, setScrollDetected] = useState(false);
+
+  console.log("ArticleProgressTracker", { moduleId, subModule, completed });
   
-  // Get submodule ID for API calls
-  const submoduleId = subModule?.id || 'main-content';
-  
-  // Track scroll position to estimate reading progress
+  // Track scroll position to determine reading progress
   useEffect(() => {
+    // Only track scroll if not already completed
+    if (completed) return;
+    
     const handleScroll = () => {
-      // Get document scroll info
-      const scrollTop = window.scrollY;
-      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+      // Mark that scroll was detected (user is actively reading)
+      if (!scrollDetected) {
+        setScrollDetected(true);
+      }
       
-      // Calculate scroll percentage
-      const scrollPercent = Math.min(100, Math.round((scrollTop / Math.max(1, scrollHeight)) * 100));
-      setScrollProgress(scrollPercent);
+      // Calculate approximate read percentage based on scroll position
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
       
-      // Update reading progress based on scroll position
-      if (!completed && scrollPercent > progress) {
-        setProgress(scrollPercent);
-        
-        // Auto-complete when user has read most of the content
-        if (scrollPercent >= 90 && !completed) {
-          // Don't auto-mark as complete, but prompt the user
-          setExpanded(true);
-        }
+      // Calculate percentage, but don't go above 95% from scroll alone
+      // The user needs to click the complete button to reach 100%
+      const percentage = Math.min(95, Math.round((scrollTop / (documentHeight - windowHeight)) * 100));
+      
+      // Only update if percentage changed significantly (to avoid too many API calls)
+      if (Math.abs(percentage - readPercentage) >= 5) {
+        setReadPercentage(percentage);
+        // Update the progress on the server
+        updateArticleProgress(moduleId, parseInt(subModule.id), percentage)
+          .catch(error => console.error("Error updating read progress:", error));
       }
     };
     
-    // Add scroll listener
     window.addEventListener('scroll', handleScroll);
     
     // Initial calculation
@@ -61,127 +64,75 @@ const ArticleProgressTracker = ({
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [progress, completed]);
-  
-  const handleMarkComplete = async () => {
-    if (completed || loading) return;
+  }, [completed, scrollDetected, moduleId, subModule.id, readPercentage]);
+
+  const handleMarkAsCompleted = async () => {
+    if (completed || isUpdating) return;
     
-    setLoading(true);
+    setIsUpdating(true);
     
     try {
-      // Call API to mark submodule as complete
-      const progressData = await completeSubmodule(moduleId, submoduleId);
+      // Call API to mark article as completed
+      const progressData = await completeArticle(moduleId, parseInt(subModule.id));
       
       // Update local state
       setCompleted(true);
-      setProgress(100);
-      
-      // Show success toast
-      toast({
-        title: "Progress updated",
-        description: "Article marked as complete",
-        variant: "success",
-      });
+      setReadPercentage(100);
       
       // Notify parent component
-      if (onProgressUpdate && progressData) {
+      if (onProgressUpdate) {
         onProgressUpdate(progressData);
       }
     } catch (error) {
-      console.error("Error marking article as complete:", error);
-      toast({
-        title: "Error updating progress",
-        description: "Please try again later",
-        variant: "destructive",
-      });
+      console.error("Error marking article as completed:", error);
     } finally {
-      setLoading(false);
+      setIsUpdating(false);
     }
   };
-  
-  // If already completed, show minimal UI
-  if (completed && !expanded) {
+
+  // If already completed, just show the completed status
+  if (completed) {
     return (
-      <div className="mt-8 mb-4">
-        <div 
-          className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 
-            p-3 rounded-lg border border-green-200 dark:border-green-800/50 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5" />
-            <span className="font-medium">Article Completed</span>
-          </div>
-          <ChevronDown className="h-4 w-4" />
+      <div className="mt-8 flex items-center justify-center">
+        <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg py-3 px-4 flex items-center gap-2">
+          <CheckCircle className="h-5 w-5" />
+          <span>Article completed</span>
         </div>
       </div>
     );
   }
-  
+
   return (
-    <div className="mt-8 mb-4 space-y-4 border-t border-gray-200 dark:border-gray-800 pt-6">
-      {completed && expanded && (
-        <div 
-          className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 
-            p-3 rounded-lg border border-green-200 dark:border-green-800/50 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5" />
-            <span className="font-medium">Article Completed</span>
-          </div>
-          <ChevronUp className="h-4 w-4" />
-        </div>
-      )}
-      
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <h3 className="font-bold text-gray-800 dark:text-gray-200">Your Reading Progress</h3>
-        
-        <div className="flex items-center text-sm text-gray-500 gap-2">
-          <BookOpen className="h-4 w-4" />
-          <span>
-            {scrollProgress < 25 ? "Just started" : 
-             scrollProgress < 50 ? "Getting started" :
-             scrollProgress < 75 ? "Making progress" :
-             scrollProgress < 90 ? "Almost there" : "Finished reading"}
-          </span>
-        </div>
+    <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
+      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <span className="flex items-center gap-1">
+          <Clock className="h-4 w-4" />
+          Reading Progress
+        </span>
+        <span>{readPercentage}%</span>
       </div>
-      
-      {/* Progress bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-sm text-gray-500">
-          <span>Article progress</span>
-          <span>{progress}%</span>
-        </div>
-        <Progress 
-          value={progress} 
-          className={`h-2 ${completed ? "bg-green-100" : "bg-blue-100"}`} 
+      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-4">
+        <div 
+          className="h-full bg-blue-500 dark:bg-blue-600 rounded-full"
+          style={{ width: `${readPercentage}%` }}
         />
       </div>
       
-      {/* Action button */}
-      <div className="pt-2">
-        <Button 
-          onClick={handleMarkComplete}
-          disabled={loading || completed}
-          className={`w-full justify-center ${
-            completed 
-              ? "bg-green-600 hover:bg-green-700" 
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
+      <div className="flex justify-center">
+        <Button
+          onClick={handleMarkAsCompleted}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+          disabled={isUpdating}
         >
-          {loading ? (
-            "Updating Progress..."
-          ) : completed ? (
+          {isUpdating ? (
             <>
-              <CheckCircle className="mr-2 h-5 w-5" />
-              Completed
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              Updating...
             </>
           ) : (
             <>
-              <CheckCircle className="mr-2 h-5 w-5" />
-              Mark as Complete
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Mark as Completed
             </>
           )}
         </Button>
@@ -189,5 +140,3 @@ const ArticleProgressTracker = ({
     </div>
   );
 }
-
-export default ArticleProgressTracker;

@@ -38,4 +38,7 @@ public class TermContentResponseDto {
      * URL to a relevant educational video about the term
      */
     private String videoUrl;
+
+    private Long subModuleId;
+    private Long quizId;
 }

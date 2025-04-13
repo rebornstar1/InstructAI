@@ -1,6 +1,7 @@
 package com.screening.interviews.service;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.screening.interviews.dto.CourseRequestDto;
@@ -205,7 +206,6 @@ public class CourseService {
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
                     // Add new fields
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
-                    module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(existingCourse);
                     return module;
                 })
@@ -267,7 +267,6 @@ public class CourseService {
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
                     // Add new fields
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
-                    module.setPrerequisiteModules(moduleDto.getPrerequisiteModules());
                     module.setCourse(course);
                     return module;
                 })
@@ -301,7 +300,6 @@ public class CourseService {
                         .complexityLevel(module.getComplexityLevel())
                         .keyTerms(module.getKeyTerms())
                         .definitions(module.getDefinitions())
-                        .prerequisiteModules(module.getPrerequisiteModules())
                         .build())
                 .collect(Collectors.toList());
 
@@ -312,6 +310,10 @@ public class CourseService {
                 .modules(moduleDtos)
                 .build();
     }
+    /**
+     * Calls Gemini with the master prompt, cleans the response of any extraneous characters,
+     * and parses it into a CourseResponseDto.
+     */
     /**
      * Calls Gemini with the master prompt, cleans the response of any extraneous characters,
      * and parses it into a CourseResponseDto.
@@ -329,14 +331,14 @@ public class CourseService {
         }
 
         String payload = String.format("""
-        {
-            "contents": [{
-                "parts": [{
-                    "text": "%s"
-                }]
+    {
+        "contents": [{
+            "parts": [{
+                "text": "%s"
             }]
-        }
-        """, escapedPrompt);
+        }]
+    }
+    """, escapedPrompt);
 
         try {
             logger.info("Calling Gemini API for course generation...");
@@ -383,12 +385,122 @@ public class CourseService {
                     .replaceAll("```", "")
                     .trim();
 
-            return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
+            // NEW CODE: Add JSON validation and repair steps
+            try {
+                // First, try to parse the response as is
+                return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
+            } catch (JsonMappingException jme) {
+                // If parsing fails, log details and attempt to repair the JSON
+                logger.warn("Failed to parse Gemini response JSON. Attempting to fix formatting issues: {}", jme.getMessage());
+
+                // Implement additional JSON cleanup for specific issues
+                embeddedJson = fixArrayClosingBrackets(embeddedJson);
+                embeddedJson = fixTrailingCommas(embeddedJson);
+
+                logger.info("Cleaned JSON, attempting to parse again");
+                return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
+            }
 
         } catch (Exception e) {
             logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate course from Gemini API", e);
         }
+    }
+
+    /**
+     * Fix issue with unbalanced array brackets by scanning and balancing them
+     */
+    private String fixArrayClosingBrackets(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int openBraces = 0;
+        int openBrackets = 0;
+        boolean inQuote = false;
+        boolean escaped = false;
+
+        // First scan to count existing brackets without modifying anything
+        for (char c : json.toCharArray()) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+            } else if (c == '"' && !escaped) {
+                inQuote = !inQuote;
+            } else if (!inQuote) {
+                if (c == '{') openBraces++;
+                else if (c == '}') openBraces--;
+                else if (c == '[') openBrackets++;
+                else if (c == ']') openBrackets--;
+            }
+        }
+
+        // Reset for second pass
+        inQuote = false;
+        escaped = false;
+
+        // Second pass to fix imbalances
+        for (char c : json.toCharArray()) {
+            sb.append(c);
+
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+            } else if (c == '"' && !escaped) {
+                inQuote = !inQuote;
+            }
+        }
+
+        // After all characters have been processed, balance any remaining brackets
+        String result = sb.toString();
+
+        // Fix mismatched closing brackets (the issue in the error)
+        // Look for pattern where an array should be closed but an object closing appears instead
+        result = result.replaceAll("\\}\\s*\\}", "]}");
+
+        // Add missing closing brackets at the end if needed
+        if (openBrackets > 0) {
+            StringBuilder closingBrackets = new StringBuilder();
+            for (int i = 0; i < openBrackets; i++) {
+                closingBrackets.append("]");
+            }
+
+            // Insert before the last closing braces if they exist
+            int lastBrace = result.lastIndexOf("}");
+            if (lastBrace > 0) {
+                result = result.substring(0, lastBrace) + closingBrackets + result.substring(lastBrace);
+            } else {
+                result = result + closingBrackets;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Fix trailing commas in JSON objects and arrays
+     */
+    private String fixTrailingCommas(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+
+        // Fix trailing commas in objects
+        json = json.replaceAll(",\\s*}", "}");
+
+        // Fix trailing commas in arrays
+        json = json.replaceAll(",\\s*]", "]");
+
+        return json;
     }
 
     /**

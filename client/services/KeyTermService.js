@@ -40,7 +40,7 @@ export async function extractKeyTerms(moduleId, moduleTitle, conceptTitle) {
   
       // Make API call to update the module with key terms
       const response = await fetch(`http://localhost:8007/api/modules/${moduleId}/key-terms`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },

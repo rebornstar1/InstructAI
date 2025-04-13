@@ -177,3 +177,95 @@ export const finalizeInteractiveCourse = async (sessionId) => {
     throw error;
   }
 };
+
+
+// src/services/api.js
+
+/**
+ * Generate content for a term
+ * @param {Object} request - Term content request
+ * @returns {Promise<Object>} - Generated content with submodule ID included
+ */
+export const generateTermContent = async (request) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/modules/term/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(request)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to generate term content: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Log the IDs for debugging purposes
+    if (data.subModuleId) {
+      console.log('Generated submodule ID:', data.subModuleId);
+    }
+    
+    if (data.quizId) {
+      console.log('Generated quiz ID:', data.quizId);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error generating term content:', error);
+    throw error;
+  }
+};
+
+
+export const getModuleTerms = async (moduleId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}/terms`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch module terms: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching module terms:', error);
+    throw error;
+  }
+};
+
+export const getTermContent = async (moduleId, termId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}/terms/${termId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch term content: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching term content:', error);
+    throw error;
+  }
+};
+
+export const completeModuleTerm = async (moduleId, termId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/progress/modules/${moduleId}/terms/${termId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to mark term as completed: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error completing term:', error);
+    throw error;
+  }
+};

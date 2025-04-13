@@ -1,5 +1,6 @@
 package com.screening.interviews.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.screening.interviews.dto.*;
 import com.screening.interviews.model.User;
 import com.screening.interviews.model.UserCourseProgress;
@@ -20,13 +21,13 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/progress")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class ProgressController {
 
     private final ProgressService progressService;
     private final UserService userService;
     private final UserModuleProgressRepository userModuleProgressRepository;
-    private final ProgressService userModuleProgressService;
-
+    private final ObjectMapper objectMapper;
 
     /**
      * Enroll the current user in a course
@@ -93,6 +94,112 @@ public class ProgressController {
         User currentUser = userService.getCurrentUser();
         UserModuleProgress progress = progressService.startModule(currentUser.getId(), moduleId);
         return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    /**
+     * Get key term progress for a module
+     */
+    @GetMapping("/module/{moduleId}/terms")
+    public ResponseEntity<List<KeyTermProgressDto>> getKeyTermProgress(@PathVariable Long moduleId) {
+        User currentUser = userService.getCurrentUser();
+        List<KeyTermProgressDto> keyTermProgress = progressService.getKeyTermProgress(
+                currentUser.getId(), moduleId);
+        return ResponseEntity.ok(keyTermProgress);
+    }
+
+    /**
+     * Set active term for a module
+     */
+    @PostMapping("/module/{moduleId}/terms/{termIndex}/activate")
+    public ResponseEntity<ModuleProgressDto> setActiveTerm(
+            @PathVariable Long moduleId,
+            @PathVariable Integer termIndex) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.setActiveTerm(
+                currentUser.getId(), moduleId, termIndex);
+        return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    /**
+     * Complete a key term
+     */
+    @PostMapping("/module/{moduleId}/terms/{termIndex}/complete")
+    public ResponseEntity<Map<String, Object>> completeKeyTerm(
+            @PathVariable Long moduleId,
+            @PathVariable Integer termIndex) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.completeKeyTerm(
+                currentUser.getId(), moduleId, termIndex);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("termCompleted", true);
+        response.put("moduleId", moduleId);
+        response.put("termIndex", termIndex);
+        response.put("progressPercentage", progress.getProgressPercentage());
+
+        // Check if next term is unlocked
+        Integer nextTermIndex = termIndex + 1;
+        boolean nextTermUnlocked = progress.isTermUnlocked(nextTermIndex);
+        response.put("nextTermUnlocked", nextTermUnlocked);
+        response.put("nextTermIndex", nextTermUnlocked ? nextTermIndex : null);
+
+        // Check if module is completed
+        boolean moduleCompleted = progress.getState() == UserModuleProgress.ModuleState.COMPLETED;
+        response.put("moduleCompleted", moduleCompleted);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Save term resources
+     */
+    @PostMapping("/module/{moduleId}/terms/{termIndex}/resources")
+    public ResponseEntity<ModuleProgressDto> saveTermResources(
+            @PathVariable Long moduleId,
+            @PathVariable Integer termIndex,
+            @RequestBody Map<String, Object> resources) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.saveTermResources(
+                currentUser.getId(), moduleId, termIndex, resources);
+        return ResponseEntity.ok(ModuleProgressDto.fromEntity(progress));
+    }
+
+    /**
+     * Update term resource completion status
+     */
+    @PostMapping("/module/{moduleId}/terms/{termIndex}/resources/{resourceType}/complete")
+    public ResponseEntity<Map<String, Object>> completeTermResource(
+            @PathVariable Long moduleId,
+            @PathVariable Integer termIndex,
+            @PathVariable String resourceType) {
+        User currentUser = userService.getCurrentUser();
+        UserModuleProgress progress = progressService.updateTermResourceCompletion(
+                currentUser.getId(), moduleId, termIndex, resourceType);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("resourceType", resourceType);
+        response.put("moduleId", moduleId);
+        response.put("termIndex", termIndex);
+
+        // Check if the term was automatically completed
+        boolean termCompleted = progress.isTermCompleted(termIndex);
+        response.put("termCompleted", termCompleted);
+
+        if (termCompleted) {
+            // If term was completed, include info about next term
+            Integer nextTermIndex = termIndex + 1;
+            boolean nextTermUnlocked = progress.isTermUnlocked(nextTermIndex);
+            response.put("nextTermUnlocked", nextTermUnlocked);
+            response.put("nextTermIndex", nextTermUnlocked ? nextTermIndex : null);
+        }
+
+        // Include module progress
+        response.put("moduleProgress", progress.getProgressPercentage());
+        response.put("moduleState", progress.getState().name());
+
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -233,7 +340,7 @@ public class ProgressController {
 
     @PostMapping("/modules/{moduleId}/update-total-submodules")
     public ResponseEntity<Map<String, Object>> updateTotalSubmodules(@PathVariable Long moduleId) {
-        int updatedCount = userModuleProgressService.updateTotalSubmodules(moduleId);
+        int updatedCount = progressService.updateTotalSubmodules(moduleId);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
@@ -322,6 +429,29 @@ public class ProgressController {
         response.put("moduleId", moduleId);
         response.put("moduleProgress", progress.getProgressPercentage());
         response.put("moduleAutoCompleted", moduleAutoCompleted);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Generate content for a term and link it to progress
+     */
+    @PostMapping("/users/{userId}/modules/{moduleId}/terms/{termIndex}/generate")
+    public ResponseEntity<Map<String, Object>> generateTermContent(
+            @PathVariable Long userId,
+            @PathVariable Long moduleId,
+            @PathVariable Integer termIndex,
+            @RequestBody Map<String, Object> contentMetadata) {
+
+        // Save the content metadata for this term
+        UserModuleProgress progress = progressService.saveTermResources(
+                userId, moduleId, termIndex, contentMetadata);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("moduleId", moduleId);
+        response.put("termIndex", termIndex);
+        response.put("contentGenerated", true);
 
         return ResponseEntity.ok(response);
     }
