@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { 
   CheckCircle, 
   XCircle, 
@@ -11,37 +12,50 @@ import {
   ArrowRight, 
   ArrowLeft,
   Trophy,
-  RefreshCw
+  RefreshCw,
+  HelpCircle
 } from "lucide-react";
-import { completeQuiz } from "@/services/progressApi";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * Enhanced quiz component with animations, progress tracking, and detailed feedback
- * Updated to use the new step progress API
+ * Enhanced Quiz component integrated with the new term-based progress API
  * 
  * @param {Object} props
  * @param {string|number} props.moduleId - The ID of the module
+ * @param {number} props.termIndex - The index of the term this quiz belongs to
  * @param {Object} props.quiz - The quiz object containing questions
  * @param {Function} props.onClose - Callback when quiz is closed
- * @param {Function} props.onProgressUpdate - Callback when progress is updated
+ * @param {Function} props.onComplete - Callback when quiz is completed
+ * @param {boolean} props.isCompleted - Whether the quiz is already completed
+ * @param {Object} props.resourceProgress - Progress information for this resource
  */
-export default function EnhancedQuiz({ 
+export default function UpdatedEnhancedQuiz({ 
   moduleId, 
+  termIndex,
   quiz, 
   onClose,
-  onProgressUpdate 
+  onComplete,
+  isCompleted = false,
+  resourceProgress = {}
 }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState([]);
-  const [score, setScore] = useState(0);
-  const [quizComplete, setQuizComplete] = useState(false);
+  const [score, setScore] = useState(resourceProgress.quizScore || 0);
+  const [quizComplete, setQuizComplete] = useState(isCompleted);
   const [userAnswers, setUserAnswers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
   
   const questions = quiz.questions || [];
   const totalQuestions = questions.length;
   const passingScore = quiz.passingScore || 70;
+  
+  // Set initial state from props if provided
+  useEffect(() => {
+    if (isCompleted) {
+      setQuizComplete(true);
+    }
+  }, [isCompleted]);
   
   // Initialize user answers with empty array
   useEffect(() => {
@@ -99,15 +113,13 @@ export default function EnhancedQuiz({
     
     setScore(calculatedScore);
     setQuizComplete(true);
+    setAttemptCount(attemptCount + 1);
     
-    // Report progress to the server using new step progress API
+    // Report progress to the server
     setLoading(true);
     try {
-      const progressData = await completeQuiz(moduleId, quiz.id, calculatedScore);
-      
-      // Notify parent component
-      if (onProgressUpdate) {
-        onProgressUpdate(progressData);
+      if (onComplete) {
+        await onComplete(calculatedScore);
       }
     } catch (error) {
       console.error("Error updating quiz progress:", error);
@@ -119,9 +131,8 @@ export default function EnhancedQuiz({
   const restartQuiz = () => {
     setCurrentQuestionIndex(0);
     setSelectedOptions([]);
-    setScore(0);
-    setQuizComplete(false);
     setUserAnswers(new Array(questions.length).fill(null));
+    setQuizComplete(false);
   };
 
   if (questions.length === 0) {
@@ -178,6 +189,12 @@ export default function EnhancedQuiz({
             <Badge className="px-3 py-1 text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
               Passing: {passingScore}%
             </Badge>
+            
+            {attemptCount > 1 && (
+              <Badge className="px-3 py-1 text-sm bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                Attempt: {attemptCount}
+              </Badge>
+            )}
           </div>
         </div>
         
@@ -186,11 +203,11 @@ export default function EnhancedQuiz({
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="flex items-center gap-2">
               <div className="h-4 w-4 rounded-full bg-green-500"></div>
-              <span>Correct: {answeredQuestions.filter(a => a.isCorrect).length}</span>
+              <span>Correct: {answeredQuestions.filter(a => a?.isCorrect).length}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-4 w-4 rounded-full bg-red-500"></div>
-              <span>Incorrect: {answeredQuestions.filter(a => !a.isCorrect).length}</span>
+              <span>Incorrect: {answeredQuestions.filter(a => a && !a.isCorrect).length}</span>
             </div>
             {unansweredCount > 0 && (
               <div className="flex items-center gap-2">
@@ -256,7 +273,7 @@ export default function EnhancedQuiz({
             className="bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Retake Quiz
+            {isPassed ? "Take Quiz Again" : "Retry Quiz"}
           </Button>
         </div>
       </div>
@@ -349,12 +366,29 @@ export default function EnhancedQuiz({
         
         <Button 
           onClick={goToNextQuestion}
-          disabled={!canNavigateNext}
+          disabled={!canNavigateNext || loading}
           className="bg-indigo-600 hover:bg-indigo-700 text-white"
         >
-          {isLastQuestion ? "Finish Quiz" : "Next Question"}
-          <ArrowRight className="h-4 w-4 ml-2" />
+          {loading ? (
+            <>
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              Loading...
+            </>
+          ) : (
+            <>
+              {isLastQuestion ? "Finish Quiz" : "Next Question"}
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </>
+          )}
         </Button>
+      </div>
+      
+      {/* Help text */}
+      <div className="text-center mt-4">
+        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center gap-1">
+          <HelpCircle className="h-3 w-3" />
+          Select an answer and click Next to continue
+        </p>
       </div>
     </div>
   );

@@ -2,30 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Clock } from "lucide-react";
-import { updateArticleProgress, completeArticle } from "@/services/progressApi";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle, Clock, BookOpen } from "lucide-react";
 
 /**
- * Component to track and update article completion progress with the new step-based progress API
+ * Enhanced ArticleProgressTracker component integrated with the new term-based progress API
  * 
  * @param {Object} props
  * @param {string|number} props.moduleId - The ID of the module
- * @param {Object} props.subModule - The submodule object containing at minimum id and title
+ * @param {number} props.termIndex - The index of the term this article belongs to
+ * @param {Object} props.article - The article object containing at minimum id and title
  * @param {boolean} props.isCompleted - Whether the article is already completed
+ * @param {Function} props.onComplete - Callback when article is completed
  * @param {Function} props.onProgressUpdate - Callback when progress is updated
  */
 export default function ArticleProgressTracker({ 
   moduleId, 
-  subModule, 
+  termIndex,
+  article, 
   isCompleted = false,
-  onProgressUpdate 
+  onComplete,
+  onProgressUpdate,
+  resourceProgress = {}
 }) {
   const [completed, setCompleted] = useState(isCompleted);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [readPercentage, setReadPercentage] = useState(0);
+  const [readPercentage, setReadPercentage] = useState(resourceProgress.articleProgress || 0);
   const [scrollDetected, setScrollDetected] = useState(false);
-
-  console.log("ArticleProgressTracker", { moduleId, subModule, completed });
   
   // Track scroll position to determine reading progress
   useEffect(() => {
@@ -50,9 +54,11 @@ export default function ArticleProgressTracker({
       // Only update if percentage changed significantly (to avoid too many API calls)
       if (Math.abs(percentage - readPercentage) >= 5) {
         setReadPercentage(percentage);
-        // Update the progress on the server
-        updateArticleProgress(moduleId, parseInt(subModule.id), percentage)
-          .catch(error => console.error("Error updating read progress:", error));
+        
+        // Send progress update to parent component
+        if (onProgressUpdate) {
+          onProgressUpdate(percentage);
+        }
       }
     };
     
@@ -64,7 +70,12 @@ export default function ArticleProgressTracker({
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [completed, scrollDetected, moduleId, subModule.id, readPercentage]);
+  }, [completed, scrollDetected, readPercentage, onProgressUpdate]);
+
+  // Set initial state from props if provided
+  useEffect(() => {
+    setCompleted(isCompleted);
+  }, [isCompleted]);
 
   const handleMarkAsCompleted = async () => {
     if (completed || isUpdating) return;
@@ -72,17 +83,14 @@ export default function ArticleProgressTracker({
     setIsUpdating(true);
     
     try {
-      // Call API to mark article as completed
-      const progressData = await completeArticle(moduleId, parseInt(subModule.id));
+      // Call API through the parent component
+      if (onComplete) {
+        await onComplete();
+      }
       
       // Update local state
       setCompleted(true);
       setReadPercentage(100);
-      
-      // Notify parent component
-      if (onProgressUpdate) {
-        onProgressUpdate(progressData);
-      }
     } catch (error) {
       console.error("Error marking article as completed:", error);
     } finally {
@@ -104,19 +112,30 @@ export default function ArticleProgressTracker({
 
   return (
     <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-6">
-      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-        <span className="flex items-center gap-1">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+        <span className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 mb-2 sm:mb-0">
           <Clock className="h-4 w-4" />
           Reading Progress
         </span>
-        <span>{readPercentage}%</span>
+        
+        <div className="flex items-center gap-2">
+          <Badge 
+            variant="outline" 
+            className={scrollDetected ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"}
+          >
+            <BookOpen className="h-3 w-3 mr-1" />
+            {scrollDetected ? "Reading" : "Not started"}
+          </Badge>
+          <Badge className="bg-blue-100 text-blue-800 border-none">
+            {readPercentage}%
+          </Badge>
+        </div>
       </div>
-      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-4">
-        <div 
-          className="h-full bg-blue-500 dark:bg-blue-600 rounded-full"
-          style={{ width: `${readPercentage}%` }}
-        />
-      </div>
+      
+      <Progress 
+        value={readPercentage} 
+        className="h-2 bg-gray-200 dark:bg-gray-700 mb-4" 
+      />
       
       <div className="flex justify-center">
         <Button

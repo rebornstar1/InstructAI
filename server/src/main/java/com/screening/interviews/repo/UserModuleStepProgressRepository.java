@@ -16,40 +16,10 @@ public interface UserModuleStepProgressRepository extends JpaRepository<UserModu
     Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepType(
             Long userId, Long moduleId, UserModuleStepProgress.StepType stepType);
 
-    // Find step progress by user, module, step type, and reference ID (submodule, quiz, or video)
-    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndSubModuleId(
-            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Long subModuleId);
-
-    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndQuizId(
-            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Long quizId);
-
-    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndVideoId(
-            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, String videoId);
-
-    // Find step progress for a key term and step type
-    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndKeyTermIndex(
-            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Integer keyTermIndex);
-
-    // Find all steps for a module
-    List<UserModuleStepProgress> findByUserIdAndModuleId(Long userId, Long moduleId);
-
-    // Find all steps for a key term
-    List<UserModuleStepProgress> findByUserIdAndModuleIdAndKeyTermIndex(
-            Long userId, Long moduleId, Integer keyTermIndex);
-
     // Get all completed steps for a module
     List<UserModuleStepProgress> findByUserIdAndModuleIdAndStatus(
             Long userId, Long moduleId, UserModuleStepProgress.StepStatus status);
 
-    // Get all completed steps for a module, excluding a certain step type
-    List<UserModuleStepProgress> findByUserIdAndModuleIdAndStatusAndStepTypeNot(
-            Long userId, Long moduleId,
-            UserModuleStepProgress.StepStatus status,
-            UserModuleStepProgress.StepType stepType);
-
-    // Count steps for a module, excluding a certain step type
-    long countByUserIdAndModuleIdAndStepTypeNot(
-            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType);
 
     // Check if all required steps for a key term are completed
     @Query("SELECT COUNT(p) FROM UserModuleStepProgress p " +
@@ -69,12 +39,67 @@ public interface UserModuleStepProgressRepository extends JpaRepository<UserModu
             @Param("moduleId") Long moduleId,
             @Param("termIndex") Integer termIndex);
 
-    // Check if all steps in a module are completed (excluding KEY_TERM type)
-    @Query("SELECT " +
-            "(SELECT COUNT(p) FROM UserModuleStepProgress p " +
-            "WHERE p.user.id = :userId AND p.module.id = :moduleId " +
-            "AND p.status = 'COMPLETED' AND p.stepType <> 'KEY_TERM') = " +
-            "(SELECT COUNT(p) FROM UserModuleStepProgress p " +
-            "WHERE p.user.id = :userId AND p.module.id = :moduleId AND p.stepType <> 'KEY_TERM')")
+
+    List<UserModuleStepProgress> findByUserIdAndModuleId(Long userId, Long moduleId);
+
+    List<UserModuleStepProgress> findByUserIdAndModuleIdAndKeyTermIndex(
+            Long userId, Long moduleId, Integer keyTermIndex);
+
+    // Find steps by type
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndSubModuleId(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Long subModuleId);
+
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndVideoId(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, String videoId);
+
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndQuizId(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Long quizId);
+
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndKeyTermIndex(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType, Integer keyTermIndex);
+
+    // Find steps by type and key term index
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndSubModuleIdAndKeyTermIndex(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType,
+            Long subModuleId, Integer keyTermIndex);
+
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndVideoIdAndKeyTermIndex(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType,
+            String videoId, Integer keyTermIndex);
+
+    Optional<UserModuleStepProgress> findByUserIdAndModuleIdAndStepTypeAndQuizIdAndKeyTermIndex(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType,
+            Long quizId, Integer keyTermIndex);
+
+    // Find steps by status
+    List<UserModuleStepProgress> findByUserIdAndModuleIdAndStatus(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType status);
+
+    List<UserModuleStepProgress> findByUserIdAndModuleIdAndStatusAndStepTypeNot(
+            Long userId, Long moduleId, UserModuleStepProgress.StepStatus status,
+            UserModuleStepProgress.StepType notStepType);
+
+    // Count steps
+    long countByUserIdAndModuleIdAndStepTypeNot(
+            Long userId, Long moduleId, UserModuleStepProgress.StepType stepType);
+
+    // Check if all steps are completed
+    @Query("SELECT CASE WHEN COUNT(s) = 0 THEN true ELSE " +
+            "CASE WHEN COUNT(s) = COUNT(CASE WHEN s.status = 'COMPLETED' THEN 1 ELSE NULL END) " +
+            "THEN true ELSE false END END " +
+            "FROM UserModuleStepProgress s " +
+            "WHERE s.user.id = :userId AND s.module.id = :moduleId AND s.stepType <> 'KEY_TERM'")
     boolean areAllStepsCompleted(@Param("userId") Long userId, @Param("moduleId") Long moduleId);
+
+    // Check if all steps for a key term are completed
+    @Query("SELECT CASE WHEN COUNT(s) = 0 THEN true ELSE " +
+            "CASE WHEN COUNT(s) = COUNT(CASE WHEN s.status = 'COMPLETED' THEN 1 ELSE NULL END) " +
+            "THEN true ELSE false END END " +
+            "FROM UserModuleStepProgress s " +
+            "WHERE s.user.id = :userId AND s.module.id = :moduleId " +
+            "AND s.keyTermIndex = :termIndex AND s.stepType <> 'KEY_TERM'")
+    boolean areAllStepsCompletedForKeyTerm(
+            @Param("userId") Long userId,
+            @Param("moduleId") Long moduleId,
+            @Param("termIndex") Integer termIndex);
 }

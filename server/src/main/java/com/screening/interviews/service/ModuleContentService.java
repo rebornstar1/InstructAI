@@ -3,12 +3,11 @@ package com.screening.interviews.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.screening.interviews.dto.*;
+import com.screening.interviews.exception.ResourceNotFoundException;
+import com.screening.interviews.model.*;
 import com.screening.interviews.model.Module;
-import com.screening.interviews.model.Quiz;
-import com.screening.interviews.model.QuizQuestion;
-import com.screening.interviews.model.SubModule;
-import com.screening.interviews.repo.ModuleRepository;
-import com.screening.interviews.repo.QuizRepository;
+import com.screening.interviews.repo.*;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -17,8 +16,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
-import com.screening.interviews.repo.SubModuleRepository;
 
+import java.lang.Thread;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -45,6 +44,10 @@ public class ModuleContentService {
     private final ModuleRepository moduleRepository;
     private final QuizRepository quizRepository;
     private final ProgressService userModuleProgressService;
+    private final UserModuleStepProgressRepository userModuleStepProgressRepository;
+    private final UserModuleProgressRepository userModuleProgressRepository;
+    private final UserRepository userRepository;
+    private final ProgressService progressService;
 
     private static final String YOUTUBE_API_KEY = "AIzaSyCItvhHeCz5v3eQRp3SziAvHk-2XUUKg1Q";
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
@@ -887,5 +890,471 @@ public class ModuleContentService {
             logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate content from Gemini API", e);
         }
+    }
+
+    // Add this method to your existing ModuleContentService class
+
+    /**
+     * Get detailed information about a term, including its resources and progress
+     */
+    public TermDetailResponseDto getTermDetailsWithProgress(Long userId, Long moduleId, Integer termIndex) {
+        log.info("Fetching term details for user {} module {} term {}", userId, moduleId, termIndex);
+
+        // 1. Get the module to access key terms and definitions
+        Module module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
+
+        // Validate term index
+        if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
+            return TermDetailResponseDto.builder()
+                    .success(false)
+                    .message("Invalid term index")
+                    .build();
+        }
+
+        // 2. Get the term and definition
+        String term = module.getKeyTerms().get(termIndex);
+        String definition = module.getDefinitions().get(termIndex);
+
+        // 3. Get module progress to check term status
+        UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
+
+        boolean isTermCompleted = progress.isTermCompleted(termIndex);
+        boolean isLastTerm = (termIndex == module.getKeyTerms().size() - 1);
+
+        // Next term information
+        Integer nextTermIndex = termIndex + 1;
+        boolean nextTermUnlocked = !isLastTerm && progress.isTermUnlocked(nextTermIndex);
+
+        // 4. Retrieve or initialize resource progress
+        TermResourceProgressDto resourceProgress = getTermResourceProgress(userId, moduleId, termIndex);
+
+        // 5. If resources are not yet generated for this term, create them on-demand
+        if (!resourceProgress.isArticleAvailable() || !resourceProgress.isQuizAvailable()) {
+            // Term resources only need to be generated once
+            generateTermResourcesIfNeeded(userId, moduleId, termIndex, term, definition);
+
+            // Refresh progress after generation
+            resourceProgress = getTermResourceProgress(userId, moduleId, termIndex);
+        }
+
+        // 6. Fetch resource content
+        SubModuleDto article = null;
+        QuizDto quiz = null;
+        String videoUrl = null;
+
+        // Fetch article (submodule) if available
+        if (resourceProgress.isArticleAvailable() && resourceProgress.getArticleId() != null) {
+            SubModule subModule = subModuleRepository.findById(resourceProgress.getArticleId())
+                    .orElse(null);
+            if (subModule != null) {
+                article = convertToSubModuleDto(subModule);
+            }
+        }
+
+        // Fetch quiz if available
+        if (resourceProgress.isQuizAvailable() && resourceProgress.getQuizId() != null) {
+            Quiz quizEntity = quizRepository.findById(resourceProgress.getQuizId())
+                    .orElse(null);
+            if (quizEntity != null) {
+                quiz = convertToQuizDto(quizEntity);
+            }
+        }
+
+        // Get video URL if available
+        if (resourceProgress.isVideoAvailable() && resourceProgress.getVideoId() != null) {
+            // First try to find in module's videos
+            if (module.getVideoUrls() != null) {
+                for (String url : module.getVideoUrls()) {
+                    if (url.contains(resourceProgress.getVideoId())) {
+                        videoUrl = url;
+                        break;
+                    }
+                }
+            }
+
+            // If not found in module videos, it might be stored in term resources
+            if (videoUrl == null) {
+                try {
+                    if (progress.getTermResourcesData() != null) {
+                        Map<String, Object> allTermResources = objectMapper.readValue(
+                                progress.getTermResourcesData(), Map.class);
+
+                        if (allTermResources.containsKey(termIndex.toString())) {
+                            Map<String, Object> termResources =
+                                    (Map<String, Object>) allTermResources.get(termIndex.toString());
+
+                            if (termResources.containsKey("videoUrl")) {
+                                videoUrl = (String) termResources.get("videoUrl");
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Error fetching video URL from term resources: {}", e.getMessage());
+                }
+            }
+        }
+
+        // 7. Build and return the response
+        return TermDetailResponseDto.builder()
+                .success(true)
+                .term(term)
+                .definition(definition)
+                .termIndex(termIndex)
+                .article(article)
+                .quiz(quiz)
+                .videoUrl(videoUrl)
+                .isCompleted(isTermCompleted)
+                .resourceProgress(resourceProgress)
+                .isLastTerm(isLastTerm)
+                .nextTermIndex(isLastTerm ? null : nextTermIndex)
+                .nextTermUnlocked(nextTermUnlocked)
+                .build();
+    }
+
+    /**
+     * Retrieve resource progress for a term
+     */
+    private TermResourceProgressDto getTermResourceProgress(Long userId, Long moduleId, Integer termIndex) {
+        // Initialize progress tracker
+        TermResourceProgressDto progress = new TermResourceProgressDto();
+
+        // First check if we have any resources stored in term resources data
+        UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
+
+        try {
+            if (moduleProgress.getTermResourcesData() != null) {
+                Map<String, Object> allTermResources = objectMapper.readValue(
+                        moduleProgress.getTermResourcesData(), Map.class);
+
+                if (allTermResources.containsKey(termIndex.toString())) {
+                    Map<String, Object> termResources =
+                            (Map<String, Object>) allTermResources.get(termIndex.toString());
+
+                    // Check for article
+                    if (termResources.containsKey("subModuleId")) {
+                        Long articleId = Long.valueOf(termResources.get("subModuleId").toString());
+                        progress.setArticleAvailable(true);
+                        progress.setArticleId(articleId);
+                        progress.setArticleCompleted(Boolean.TRUE.equals(termResources.get("articleCompleted")));
+                        progress.setArticleStarted(progress.isArticleCompleted() ||
+                                Boolean.TRUE.equals(termResources.get("articleStarted")));
+
+                        // Get progress percentage if available
+                        if (termResources.containsKey("articleProgress")) {
+                            progress.setArticleProgress(
+                                    Integer.valueOf(termResources.get("articleProgress").toString()));
+                        } else {
+                            progress.setArticleProgress(progress.isArticleCompleted() ? 100 : 0);
+                        }
+                    }
+
+                    // Check for quiz
+                    if (termResources.containsKey("quizId")) {
+                        Long quizId = Long.valueOf(termResources.get("quizId").toString());
+                        progress.setQuizAvailable(true);
+                        progress.setQuizId(quizId);
+                        progress.setQuizCompleted(Boolean.TRUE.equals(termResources.get("quizCompleted")));
+                        progress.setQuizStarted(progress.isQuizCompleted() ||
+                                Boolean.TRUE.equals(termResources.get("quizStarted")));
+
+                        // Get best score if available
+                        if (termResources.containsKey("quizScore")) {
+                            progress.setQuizScore(
+                                    Integer.valueOf(termResources.get("quizScore").toString()));
+                        }
+                    }
+
+                    // Check for video
+                    if (termResources.containsKey("videoId")) {
+                        String videoId = termResources.get("videoId").toString();
+                        progress.setVideoAvailable(true);
+                        progress.setVideoId(videoId);
+                        progress.setVideoCompleted(Boolean.TRUE.equals(termResources.get("videoCompleted")));
+                        progress.setVideoStarted(progress.isVideoCompleted() ||
+                                Boolean.TRUE.equals(termResources.get("videoStarted")));
+
+                        // Get progress percentage if available
+                        if (termResources.containsKey("videoProgress")) {
+                            progress.setVideoProgress(
+                                    Integer.valueOf(termResources.get("videoProgress").toString()));
+                        } else {
+                            progress.setVideoProgress(progress.isVideoCompleted() ? 100 : 0);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error retrieving term progress: {}", e.getMessage());
+        }
+
+        // Also check step progress for more detailed status
+        if (progress.isArticleAvailable() || progress.isQuizAvailable() || progress.isVideoAvailable()) {
+            try {
+                // Check for article progress in step progress
+                if (progress.isArticleAvailable() && progress.getArticleId() != null) {
+                    userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleId(
+                                    userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, progress.getArticleId())
+                            .ifPresent(step -> {
+                                progress.setArticleStarted(
+                                        step.getStatus() != UserModuleStepProgress.StepStatus.NOT_STARTED);
+                                progress.setArticleCompleted(
+                                        step.getStatus() == UserModuleStepProgress.StepStatus.COMPLETED);
+                                if (step.getReadProgressPercentage() != null) {
+                                    progress.setArticleProgress(step.getReadProgressPercentage());
+                                }
+                            });
+                }
+
+                // Check for quiz progress in step progress
+                if (progress.isQuizAvailable() && progress.getQuizId() != null) {
+                    userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndQuizId(
+                                    userId, moduleId, UserModuleStepProgress.StepType.QUIZ, progress.getQuizId())
+                            .ifPresent(step -> {
+                                progress.setQuizStarted(
+                                        step.getStatus() != UserModuleStepProgress.StepStatus.NOT_STARTED);
+                                progress.setQuizCompleted(
+                                        step.getStatus() == UserModuleStepProgress.StepStatus.COMPLETED);
+                                if (step.getBestScore() != null) {
+                                    progress.setQuizScore(step.getBestScore());
+                                }
+                            });
+                }
+
+                // Check for video progress in step progress
+                if (progress.isVideoAvailable() && progress.getVideoId() != null) {
+                    userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndVideoId(
+                                    userId, moduleId, UserModuleStepProgress.StepType.VIDEO, progress.getVideoId())
+                            .ifPresent(step -> {
+                                progress.setVideoStarted(
+                                        step.getStatus() != UserModuleStepProgress.StepStatus.NOT_STARTED);
+                                progress.setVideoCompleted(
+                                        step.getStatus() == UserModuleStepProgress.StepStatus.COMPLETED);
+                                if (step.getWatchProgressPercentage() != null) {
+                                    progress.setVideoProgress(step.getWatchProgressPercentage());
+                                }
+                            });
+                }
+            } catch (Exception e) {
+                log.error("Error retrieving step progress: {}", e.getMessage());
+            }
+        }
+
+        return progress;
+    }
+
+    /**
+     * Generate resources for a term if they don't already exist
+     */
+    @Transactional
+    public void generateTermResourcesIfNeeded(Long userId, Long moduleId, Integer termIndex,
+                                               String term, String definition) {
+        log.info("Checking if term resources need to be generated for term {}", termIndex);
+
+        UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
+
+        // Check if resources are already generated
+        boolean resourcesExist = false;
+
+        try {
+            if (progress.getTermResourcesData() != null) {
+                Map<String, Object> allTermResources = objectMapper.readValue(
+                        progress.getTermResourcesData(), Map.class);
+
+                // If we have resources for this term and they include article and quiz,
+                // then we don't need to generate again
+                if (allTermResources.containsKey(termIndex.toString())) {
+                    Map<String, Object> termResources =
+                            (Map<String, Object>) allTermResources.get(termIndex.toString());
+
+                    if (termResources.containsKey("subModuleId") && termResources.containsKey("quizId")) {
+                        resourcesExist = true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error checking existing term resources: {}", e.getMessage());
+        }
+
+        // Generate resources if needed
+        if (!resourcesExist) {
+            log.info("Generating resources for term {}: {}", termIndex, term);
+
+            Module module = moduleRepository.findById(moduleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+
+            // Context title is used for better AI prompt construction
+            String contextTitle = module.getTitle();
+
+            // Build request for term content generation
+            TermContentRequestDto request = TermContentRequestDto.builder()
+                    .term(term)
+                    .definition(definition)
+                    .moduleId(moduleId)
+                    .contextTitle(contextTitle)
+                    .saveContent(true)
+                    .build();
+
+            // Generate the content
+            TermContentResponseDto response = generateTermContent(request);
+
+            // Store the generated resources in term progress data
+            Map<String, Object> termResources = new HashMap<>();
+
+            // Store article info
+            if (response.getSubModule() != null && response.getSubModuleId() != null) {
+                termResources.put("subModuleId", response.getSubModuleId());
+                termResources.put("articleStarted", false);
+                termResources.put("articleCompleted", false);
+                termResources.put("articleProgress", 0);
+            }
+
+            // Store quiz info
+            if (response.getQuiz() != null && response.getQuizId() != null) {
+                termResources.put("quizId", response.getQuizId());
+                termResources.put("quizStarted", false);
+                termResources.put("quizCompleted", false);
+                termResources.put("quizScore", 0);
+            }
+
+            // Store video info
+            if (response.getVideoUrl() != null) {
+                String videoId = extractVideoId(response.getVideoUrl());
+                termResources.put("videoId", videoId);
+                termResources.put("videoUrl", response.getVideoUrl());
+                termResources.put("videoStarted", false);
+                termResources.put("videoCompleted", false);
+                termResources.put("videoProgress", 0);
+            }
+
+            // Save the resources
+            progressService.saveTermResources(userId, moduleId, termIndex, termResources);
+
+            // Create step progress entries for these resources
+            createStepProgressForTermResources(userId, moduleId, termIndex, response);
+        }
+    }
+
+    /**
+     * Create step progress entries for newly generated term resources
+     */
+    private void createStepProgressForTermResources(Long userId, Long moduleId, Integer termIndex,
+                                                    TermContentResponseDto resources) {
+        try {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            Module module = moduleRepository.findById(moduleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
+
+            UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
+
+            // Create parent key term step if needed
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.KEY_TERM, termIndex)
+                    .orElseGet(() -> {
+                        UserModuleStepProgress keyTermStep = UserModuleStepProgress.builder()
+                                .user(user)
+                                .module(module)
+                                .userModuleProgress(moduleProgress)
+                                .stepType(UserModuleStepProgress.StepType.KEY_TERM)
+                                .keyTermIndex(termIndex)
+                                .status(UserModuleStepProgress.StepStatus.NOT_STARTED)
+                                .build();
+                        return userModuleStepProgressRepository.save(keyTermStep);
+                    });
+
+            // Create article step if article was generated
+            if (resources.getSubModuleId() != null) {
+                SubModule subModule = subModuleRepository.findById(resources.getSubModuleId())
+                        .orElseThrow(() -> new ResourceNotFoundException("SubModule not found"));
+
+                userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleId(
+                                userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, resources.getSubModuleId())
+                        .orElseGet(() -> {
+                            UserModuleStepProgress articleStep = UserModuleStepProgress.builder()
+                                    .user(user)
+                                    .module(module)
+                                    .userModuleProgress(moduleProgress)
+                                    .subModule(subModule)
+                                    .stepType(UserModuleStepProgress.StepType.ARTICLE)
+                                    .keyTermIndex(termIndex)
+                                    .status(UserModuleStepProgress.StepStatus.NOT_STARTED)
+                                    .readProgressPercentage(0)
+                                    .build();
+                            return userModuleStepProgressRepository.save(articleStep);
+                        });
+            }
+
+            // Create quiz step if quiz was generated
+            if (resources.getQuizId() != null) {
+                Quiz quiz = quizRepository.findById(resources.getQuizId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
+
+                userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndQuizId(
+                                userId, moduleId, UserModuleStepProgress.StepType.QUIZ, resources.getQuizId())
+                        .orElseGet(() -> {
+                            UserModuleStepProgress quizStep = UserModuleStepProgress.builder()
+                                    .user(user)
+                                    .module(module)
+                                    .userModuleProgress(moduleProgress)
+                                    .quiz(quiz)
+                                    .stepType(UserModuleStepProgress.StepType.QUIZ)
+                                    .keyTermIndex(termIndex)
+                                    .status(UserModuleStepProgress.StepStatus.NOT_STARTED)
+                                    .build();
+                            return userModuleStepProgressRepository.save(quizStep);
+                        });
+            }
+
+            // Create video step if video was found
+            if (resources.getVideoUrl() != null) {
+                String videoId = extractVideoId(resources.getVideoUrl());
+
+                userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndVideoId(
+                                userId, moduleId, UserModuleStepProgress.StepType.VIDEO, videoId)
+                        .orElseGet(() -> {
+                            UserModuleStepProgress videoStep = UserModuleStepProgress.builder()
+                                    .user(user)
+                                    .module(module)
+                                    .userModuleProgress(moduleProgress)
+                                    .videoId(videoId)
+                                    .stepType(UserModuleStepProgress.StepType.VIDEO)
+                                    .keyTermIndex(termIndex)
+                                    .status(UserModuleStepProgress.StepStatus.NOT_STARTED)
+                                    .watchProgressPercentage(0)
+                                    .build();
+                            return userModuleStepProgressRepository.save(videoStep);
+                        });
+            }
+        } catch (Exception e) {
+            log.error("Error creating step progress entries: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Extract video ID from YouTube URL
+     */
+    private String extractVideoId(String videoUrl) {
+        if (videoUrl == null || videoUrl.isEmpty()) {
+            return null;
+        }
+
+        try {
+            if (videoUrl.contains("youtube.com/watch")) {
+                return videoUrl.split("v=")[1].split("&")[0];
+            } else if (videoUrl.contains("youtu.be/")) {
+                return videoUrl.split("youtu.be/")[1].split("\\?")[0];
+            }
+        } catch (Exception e) {
+            log.warn("Could not extract video ID from URL: {}", videoUrl);
+        }
+
+        // If not a recognizable YouTube URL format or extraction failed, return the URL itself
+        return videoUrl;
     }
 }

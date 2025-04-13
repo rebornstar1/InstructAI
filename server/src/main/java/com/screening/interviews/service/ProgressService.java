@@ -32,6 +32,7 @@ public class ProgressService {
     private final ModuleService moduleService;
     private final ThreadRepository threadRepository;
     private final ObjectMapper objectMapper;
+    private final UserModuleStepProgressRepository userModuleStepProgressRepository;
 
     /**
      * Enroll user in a course and initialize progress
@@ -133,6 +134,8 @@ public class ProgressService {
         UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
 
+        log.info("progress ye rahi bhai {}",progress);
+
         // Only allow starting if UNLOCKED
         if (progress.getState() == UserModuleProgress.ModuleState.UNLOCKED) {
             progress.setState(UserModuleProgress.ModuleState.IN_PROGRESS);
@@ -140,6 +143,9 @@ public class ProgressService {
 
             // Initialize key term progress if not already set up
             Module module = progress.getModule();
+
+            log.info("module toh ye raha {}",module);
+
             if (module.getKeyTerms() != null && !module.getKeyTerms().isEmpty() &&
                     (progress.getUnlockedTerms() == null || progress.getUnlockedTerms().isEmpty())) {
                 // Set first term as active and unlocked
@@ -960,5 +966,426 @@ public class ProgressService {
         }
 
         userCourseProgressRepository.save(courseProgress);
+    }
+
+    @Transactional
+    public ResourceCompletionResponse completeTermResource(Long userId, Long moduleId,
+                                                           Integer termIndex, String resourceType) {
+        log.info("Completing {} for user {} module {} term {}",
+                resourceType, userId, moduleId, termIndex);
+
+        // Get module progress
+        UserModuleProgress progress = getModuleProgress(userId, moduleId);
+        Module module = progress.getModule();
+
+        // Verify the term index is valid
+        if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
+            throw new IllegalArgumentException("Invalid term index: " + termIndex);
+        }
+
+        // Verify term is unlocked
+        if (!progress.isTermUnlocked(termIndex)) {
+            throw new IllegalArgumentException("Term is not unlocked: " + termIndex);
+        }
+
+        // Get term resources
+        Map<String, Object> termResources = getTermResources(progress, termIndex);
+        if (termResources == null) {
+            termResources = new HashMap<>();
+        }
+
+        // Build response
+        ResourceCompletionResponse response = new ResourceCompletionResponse();
+        response.setSuccess(true);
+        response.setResourceType(resourceType);
+        response.setResourceCompleted(true);
+        response.setTermIndex(termIndex);
+
+        // Complete the appropriate resource
+        boolean resourceCompleted = false;
+        switch (resourceType.toLowerCase()) {
+            case "article":
+                resourceCompleted = completeArticleResource(userId, moduleId, termIndex, termResources);
+                break;
+            case "video":
+                resourceCompleted = completeVideoResource(userId, moduleId, termIndex, termResources);
+                break;
+            case "quiz":
+                resourceCompleted = completeQuizResource(userId, moduleId, termIndex, termResources);
+                break;
+            default:
+                log.warn("Unknown resource type: {}", resourceType);
+                response.setSuccess(false);
+                response.setResourceCompleted(false);
+                return response;
+        }
+
+        // Save updated term resources
+        saveTermResources(userId, moduleId, termIndex, termResources);
+
+        // Check if all resources are completed and if the term should be automatically completed
+        boolean isTermCompleted = false;
+        boolean nextTermUnlocked = false;
+        Integer nextTermIndex = null;
+
+        if (checkAllResourcesCompleted(termResources)) {
+            log.info("All resources completed for term {}, automatically completing term", termIndex);
+
+            // Mark term as completed
+            if (!progress.isTermCompleted(termIndex)) {
+                completeKeyTerm(userId, moduleId, termIndex);
+                isTermCompleted = true;
+
+                // Check for next term
+                if (termIndex + 1 < module.getKeyTerms().size()) {
+                    nextTermIndex = termIndex + 1;
+                    nextTermUnlocked = progress.isTermUnlocked(nextTermIndex);
+                }
+            } else {
+                isTermCompleted = true;
+            }
+        }
+
+        // Get updated module progress
+        progress = getModuleProgress(userId, moduleId);
+
+        // Update response with term completion status
+        response.setTermCompleted(isTermCompleted);
+        response.setNextTermUnlocked(nextTermUnlocked);
+        response.setNextTermIndex(nextTermIndex);
+        response.setModuleProgressPercentage(progress.getProgressPercentage());
+        response.setModuleCompleted(progress.getState() == UserModuleProgress.ModuleState.COMPLETED);
+
+        return response;
+    }
+
+    public boolean checkAllResourcesCompleted(Map<String, Object> termResources) {
+        boolean articleCompleted = true; // Default to true if not available
+        boolean videoCompleted = true;   // Default to true if not available
+        boolean quizCompleted = true;    // Default to true if not available
+
+        // Check article completion if available
+        if (termResources.containsKey("subModuleId")) {
+            articleCompleted = Boolean.TRUE.equals(termResources.get("articleCompleted"));
+        }
+
+        // Check video completion if available
+        if (termResources.containsKey("videoId")) {
+            videoCompleted = Boolean.TRUE.equals(termResources.get("videoCompleted"));
+        }
+
+        // Check quiz completion if available
+        if (termResources.containsKey("quizId")) {
+            quizCompleted = Boolean.TRUE.equals(termResources.get("quizCompleted"));
+        }
+
+        // All resources are considered completed if all available resources are completed
+        return articleCompleted && videoCompleted && quizCompleted;
+    }
+
+    private boolean completeArticleResource(Long userId, Long moduleId, Integer termIndex,
+                                            Map<String, Object> termResources) {
+        if (!termResources.containsKey("subModuleId")) {
+            log.warn("No article found for term {}", termIndex);
+            return false;
+        }
+
+        // Get the submodule ID
+        Long subModuleId = Long.valueOf(termResources.get("subModuleId").toString());
+
+        // Mark article as completed in term resources
+        termResources.put("articleCompleted", true);
+        termResources.put("articleProgress", 100);
+
+        // Also update step progress if available
+        try {
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleIdAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, subModuleId, termIndex)
+                    .ifPresent(step -> {
+                        step.complete();
+                        userModuleStepProgressRepository.save(step);
+                    });
+        } catch (Exception e) {
+            log.error("Error updating article step progress: {}", e.getMessage());
+        }
+
+        // Add XP for article completion if not already completed
+        if (!Boolean.TRUE.equals(termResources.get("articleCompletedBefore"))) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            // Add 10 XP for article completion
+            user.setXp(user.getXp() + 10);
+            userRepository.save(user);
+
+            // Mark as previously completed to avoid giving XP again
+            termResources.put("articleCompletedBefore", true);
+        }
+
+        return true;
+    }
+
+    private boolean completeVideoResource(Long userId, Long moduleId, Integer termIndex,
+                                          Map<String, Object> termResources) {
+        if (!termResources.containsKey("videoId")) {
+            log.warn("No video found for term {}", termIndex);
+            return false;
+        }
+
+        // Get the video ID
+        String videoId = termResources.get("videoId").toString();
+
+        // Mark video as completed in term resources
+        termResources.put("videoCompleted", true);
+        termResources.put("videoProgress", 100);
+
+        // Also update step progress if available
+        try {
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndVideoIdAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.VIDEO, videoId, termIndex)
+                    .ifPresent(step -> {
+                        step.complete();
+                        userModuleStepProgressRepository.save(step);
+                    });
+        } catch (Exception e) {
+            log.error("Error updating video step progress: {}", e.getMessage());
+        }
+
+        // Add XP for video completion if not already completed
+        if (!Boolean.TRUE.equals(termResources.get("videoCompletedBefore"))) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            // Add 15 XP for video completion
+            user.setXp(user.getXp() + 15);
+            userRepository.save(user);
+
+            // Mark as previously completed to avoid giving XP again
+            termResources.put("videoCompletedBefore", true);
+        }
+
+        return true;
+    }
+
+    private boolean completeQuizResource(Long userId, Long moduleId, Integer termIndex,
+                                         Map<String, Object> termResources) {
+        if (!termResources.containsKey("quizId")) {
+            log.warn("No quiz found for term {}", termIndex);
+            return false;
+        }
+
+        // Get the quiz ID
+        Long quizId = Long.valueOf(termResources.get("quizId").toString());
+
+        // Mark quiz as completed in term resources
+        termResources.put("quizCompleted", true);
+
+        // Get quiz score if available (default to passing score if not specified)
+        int score = termResources.containsKey("quizScore")
+                ? Integer.parseInt(termResources.get("quizScore").toString())
+                : 70;
+
+        // Also update step progress if available
+        try {
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndQuizIdAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.QUIZ, quizId, termIndex)
+                    .ifPresent(step -> {
+                        step.updateQuizScore(score);
+                        userModuleStepProgressRepository.save(step);
+                    });
+        } catch (Exception e) {
+            log.error("Error updating quiz step progress: {}", e.getMessage());
+        }
+
+        // Add XP for quiz completion if not already completed
+        if (!Boolean.TRUE.equals(termResources.get("quizCompletedBefore"))) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            // Add XP based on score (1 XP per percentage point)
+            user.setXp(user.getXp() + score);
+            userRepository.save(user);
+
+            // Mark as previously completed to avoid giving XP again
+            termResources.put("quizCompletedBefore", true);
+        }
+
+        return true;
+    }
+
+    public Map<String, Object> getTermResources(UserModuleProgress progress, Integer termIndex) {
+        try {
+            if (progress.getTermResourcesData() != null && !progress.getTermResourcesData().isEmpty()) {
+                Map<String, Object> allTermResources = objectMapper.readValue(
+                        progress.getTermResourcesData(), Map.class);
+
+                if (allTermResources.containsKey(termIndex.toString())) {
+                    return (Map<String, Object>) allTermResources.get(termIndex.toString());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error retrieving term resources: {}", e.getMessage());
+        }
+
+        return new HashMap<>();
+    }
+
+    @Transactional
+    public void updateResourceProgress(Long userId, Long moduleId, Integer termIndex,
+                                       String resourceType, int progressPercentage) {
+        log.info("Updating {} progress to {}% for user {} module {} term {}",
+                resourceType, progressPercentage, userId, moduleId, termIndex);
+
+        // Get module progress and term resources
+        UserModuleProgress progress = getModuleProgress(userId, moduleId);
+        Map<String, Object> termResources = getTermResources(progress, termIndex);
+
+        if (termResources == null) {
+            termResources = new HashMap<>();
+        }
+
+        // Update progress for the specific resource type
+        switch (resourceType.toLowerCase()) {
+            case "article":
+                if (termResources.containsKey("subModuleId")) {
+                    // Update progress percentage
+                    termResources.put("articleProgress", progressPercentage);
+                    termResources.put("articleStarted", true);
+
+                    // Mark as completed if 100%
+                    if (progressPercentage >= 100) {
+                        termResources.put("articleCompleted", true);
+                    }
+
+                    // Update step progress if available
+                    Long subModuleId = Long.valueOf(termResources.get("subModuleId").toString());
+                    updateArticleStepProgress(userId, moduleId, termIndex, subModuleId, progressPercentage);
+                }
+                break;
+
+            case "video":
+                if (termResources.containsKey("videoId")) {
+                    // Update progress percentage
+                    termResources.put("videoProgress", progressPercentage);
+                    termResources.put("videoStarted", true);
+
+                    // Mark as completed if 100%
+                    if (progressPercentage >= 100) {
+                        termResources.put("videoCompleted", true);
+                    }
+
+                    // Update step progress if available
+                    String videoId = termResources.get("videoId").toString();
+                    updateVideoStepProgress(userId, moduleId, termIndex, videoId, progressPercentage);
+                }
+                break;
+
+            default:
+                log.warn("Resource type not supported for progress updates: {}", resourceType);
+                return;
+        }
+
+        // Save updated resources
+        saveTermResources(userId, moduleId, termIndex, termResources);
+
+        // Check if all resources are completed and if the term should be automatically completed
+        if (progressPercentage >= 100 && checkAllResourcesCompleted(termResources)) {
+            log.info("All resources completed for term {}, automatically completing term", termIndex);
+
+            // Only complete if not already completed
+            if (!progress.isTermCompleted(termIndex)) {
+                completeKeyTerm(userId, moduleId, termIndex);
+            }
+        }
+    }
+
+    private void updateArticleStepProgress(Long userId, Long moduleId, Integer termIndex,
+                                           Long subModuleId, int progressPercentage) {
+        try {
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleIdAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, subModuleId, termIndex)
+                    .ifPresent(step -> {
+                        step.updateProgress(progressPercentage);
+                        userModuleStepProgressRepository.save(step);
+                    });
+        } catch (Exception e) {
+            log.error("Error updating article step progress: {}", e.getMessage());
+        }
+    }
+
+    private void updateVideoStepProgress(Long userId, Long moduleId, Integer termIndex,
+                                         String videoId, int progressPercentage) {
+        try {
+            userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndVideoIdAndKeyTermIndex(
+                            userId, moduleId, UserModuleStepProgress.StepType.VIDEO, videoId, termIndex)
+                    .ifPresent(step -> {
+                        step.updateProgress(progressPercentage);
+                        userModuleStepProgressRepository.save(step);
+                    });
+        } catch (Exception e) {
+            log.error("Error updating video step progress: {}", e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void updateQuizScore(Long userId, Long moduleId, Integer termIndex, Long quizId, int score) {
+        log.info("Updating quiz score to {} for user {} module {} term {}",
+                score, userId, moduleId, termIndex);
+
+        // Get module progress and term resources
+        UserModuleProgress progress = getModuleProgress(userId, moduleId);
+        Map<String, Object> termResources = getTermResources(progress, termIndex);
+
+        if (termResources == null) {
+            termResources = new HashMap<>();
+        }
+
+        if (termResources.containsKey("quizId")) {
+            Long existingQuizId = Long.valueOf(termResources.get("quizId").toString());
+
+            // Verify this is the correct quiz
+            if (!existingQuizId.equals(quizId)) {
+                log.warn("Quiz ID mismatch: {} vs {}", existingQuizId, quizId);
+                return;
+            }
+
+            // Update quiz score (keep best score)
+            int existingScore = termResources.containsKey("quizScore")
+                    ? Integer.parseInt(termResources.get("quizScore").toString())
+                    : 0;
+
+            if (score > existingScore) {
+                termResources.put("quizScore", score);
+            }
+
+            // Mark as started and completed
+            termResources.put("quizStarted", true);
+            termResources.put("quizCompleted", true);
+
+            // Update step progress if available
+            try {
+                userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndQuizIdAndKeyTermIndex(
+                                userId, moduleId, UserModuleStepProgress.StepType.QUIZ, quizId, termIndex)
+                        .ifPresent(step -> {
+                            step.updateQuizScore(score);
+                            userModuleStepProgressRepository.save(step);
+                        });
+            } catch (Exception e) {
+                log.error("Error updating quiz step progress: {}", e.getMessage());
+            }
+
+            // Save updated resources
+            saveTermResources(userId, moduleId, termIndex, termResources);
+
+            // Check if all resources are completed and if the term should be automatically completed
+            if (checkAllResourcesCompleted(termResources)) {
+                log.info("All resources completed for term {}, automatically completing term", termIndex);
+
+                // Only complete if not already completed
+                if (!progress.isTermCompleted(termIndex)) {
+                    completeKeyTerm(userId, moduleId, termIndex);
+                }
+            }
+        }
     }
 }
