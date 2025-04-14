@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch('http://localhost:8007/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +48,7 @@ export function AuthProvider({ children }) {
 
   const register = async (username, password) => {
     try {
-      const response = await fetch('http://localhost:8007/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

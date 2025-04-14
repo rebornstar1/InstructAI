@@ -44,6 +44,8 @@ import {
 import LearningProgressTracker from "./LearningProgressTracker";
 import CustomMarkdownRenderer from "./ui/CustomMarkdownRenderer";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export default function CourseContentComponent({ generatedCourse, setMessages }) {
   const [selectedModule, setSelectedModule] = useState(null);
   const [learningResource, setLearningResource] = useState(null);
@@ -182,7 +184,7 @@ export default function CourseContentComponent({ generatedCourse, setMessages })
         );
       }
 
-      const response = await fetch("http://localhost:8007/api/learning-resources/generate", {
+      const response = await fetch(`${API_URL}/api/learning-resources/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),

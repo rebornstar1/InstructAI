@@ -1,12 +1,12 @@
 // src/services/progressApi.js
-const API_BASE_URL = 'http://localhost:8007';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 
 export const enrollInCourse = async (courseId) => {
     try {
       const userId = getCurrentUserId();
       if (!userId) throw new Error('User not authenticated');
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/enroll`, {
+      const response = await fetch(`${API_URL}/api/progress/enroll`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,7 +64,7 @@ export const getCourseProgress = async (courseId) => {
       const userId = getCurrentUserId();
       if (!userId) return null;
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/course/${courseId}?userId=${userId}`);
+      const response = await fetch(`${API_URL}/api/progress/course/${courseId}?userId=${userId}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch course progress: ${response.statusText}`);
@@ -88,7 +88,7 @@ export const getCourseWithProgress = async (courseId) => {
       if (!userId) return { course: null, courseProgress: null };
       
       // Fetch course data
-      const courseResponse = await fetch(`${API_BASE_URL}/api/courses/simplified/${courseId}`);
+      const courseResponse = await fetch(`${API_URL}/api/courses/simplified/${courseId}`);
       if (!courseResponse.ok) {
         throw new Error(`Failed to fetch course: ${courseResponse.statusText}`);
       }
@@ -96,7 +96,7 @@ export const getCourseWithProgress = async (courseId) => {
       
       // Fetch progress data with module map
       const progressResponse = await fetch(
-        `${API_BASE_URL}/api/progress/course/${courseId}/detailed?userId=${userId}`
+        `${API_URL}/api/progress/course/${courseId}/detailed?userId=${userId}`
         , {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -131,7 +131,7 @@ export const getModuleProgress = async (moduleId) => {
       const userId = getCurrentUserId();
       if (!userId) return null;
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}?userId=${userId}`,{
+      const response = await fetch(`${API_URL}/api/progress/module/${moduleId}?userId=${userId}`,{
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -154,7 +154,7 @@ export const getModuleProgress = async (moduleId) => {
  */
 export const getAllCoursesWithProgress = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/courses/simplified/with-progress`, {
+    const response = await fetch(`${API_URL}/api/courses/simplified/with-progress`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -177,7 +177,7 @@ export const getAllCoursesWithProgress = async () => {
  */
 export const getUserProgressSummary = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/summary`, {
+    const response = await fetch(`${API_URL}/api/progress/summary`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -204,7 +204,7 @@ export const startModule = async (moduleId) => {
       const userId = getCurrentUserId();
       if (!userId) throw new Error('User not authenticated');
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/start`, {
+      const response = await fetch(`${API_URL}/api/progress/module/${moduleId}/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -235,7 +235,7 @@ export const completeSubmodule = async (moduleId, submoduleId) => {
       const userId = parseInt(getCurrentUserId());
       if (!userId) throw new Error('User not authenticated');
       
-      const response = await fetch(`${API_BASE_URL}/api/progress/module/${moduleId}/submodule/${submoduleId}/complete`, {
+      const response = await fetch(`${API_URL}/api/progress/module/${moduleId}/submodule/${submoduleId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,7 +262,7 @@ export const completeSubmodule = async (moduleId, submoduleId) => {
  */
 export const canAccessModule = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/modules/${moduleId}/access`, {
+    const response = await fetch(`${API_URL}/api/progress/modules/${moduleId}/access`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -282,7 +282,7 @@ export const canAccessModule = async (moduleId) => {
 
 export const completeKeyTerm = async (moduleId, termIndex) => {
 try {
-  const response = await fetch(`${API_BASE_URL}/progress/modules/${moduleId}/terms/${termIndex}/complete`, {
+  const response = await fetch(`${API_URL}/progress/modules/${moduleId}/terms/${termIndex}/complete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -302,7 +302,7 @@ try {
 
 export const getTermProgress = async (moduleId, termIndex) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/progress/modules/${moduleId}/terms/${termIndex}`);
+    const response = await fetch(`${API_URL}/progress/modules/${moduleId}/terms/${termIndex}`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch term progress: ${response.statusText}`);
@@ -318,7 +318,7 @@ export const getTermProgress = async (moduleId, termIndex) => {
 
 export const completeModule = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/progress/modules/${moduleId}/complete`, {
+    const response = await fetch(`${API_URL}/progress/modules/${moduleId}/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -343,7 +343,7 @@ export const completeModule = async (moduleId) => {
  */
 export const initializeStepProgress = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/steps/modules/${moduleId}/initialize`, {
+    const response = await fetch(`${API_URL}/api/progress/steps/modules/${moduleId}/initialize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -370,7 +370,7 @@ export const initializeStepProgress = async (moduleId) => {
  */
 export const getStepsForModule = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/progress/steps/modules/${moduleId}`, {
+    const response = await fetch(`${API_URL}/api/progress/steps/modules/${moduleId}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -396,7 +396,7 @@ export const getStepsForModule = async (moduleId) => {
 export const getStepsForKeyTerm = async (moduleId, termIndex) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/terms/${termIndex}`, 
+      `${API_URL}/api/progress/steps/modules/${moduleId}/terms/${termIndex}`, 
       {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -424,7 +424,7 @@ export const getStepsForKeyTerm = async (moduleId, termIndex) => {
 export const completeArticle = async (moduleId, submoduleId) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/articles/${submoduleId}/complete`, 
+      `${API_URL}/api/progress/steps/modules/${moduleId}/articles/${submoduleId}/complete`, 
       {
         method: 'POST',
         headers: {
@@ -456,7 +456,7 @@ export const updateArticleProgress = async (moduleId, submoduleId, percentage) =
   try {
     console.log("Updating article progress", { moduleId, submoduleId, percentage });
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/articles/${submoduleId}/progress`, 
+      `${API_URL}/api/progress/steps/modules/${moduleId}/articles/${submoduleId}/progress`, 
       {
         method: 'POST',
         headers: {
@@ -487,7 +487,7 @@ export const updateArticleProgress = async (moduleId, submoduleId, percentage) =
 export const completeVideo = async (moduleId, videoId) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/videos/${videoId}/complete`,
+      `${API_URL}/api/progress/steps/modules/${moduleId}/videos/${videoId}/complete`,
       {
         method: 'POST',
         headers: {
@@ -518,7 +518,7 @@ export const completeVideo = async (moduleId, videoId) => {
 export const updateVideoProgress = async (moduleId, videoId, percentage) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/videos/${videoId}/progress`,
+      `${API_URL}/api/progress/steps/modules/${moduleId}/videos/${videoId}/progress`,
       {
         method: 'POST',
         headers: {
@@ -550,7 +550,7 @@ export const updateVideoProgress = async (moduleId, videoId, percentage) => {
 export const completeQuiz = async (moduleId, quizId, score) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/quizzes/${quizId}/complete`,
+      `${API_URL}/api/progress/steps/modules/${moduleId}/quizzes/${quizId}/complete`,
       {
         method: 'POST',
         headers: {
@@ -581,7 +581,7 @@ export const completeQuiz = async (moduleId, quizId, score) => {
 export const checkKeyTermCompletion = async (moduleId, termIndex) => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/progress/steps/modules/${moduleId}/terms/${termIndex}/check-completion`,
+      `${API_URL}/api/progress/steps/modules/${moduleId}/terms/${termIndex}/check-completion`,
       {
         method: 'POST',
         headers: {

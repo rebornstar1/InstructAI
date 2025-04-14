@@ -26,6 +26,8 @@ import { fetchWithAuth } from "@/lib/api";
 import { usePathname } from 'next/navigation';
 import Navbar2 from "./Navbar2";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export default function Dashboard() {
   const pathname = usePathname();
 
@@ -145,8 +147,8 @@ useEffect(() => {
       setLeaderboardLoading(true);
       
       // Fetch data from real API endpoints
-      const streakResponse = await fetch('http://localhost:8007/api/leaderboard/streaks');
-      const xpResponse = await fetch('http://localhost:8007/api/leaderboard/xp');
+      const streakResponse = await fetch(`${API_URL}/api/leaderboard/streaks`);
+      const xpResponse = await fetch(`${API_URL}/api/leaderboard/xp`);
       
       if (!streakResponse.ok || !xpResponse.ok) {
         throw new Error('Failed to fetch leaderboard data');

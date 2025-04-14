@@ -1,4 +1,5 @@
-const API_URL = 'http://localhost:8007/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 
 export async function fetchWithAuth(endpoint, options = {}) {
   console.log("okay" , options)
@@ -22,7 +23,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
   };
 
   console.log("configg" , config)
-  const response = await fetch(`${API_URL}/users/profile`, {
+  const response = await fetch(`${API_URL}/api/users/profile`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -30,7 +31,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
     },
     
   });
-  // const response = await fetch(`${API_URL}${endpoint}`, config);
+  // const response = await fetch(`${API_URL}/api${endpoint}`, config);
   
   
   

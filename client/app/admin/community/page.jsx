@@ -74,6 +74,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export default function ThreadManagementDashboard() {
   // State management
   const [activeTab, setActiveTab] = useState("threads");
@@ -115,7 +117,7 @@ export default function ThreadManagementDashboard() {
     setShowError(false);
     
     try {
-      const response = await fetch("http://localhost:8007/api/threads/main");
+      const response = await fetch(`${API_URL}/api/threads/main`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
@@ -134,7 +136,7 @@ export default function ThreadManagementDashboard() {
   // Fetch available users for adding to threads
   const fetchUsers = async () => {
     try {
-      const response = await fetch("http://localhost:8007/api/users");
+      const response = await fetch(`${API_URL}/api/users`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
@@ -150,7 +152,7 @@ export default function ThreadManagementDashboard() {
   // Fetch available courses for adding to threads
   const fetchCourses = async () => {
     try {
-      const response = await fetch("http://localhost:8007/api/courses/simplified");
+      const response = await fetch(`${API_URL}/api/courses/simplified`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
@@ -167,7 +169,7 @@ export default function ThreadManagementDashboard() {
   // Fetch users for a specific thread
   const fetchThreadUsers = async (threadId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/users`);
+      const response = await fetch(`${API_URL}/api/threads/${threadId}/users`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
@@ -202,7 +204,7 @@ export default function ThreadManagementDashboard() {
     }
     
     try {
-      const response = await fetch("http://localhost:8007/api/threads", {
+      const response = await fetch(`${API_URL}/api/threads`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -236,7 +238,7 @@ export default function ThreadManagementDashboard() {
   // Update existing thread
   const handleUpdateThread = async () => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -259,7 +261,7 @@ export default function ThreadManagementDashboard() {
   // Delete thread
   const handleDeleteThread = async () => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}`, {
         method: "DELETE",
       });
       
@@ -279,7 +281,7 @@ export default function ThreadManagementDashboard() {
   // Add user to thread
   const handleAddUserToThread = async () => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}/users/${selectedUserId}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}/users/${selectedUserId}`, {
         method: "POST",
       });
       
@@ -299,7 +301,7 @@ export default function ThreadManagementDashboard() {
   // Remove user from thread
   const handleRemoveUserFromThread = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}/users/${userId}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}/users/${userId}`, {
         method: "DELETE",
       });
       
@@ -317,7 +319,7 @@ export default function ThreadManagementDashboard() {
   // Add course to thread
   const handleAddCourseToThread = async () => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}/courses/${selectedCourseId}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}/courses/${selectedCourseId}`, {
         method: "POST",
       });
       
@@ -337,7 +339,7 @@ export default function ThreadManagementDashboard() {
   // Remove course from thread
   const handleRemoveCourseFromThread = async (courseId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${selectedThread.id}/courses/${courseId}`, {
+      const response = await fetch(`${API_URL}/api/threads/${selectedThread.id}/courses/${courseId}`, {
         method: "DELETE",
       });
       

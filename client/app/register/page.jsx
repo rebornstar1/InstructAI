@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, UserPlus, Linkedin, Mail, User } from "lucide-react";
 import { SparklesCore } from "@/components/ui/sparkles";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     username: '',
@@ -95,7 +97,7 @@ export default function RegisterPage() {
     
     try {
       // Registration API call
-      const response = await fetch('http://localhost:8007/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

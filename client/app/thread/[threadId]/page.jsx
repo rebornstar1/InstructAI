@@ -60,7 +60,11 @@ import { getThreadById, getUsersByThreadId } from "@/services/threadApi";
 import { getConversationsByThreadId } from "@/services/conversationApi.js";
 import { getMessagesByConversationId, createMessage, createReply } from "@/services/messageApi";
 
-const API_URL = 'http://localhost:8007/api';
+// const API_URL = 'http://localhost:8007/api';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
+
 
 // User Profile Service
 async function fetchUserProfile() {
@@ -71,7 +75,7 @@ async function fetchUserProfile() {
       throw new Error('No authentication token found');
     }
     
-    const response = await fetch(`${API_URL}/users/profile`, {
+    const response = await fetch(`${API_URL}/api/users/profile`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

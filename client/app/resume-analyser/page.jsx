@@ -7,6 +7,8 @@ import { Star } from "lucide-react";
 import EnhancedQuiz from "./EnhancedQuiz"; 
 import { usePathname } from 'next/navigation';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 
 // Helper component for navigation links
 const NavLink = ({ href, active, disabled, children }) => (
@@ -129,7 +131,7 @@ const ResumeAnalyzerPage = () => {
             return { ...prev, progress: prev.progress + 5 };
           });
         }, 100);
-        fetch("http://localhost:8007/api/documents/extract-topics", {
+        fetch(`${API_URL}/api/documents/extract-topics`, {
           method: "POST",
           body: formData,
         })
@@ -196,7 +198,7 @@ const ResumeAnalyzerPage = () => {
           return { ...prev, progress: prev.progress + 5 };
         });
       }, 100);
-      fetch("http://localhost:8007/api/learning-resources/generate-multiple-quizzes", {
+      fetch(`${API_URL}/api/learning-resources/generate-multiple-quizzes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(topicNames),

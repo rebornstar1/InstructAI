@@ -3,9 +3,12 @@
 /**
  * Service for handling key term extraction and processing
  */
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export async function extractKeyTerms(moduleId, moduleTitle, conceptTitle) {
     try {
-      const response = await fetch('http://localhost:8007/api/v1/keyterms/extract', {
+      const response = await fetch(`${API_URL}/api/v1/keyterms/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -39,7 +42,7 @@ export async function extractKeyTerms(moduleId, moduleTitle, conceptTitle) {
       const definitions = keyTermsData.keyTerms.map(item => item.definition);
   
       // Make API call to update the module with key terms
-      const response = await fetch(`http://localhost:8007/api/modules/${moduleId}/key-terms`, {
+      const response = await fetch(`${API_URL}/api/modules/${moduleId}/key-terms`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

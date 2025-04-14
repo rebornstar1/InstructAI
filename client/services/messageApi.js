@@ -5,9 +5,12 @@
  */
 
 // Get all messages in a conversation
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export const getMessagesByConversationId = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/messages`);
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/messages`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -21,7 +24,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Get only top-level messages in a conversation
   export const getTopLevelMessagesByConversationId = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/top-level-messages`);
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/top-level-messages`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -35,7 +38,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Get threaded messages (top-level with replies)
   export const getThreadedMessagesByConversationId = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/threaded-messages`);
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/threaded-messages`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -49,7 +52,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Create a new top-level message
   export const createMessage = async (conversationId, messageData) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/messages`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -76,7 +79,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Create a reply to a message
   export const createReply = async (messageId, messageData) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/messages/${messageId}/replies`, {
+      const response = await fetch(`${API_URL}/api/messages/${messageId}/replies`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,7 +106,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Update a message
   export const updateMessage = async (messageId, messageData) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/messages/${messageId}`, {
+      const response = await fetch(`${API_URL}/api/messages/${messageId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -128,7 +131,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Delete a message
   export const deleteMessage = async (messageId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/messages/${messageId}`, {
+      const response = await fetch(`${API_URL}/api/messages/${messageId}`, {
         method: "DELETE"
       });
       
@@ -146,7 +149,7 @@ export const getMessagesByConversationId = async (conversationId) => {
   // Search messages
   export const searchMessages = async (searchTerm) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/messages/search?term=${encodeURIComponent(searchTerm)}`);
+      const response = await fetch(`${API_URL}/api/messages/search?term=${encodeURIComponent(searchTerm)}`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);

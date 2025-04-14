@@ -1,6 +1,9 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
+
 export const getConversationsByThreadId = async (threadId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`);
+      const response = await fetch(`${API_URL}/api/threads/${threadId}/conversations`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -13,7 +16,7 @@ export const getConversationsByThreadId = async (threadId) => {
   
   export const getConversationById = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}`);
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}`);
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);
       }
@@ -27,7 +30,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Create a new conversation in a thread
   export const createConversation = async (threadId, conversationData) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`, {
+      const response = await fetch(`${API_URL}/api/threads/${threadId}/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -53,7 +56,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Update a conversation
   export const updateConversation = async (conversationId, conversationData) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -78,7 +81,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Delete a conversation
   export const deleteConversation = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
         method: "DELETE"
       });
       
@@ -96,7 +99,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Add a participant to a conversation
   export const addParticipantToConversation = async (conversationId, userId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/participants/${userId}`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/participants/${userId}`, {
         method: "POST"
       });
       
@@ -114,7 +117,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Remove a participant from a conversation
   export const removeParticipantFromConversation = async (conversationId, userId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/conversations/${conversationId}/participants/${userId}`, {
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/participants/${userId}`, {
         method: "DELETE"
       });
       
@@ -132,7 +135,7 @@ export const getConversationsByThreadId = async (threadId) => {
   // Get conversations by participant
   export const getConversationsByParticipantId = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:8007/api/users/${userId}/conversations`);
+      const response = await fetch(`${API_URL}/api/users/${userId}/conversations`);
       
       if (!response.ok) {
         throw new Error(`API responded with status: ${response.status}`);

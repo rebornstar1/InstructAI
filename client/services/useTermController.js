@@ -6,8 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 import { useCallback } from "react";
 
 // Base API URL
-const API_BASE_URL = 'http://localhost:8007/api';
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 /**
  * Controller component for managing key term interactions
  * Acts as a bridge between the UI and the backend APIs
@@ -26,7 +25,7 @@ export default function useTermController(moduleId) {
   const loadTerms = useCallback(async (moduleId) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}`,{
+      const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}`,{
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -75,7 +74,7 @@ export default function useTermController(moduleId) {
       setIsLoading(true);
       setActiveTermIndex(termIndex);
       
-      const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}`,{
+      const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}`,{
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -126,7 +125,7 @@ export default function useTermController(moduleId) {
       }
       
       // Call API to set term as active
-      const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/activate`, {
+      const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/activate`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -159,7 +158,7 @@ export default function useTermController(moduleId) {
     try {
       setIsGenerating(true);
       
-      const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/generate`, {
+      const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/generate`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -200,7 +199,7 @@ export default function useTermController(moduleId) {
   // Complete a resource for a term (article, video, quiz)
   const completeResource = useCallback(async (moduleId, termIndex, resourceType) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/resource/${resourceType}/complete`, {
+      const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/resource/${resourceType}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,7 +262,7 @@ export default function useTermController(moduleId) {
   // Update progress for a resource (for partial completion)
 const updateResourceProgress = useCallback(async (moduleId, termIndex, resourceType, percentage) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/resource/${resourceType}/progress`, {
+    const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/resource/${resourceType}/progress`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -293,7 +292,7 @@ const completeQuiz = useCallback(async (moduleId, termIndex, quizId, score) => {
   console.log("score",score);
   
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/quiz/${quizId}/complete`, {
+    const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/quiz/${quizId}/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -342,7 +341,7 @@ const completeQuiz = useCallback(async (moduleId, termIndex, quizId, score) => {
 // Check if a term is completed
 const checkTermCompletion = useCallback(async (moduleId, termIndex) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/terms/module/${moduleId}/term/${termIndex}/check-completion`, {
+    const response = await fetch(`${API_URL}/api/v1/terms/module/${moduleId}/term/${termIndex}/check-completion`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

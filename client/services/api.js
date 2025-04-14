@@ -1,13 +1,13 @@
 // services/api.js - Centralized API service
 
-const API_BASE_URL = 'http://localhost:8007/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 
 /**
  * Fetch all available courses
  */
 export const fetchCourses = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified`);
+    const response = await fetch(`${API_URL}/api/courses/simplified`);
     if (!response.ok) {
       throw new Error('Failed to fetch courses');
     }
@@ -23,7 +23,7 @@ export const fetchCourses = async () => {
  */
 export const fetchCourse = async (courseId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified/${courseId}`);
+    const response = await fetch(`${API_URL}/api/courses/simplified/${courseId}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch course with ID: ${courseId}`);
     }
@@ -39,7 +39,7 @@ export const fetchCourse = async (courseId) => {
  */
 export const fetchModule = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}`);
+    const response = await fetch(`${API_URL}/api/modules/${moduleId}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch module with ID: ${moduleId}`);
     }
@@ -56,7 +56,7 @@ export const fetchModule = async (moduleId) => {
  */
 export const checkLearningResources = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}`);
+    const response = await fetch(`${API_URL}/api/modules/${moduleId}`);
     if (response.ok) {
       const data = await response.json();
       console.log(data,"data");
@@ -74,7 +74,7 @@ export const checkLearningResources = async (moduleId) => {
  */
 export const generateLearningResources = async (request) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/learning-resources/generate`, {
+    const response = await fetch(`${API_URL}/api/learning-resources/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -96,7 +96,7 @@ export const generateLearningResources = async (request) => {
  */
 export const createCourse = async (courseData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified/generate`, {
+    const response = await fetch(`${API_URL}/api/courses/simplified/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(courseData),
@@ -118,7 +118,7 @@ export const createCourse = async (courseData) => {
  */
 export const startInteractiveCourseCreation = async (topic) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified/interactive/start`, {
+    const response = await fetch(`${API_URL}/api/courses/simplified/interactive/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic }),
@@ -140,7 +140,7 @@ export const startInteractiveCourseCreation = async (topic) => {
  */
 export const continueInteractiveCourseCreation = async (sessionId, answers) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified/interactive/continue?sessionId=${sessionId}`, {
+    const response = await fetch(`${API_URL}/api/courses/simplified/interactive/continue?sessionId=${sessionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(answers),
@@ -162,7 +162,7 @@ export const continueInteractiveCourseCreation = async (sessionId, answers) => {
  */
 export const finalizeInteractiveCourse = async (sessionId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/courses/simplified/interactive/finalize?sessionId=${sessionId}`, {
+    const response = await fetch(`${API_URL}/api/courses/simplified/interactive/finalize?sessionId=${sessionId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -188,7 +188,7 @@ export const finalizeInteractiveCourse = async (sessionId) => {
  */
 export const generateTermContent = async (request) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/modules/term/generate`, {
+    const response = await fetch(`${API_URL}/api/modules/term/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -222,7 +222,7 @@ export const generateTermContent = async (request) => {
 
 export const getModuleTerms = async (moduleId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}/terms`);
+    const response = await fetch(`${API_URL}/api/modules/${moduleId}/terms`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch module terms: ${response.statusText}`);
@@ -237,7 +237,7 @@ export const getModuleTerms = async (moduleId) => {
 
 export const getTermContent = async (moduleId, termId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/modules/${moduleId}/terms/${termId}`);
+    const response = await fetch(`${API_URL}/api/modules/${moduleId}/terms/${termId}`);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch term content: ${response.statusText}`);
@@ -252,7 +252,7 @@ export const getTermContent = async (moduleId, termId) => {
 
 export const completeModuleTerm = async (moduleId, termId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/progress/modules/${moduleId}/terms/${termId}/complete`, {
+    const response = await fetch(`${API_URL}/api/progress/modules/${moduleId}/terms/${termId}/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

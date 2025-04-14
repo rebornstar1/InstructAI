@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from 'next/navigation';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 // Simple loader component that maintains height
 // Simple loader component that maintains component boundaries
 // Enhanced simple loader component with professional touches
@@ -210,7 +212,7 @@ export default function CourseCreationComponent({
     setInteractiveMode(true);
     
     try {
-      const response = await fetch("http://localhost:8007/api/courses/simplified/interactive/start", {
+      const response = await fetch(`${API_URL}/api/courses/simplified/interactive/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -262,7 +264,7 @@ export default function CourseCreationComponent({
     setIsLoading(true);
     
     try {
-      const response = await fetch(`http://localhost:8007/api/courses/simplified/interactive/continue?sessionId=${sessionId}`, {
+      const response = await fetch(`${API_URL}/api/courses/simplified/interactive/continue?sessionId=${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userAnswers),
@@ -320,7 +322,7 @@ export default function CourseCreationComponent({
     setIsLoading(true);
     
     try {
-      const response = await fetch(`http://localhost:8007/api/courses/simplified/interactive/finalize?sessionId=${sessionId}`, {
+      const response = await fetch(`${API_URL}/api/courses/simplified/interactive/finalize?sessionId=${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -390,7 +392,7 @@ export default function CourseCreationComponent({
     setIsLoading(true);
     
     try {
-      const response = await fetch("http://localhost:8007/api/courses/simplified/generate", {
+      const response = await fetch("${API_URL}/api/courses/simplified/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

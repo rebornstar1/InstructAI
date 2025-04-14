@@ -49,6 +49,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
 export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +70,7 @@ export default function CoursesPage() {
     // Fetch available courses from backend
     const fetchCourses = async () => {
       try {
-        const response = await fetch("http://localhost:8007/api/courses/simplified");
+        const response = await fetch(`${API_URL}/api/courses/simplified`);
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
@@ -111,7 +113,7 @@ export default function CoursesPage() {
     // Refetch courses on retry
     const fetchCourses = async () => {
       try {
-        const response = await fetch("http://localhost:8007/api/courses/simplified");
+        const response = await fetch(`${API_URL}/api/courses/simplified`);
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
