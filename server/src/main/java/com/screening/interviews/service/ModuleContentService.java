@@ -219,31 +219,47 @@ public class ModuleContentService {
         String safeDefinition = sanitizeInput(definition);
         String safeContext = contextTitle != null ? sanitizeInput(contextTitle) : safeTerm.split(" ")[0];
 
+        // Generate a more structured prompt with clear JSON format instructions
+        // Using a similar approach to InteractiveCourseService
         String quizPrompt = String.format(
-                "Create a quiz focused specifically on '%s' with 5 multiple-choice questions. " +
-                        "Begin with this definition as your foundation: '%s' " +
-                        "For each question: " +
-                        "1. Write questions that test understanding of different aspects and applications of this specific term " +
-                        "2. Provide 4 answer options (A, B, C, D) with carefully designed distractors " +
-                        "3. Indicate the correct answer " +
-                        "4. Include a brief explanation for why the answer is correct " +
-                        "Format as a structured JSON object with these exact fields: " +
-                        "{ " +
-                        "  \"questions\": [ " +
-                        "    { " +
-                        "      \"question\": \"...\", " +
-                        "      \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"], " +
-                        "      \"correctAnswer\": \"B\", " +
-                        "      \"explanation\": \"...\" " +
-                        "    } " +
-                        "  ] " +
-                        "} " +
-                        "Include questions that test: definition recognition, key characteristics, practical applications, " +
-                        "common misconceptions, and relationship to other related concepts in %s.",
-                safeTerm, safeDefinition, safeContext
+                """
+                You are an educational quiz creator specializing in precise JSON responses.
+                
+                Create a quiz about '%s' with 5 multiple-choice questions based on this definition: '%s'
+                
+                Format your response EXACTLY as follows:
+                {
+                  "questions": [
+                    {
+                      "question": "Question text here?",
+                      "options": [
+                        "A. First option",
+                        "B. Second option",
+                        "C. Third option",
+                        "D. Fourth option"
+                      ],
+                      "correctAnswer": "A",
+                      "explanation": "Explanation for correct answer"
+                    },
+                    // more questions here...
+                  ]
+                }
+                
+                CRITICAL FORMATTING RULES:
+                1. Use double quotes for all JSON keys and string values
+                2. Ensure proper JSON syntax with correct commas between items
+                3. DO NOT include any markdown formatting (```json, etc.)
+                4. DO NOT include any explanatory text before or after the JSON
+                5. Ensure each question follows the EXACT format shown above
+                6. Do not use line breaks within string values
+                
+                The questions should test understanding of different aspects of %s in the context of %s.
+                """,
+                safeTerm, safeDefinition, safeTerm, safeContext
         );
 
-        String quizJson = callGeminiApi(quizPrompt); // Placeholder for API call
+        // Call Gemini with the enhanced prompt
+        String quizJson = callGeminiForQuiz(quizPrompt);
         List<QuestionDto> questions = parseQuizQuestions(quizJson);
 
         return QuizDto.builder()
@@ -254,6 +270,164 @@ public class ModuleContentService {
                 .questions(questions)
                 .passingScore(70)
                 .build();
+    }
+
+
+    private String callGeminiForQuiz(String prompt) {
+        try {
+            // Properly escape the prompt for JSON payload
+            String escapedPrompt = objectMapper.writeValueAsString(prompt);
+            escapedPrompt = escapedPrompt.substring(1, escapedPrompt.length() - 1);
+
+            // Construct a cleaner payload using the approach from InteractiveCourseService
+            String payload = String.format("""
+        {
+            "contents": [{
+                "parts": [{
+                    "text": "%s"
+                }]
+            }]
+        }
+        """, escapedPrompt);
+
+            logger.info("Calling Gemini API for quiz generation...");
+            String rawResponse = geminiWebClient.post()
+                    .uri("") // URL is already set in the WebClient bean
+                    .bodyValue(payload)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (logger.isTraceEnabled()) {
+                logger.trace("Raw response from Gemini API: {}", rawResponse);
+            }
+
+            // Extract the text using the more reliable method from InteractiveCourseService
+            JsonNode root = objectMapper.readTree(rawResponse);
+            JsonNode textNode = root.path("candidates")
+                    .path(0)
+                    .path("content")
+                    .path("parts")
+                    .path(0)
+                    .path("text");
+
+            String generatedText = textNode.asText();
+
+            if (generatedText == null || generatedText.trim().isEmpty()) {
+                logger.warn("Gemini API returned empty text content");
+                return generateFallbackQuizJson();
+            }
+
+            // Clean up any potential formatting issues
+            generatedText = generatedText.replaceAll("```json", "")
+                    .replaceAll("```", "")
+                    .trim();
+
+            // Validate JSON before returning
+            try {
+                objectMapper.readTree(generatedText);
+                return generatedText;
+            } catch (Exception e) {
+                logger.warn("Generated text is not valid JSON: {}", e.getMessage());
+                return cleanAndRepairJson(generatedText);
+            }
+
+        } catch (Exception e) {
+            logger.error("Error calling Gemini API for quiz: {}", e.getMessage());
+            return generateFallbackQuizJson();
+        }
+    }
+
+    private String cleanAndRepairJson(String potentialJson) {
+        try {
+            // First remove any text before the first { and after the last }
+            int firstBrace = potentialJson.indexOf('{');
+            int lastBrace = potentialJson.lastIndexOf('}');
+
+            if (firstBrace >= 0 && lastBrace > firstBrace) {
+                potentialJson = potentialJson.substring(firstBrace, lastBrace + 1);
+            }
+
+            // Common replacements for malformed JSON
+            potentialJson = potentialJson
+                    .replaceAll("\\\\\"", "\"") // Fix escaped quotes
+                    .replaceAll(",\\s*}", "}") // Remove trailing commas
+                    .replaceAll(",\\s*]", "]") // Remove trailing commas in arrays
+                    .replaceAll("([{,])\\s*\"?(\\w+)\"?\\s*:", "$1\"$2\":") // Ensure keys are quoted
+                    .replaceAll("\"\\s*:\\s*\"([^\"]+)\"\\s*([,}])", "\":\"$1\"$2") // Fix string values
+                    .replaceAll("(\\d),([0-9])", "$1.$2"); // Fix numbers (if commas used instead of dots)
+
+            // Try to parse the JSON now
+            objectMapper.readTree(potentialJson);
+            return potentialJson;
+        } catch (Exception e) {
+            logger.error("Failed to repair JSON: {}", e.getMessage());
+            return generateFallbackQuizJson();
+        }
+    }
+
+    private String generateFallbackQuizJson() {
+        return """
+    {
+      "questions": [
+        {
+          "question": "What is the best way to understand this concept?",
+          "options": [
+            "A. Study core principles",
+            "B. Apply in practical scenarios",
+            "C. Memorize definitions",
+            "D. Compare with similar concepts"
+          ],
+          "correctAnswer": "B",
+          "explanation": "Practical application helps reinforce understanding."
+        },
+        {
+          "question": "Which statement best defines this term?",
+          "options": [
+            "A. A fundamental building block",
+            "B. An advanced technique",
+            "C. A specialized application",
+            "D. A theoretical framework"
+          ],
+          "correctAnswer": "A",
+          "explanation": "This term represents a core concept in the field."
+        },
+        {
+          "question": "What is the primary purpose of this concept?",
+          "options": [
+            "A. To simplify complex processes",
+            "B. To enable additional functionality",
+            "C. To standardize approaches",
+            "D. To optimize performance"
+          ],
+          "correctAnswer": "C",
+          "explanation": "Standardization is the main benefit."
+        },
+        {
+          "question": "How would you implement this in a real-world scenario?",
+          "options": [
+            "A. Through careful planning",
+            "B. With specialized tools",
+            "C. Following established patterns",
+            "D. Using an incremental approach"
+          ],
+          "correctAnswer": "C",
+          "explanation": "Following patterns ensures reliable implementation."
+        },
+        {
+          "question": "What is a common misconception about this concept?",
+          "options": [
+            "A. It's only for advanced users",
+            "B. It's difficult to implement",
+            "C. It's not widely applicable",
+            "D. It requires specialized knowledge"
+          ],
+          "correctAnswer": "D",
+          "explanation": "While helpful, specialized knowledge is not required."
+        }
+      ]
+    }
+    """;
     }
 
     public Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
@@ -614,35 +788,155 @@ public class ModuleContentService {
         List<QuestionDto> questions = new ArrayList<>();
 
         try {
-            String cleanedJson = cleanJsonString(quizJson);
-            JsonNode root = objectMapper.readTree(cleanedJson);
-
+            // Attempt to parse the JSON
+            JsonNode root = objectMapper.readTree(quizJson);
             JsonNode questionsNode = root.has("questions") ? root.get("questions") : root;
 
+            // If questions is not an array, handle the error gracefully
             if (!questionsNode.isArray()) {
-                logger.warn("Questions node is not an array. Attempting to extract single question.");
-                QuestionDto question = extractSingleQuestion(questionsNode);
-                if (question != null) {
-                    questions.add(question);
-                }
-            } else {
-                for (JsonNode questionNode : questionsNode) {
-                    QuestionDto question = extractSingleQuestion(questionNode);
-                    if (question != null) {
-                        questions.add(question);
+                logger.warn("Questions node is not an array. Using fallback questions.");
+                return createFallbackQuestions();
+            }
+
+            // Process each question
+            for (JsonNode questionNode : questionsNode) {
+                try {
+                    // Extract required fields with careful null checks
+                    String questionText = questionNode.has("question") ?
+                            questionNode.get("question").asText() : null;
+
+                    if (questionText == null || questionText.trim().isEmpty()) {
+                        logger.warn("Question text is missing or empty, skipping");
+                        continue;
                     }
+
+                    // Extract options with error handling
+                    List<String> options = new ArrayList<>();
+                    if (questionNode.has("options") && questionNode.get("options").isArray()) {
+                        JsonNode optionsNode = questionNode.get("options");
+                        for (JsonNode option : optionsNode) {
+                            options.add(option.asText());
+                        }
+                    }
+
+                    // If no options were found, skip this question
+                    if (options.isEmpty()) {
+                        logger.warn("No options found for question: {}", questionText);
+                        continue;
+                    }
+
+                    // Extract correctAnswer with fallback to first option
+                    String correctAnswer = "A"; // Default to first option
+                    if (questionNode.has("correctAnswer")) {
+                        correctAnswer = questionNode.get("correctAnswer").asText();
+                        // If correct answer is just a number, convert to letter
+                        if (correctAnswer.matches("\\d+")) {
+                            int index = Integer.parseInt(correctAnswer);
+                            correctAnswer = String.valueOf((char)('A' + (index - 1)));
+                        }
+                        // If it's just a letter without the A. format, ensure it's capitalized
+                        if (correctAnswer.length() == 1) {
+                            correctAnswer = correctAnswer.toUpperCase();
+                        }
+                        // If it's in the "A. Answer" format, extract just the letter
+                        if (correctAnswer.contains(".")) {
+                            correctAnswer = correctAnswer.substring(0, 1).toUpperCase();
+                        }
+                    }
+
+                    // Extract explanation with fallback
+                    String explanation = "Correct answer based on the term definition.";
+                    if (questionNode.has("explanation")) {
+                        explanation = questionNode.get("explanation").asText();
+                    }
+
+                    // Create and add the question
+                    QuestionDto question = QuestionDto.builder()
+                            .question(questionText)
+                            .options(options)
+                            .correctAnswer(correctAnswer)
+                            .explanation(explanation)
+                            .build();
+
+                    questions.add(question);
+
+                } catch (Exception e) {
+                    logger.warn("Error processing individual question: {}", e.getMessage());
+                    // Continue to the next question rather than failing the entire process
                 }
             }
         } catch (Exception e) {
-            logger.error("Error parsing quiz JSON: {}", e.getMessage(), e);
+            logger.error("Error parsing quiz JSON: {}", e.getMessage());
         }
 
+        // If no valid questions were created, use fallback questions
         if (questions.isEmpty()) {
-            logger.warn("No questions parsed. Generating default question.");
-            questions.add(createDefaultQuestion());
+            logger.warn("No valid questions were parsed. Using fallback questions.");
+            return createFallbackQuestions();
         }
 
         return questions;
+    }
+
+    private List<QuestionDto> createFallbackQuestions() {
+        List<QuestionDto> fallbackQuestions = new ArrayList<>();
+
+        fallbackQuestions.add(QuestionDto.builder()
+                .question("What is the main concept being described?")
+                .options(Arrays.asList(
+                        "A. A fundamental principle",
+                        "B. An advanced technique",
+                        "C. A specialized tool",
+                        "D. A theoretical framework"))
+                .correctAnswer("A")
+                .explanation("The term refers to a fundamental concept.")
+                .build());
+
+        fallbackQuestions.add(QuestionDto.builder()
+                .question("How is this concept typically applied?")
+                .options(Arrays.asList(
+                        "A. In theoretical research",
+                        "B. In practical applications",
+                        "C. In academic discussions",
+                        "D. In historical contexts"))
+                .correctAnswer("B")
+                .explanation("The concept is most valuable in practical scenarios.")
+                .build());
+
+        fallbackQuestions.add(QuestionDto.builder()
+                .question("What is a key benefit of understanding this concept?")
+                .options(Arrays.asList(
+                        "A. Improved problem-solving",
+                        "B. Better communication",
+                        "C. Enhanced creativity",
+                        "D. Stronger analytical skills"))
+                .correctAnswer("A")
+                .explanation("Understanding this concept enhances problem-solving abilities.")
+                .build());
+
+        fallbackQuestions.add(QuestionDto.builder()
+                .question("Which field most commonly uses this concept?")
+                .options(Arrays.asList(
+                        "A. Science",
+                        "B. Engineering",
+                        "C. Business",
+                        "D. Education"))
+                .correctAnswer("B")
+                .explanation("This concept is most frequently applied in engineering contexts.")
+                .build());
+
+        fallbackQuestions.add(QuestionDto.builder()
+                .question("What is most closely related to this concept?")
+                .options(Arrays.asList(
+                        "A. Methodologies",
+                        "B. Frameworks",
+                        "C. Principles",
+                        "D. Tools"))
+                .correctAnswer("C")
+                .explanation("The concept is most closely related to fundamental principles.")
+                .build());
+
+        return fallbackQuestions;
     }
 
     private String cleanJsonString(String rawJson) {
