@@ -1103,7 +1103,7 @@ public class ModuleContentService {
      */
     @Transactional
     public void generateTermResourcesIfNeeded(Long userId, Long moduleId, Integer termIndex,
-                                               String term, String definition) {
+                                              String term, String definition) {
         log.info("Checking if term resources need to be generated for term {}", termIndex);
 
         UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)

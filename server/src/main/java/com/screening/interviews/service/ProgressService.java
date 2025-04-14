@@ -1336,6 +1336,8 @@ public class ProgressService {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
         Map<String, Object> termResources = getTermResources(progress, termIndex);
 
+        log.info("Term resources before update: {}", termResources);
+
         if (termResources == null) {
             termResources = new HashMap<>();
         }

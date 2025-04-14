@@ -49,23 +49,43 @@ export default function ModuleDetailPage({ params }) {
       try {
         setIsLoading(true);
         
-        // Fetch module data
+        // Since the module has already been started in navigateToModule,
+        // we can focus on fetching the data we need
+        
+        // Step 1: Get the latest module progress
+        const progress = await getModuleProgress(moduleId);
+        setModuleProgress(progress);
+        console.log("Module progress loaded:", progress);
+        
+        // Step 2: Fetch the module data
         const moduleData = await fetchModule(moduleId);
         setModule(moduleData);
+        console.log("Module data loaded:", moduleData);
         
-        // Initialize progress
-        try {
-          // First start the module if not already started
-          await startModule(moduleId);
+        // Verify we have key terms
+        if (!moduleData.keyTerms || moduleData.keyTerms.length === 0) {
+          console.warn("Module doesn't have key terms - check course generation");
+        } else {
+          console.log(`Module has ${moduleData.keyTerms.length} key terms available`);
+        }
+        
+        // Double-check term unlock status
+        if (progress && !progress.unlockedTerms?.includes(0)) {
+          console.warn("First term not showing as unlocked - may need to restart module");
           
-          // Fetch module progress
-          const progress = await getModuleProgress(moduleId);
-          setModuleProgress(progress);
-        } catch (error) {
-          console.error("Error initializing progress:", error);
+          // Optional: Force restart the module if first term isn't unlocked
+          // This serves as a fallback mechanism
+          try {
+            console.log("Attempting to ensure module is properly started...");
+            await startModule(moduleId);
+            const refreshedProgress = await getModuleProgress(moduleId);
+            setModuleProgress(refreshedProgress);
+          } catch (restartError) {
+            console.error("Error restarting module:", restartError);
+          }
         }
       } catch (error) {
-        console.error("Error loading module:", error);
+        console.error("Error loading module data:", error);
         toast({
           title: "Error",
           description: "Failed to load module data. Please try again.",

@@ -42,7 +42,7 @@ public class CourseService {
     public CourseResponseDto generateCourse(CourseRequestDto request) {
         logger.info("Starting course generation for topic: {}", request.getTopic());
 
-        // Enhanced prompt for better topic gradation and organization
+        // Enhanced prompt that includes key term generation
         String masterPrompt = String.format("""
                 Generate a comprehensive and pedagogically sound course structure for the topic: "%s". 
                 
@@ -75,6 +75,10 @@ public class CourseService {
                    - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
                    - learningObjectives: 3-5 specific, measurable objectives
                    - prerequisites: Any specific modules that should be completed before this one
+                   
+                   IMPORTANT: For each module, also include:
+                   - keyTerms: An array of 5-7 important terms/concepts that learners should master in this module
+                   - definitions: An array of clear 1-2 sentence definitions for each key term (same order as keyTerms)
                 
                 Return the result as a valid JSON object with keys "courseMetadata" and "modules".
                 
@@ -158,6 +162,10 @@ public class CourseService {
                - duration: Estimated time to complete (e.g., "30 minutes", "1 hour")
                - learningObjectives: 3-5 specific, measurable objectives
                - prerequisites: Any specific modules that should be completed before this one
+               
+               IMPORTANT: For each module, also include:
+               - keyTerms: An array of 5-7 important terms/concepts that learners should master in this module
+               - definitions: An array of clear 1-2 sentence definitions for each key term (same order as keyTerms)
             
             Return the result as a valid JSON object with keys "courseMetadata" and "modules".
             
@@ -206,6 +214,8 @@ public class CourseService {
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
                     // Add new fields
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
+                    module.setKeyTerms(moduleDto.getKeyTerms());
+                    module.setDefinitions(moduleDto.getDefinitions());
                     module.setCourse(existingCourse);
                     return module;
                 })
@@ -265,7 +275,10 @@ public class CourseService {
                     module.setDescription(moduleDto.getDescription());
                     module.setDuration(moduleDto.getDuration());
                     module.setLearningObjectives(moduleDto.getLearningObjectives());
-                    // Add new fields
+                    // Add key terms and definitions
+                    module.setKeyTerms(moduleDto.getKeyTerms());
+                    module.setDefinitions(moduleDto.getDefinitions());
+                    // Add complexity level
                     module.setComplexityLevel(moduleDto.getComplexityLevel());
                     module.setCourse(course);
                     return module;
@@ -310,10 +323,7 @@ public class CourseService {
                 .modules(moduleDtos)
                 .build();
     }
-    /**
-     * Calls Gemini with the master prompt, cleans the response of any extraneous characters,
-     * and parses it into a CourseResponseDto.
-     */
+
     /**
      * Calls Gemini with the master prompt, cleans the response of any extraneous characters,
      * and parses it into a CourseResponseDto.
@@ -349,7 +359,12 @@ public class CourseService {
                     .bodyToMono(String.class)
                     .block();
 
-            logger.debug("Raw response from Gemini API: {}", rawResponse);
+            // Log only partial response to avoid flooding logs
+            if (rawResponse != null && rawResponse.length() > 500) {
+                logger.debug("Raw response from Gemini API (first 500 chars): {}", rawResponse.substring(0, 500) + "...");
+            } else {
+                logger.debug("Raw response from Gemini API: {}", rawResponse);
+            }
 
             // Remove any lines starting with '#' (YAML-style comments).
             rawResponse = rawResponse.replaceAll("(?m)^#.*", "").trim();
@@ -385,28 +400,44 @@ public class CourseService {
                     .replaceAll("```", "")
                     .trim();
 
-            // NEW CODE: Add JSON validation and repair steps
+            // Try to parse the response, applying multiple repair attempts if needed
             try {
                 // First, try to parse the response as is
                 return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
             } catch (JsonMappingException jme) {
                 // If parsing fails, log details and attempt to repair the JSON
-                logger.warn("Failed to parse Gemini response JSON. Attempting to fix formatting issues: {}", jme.getMessage());
+                logger.warn("Failed to parse Gemini response JSON. Attempting fixes: {}", jme.getMessage());
 
-                // Implement additional JSON cleanup for specific issues
-                embeddedJson = fixArrayClosingBrackets(embeddedJson);
-                embeddedJson = fixTrailingCommas(embeddedJson);
+                try {
+                    // Step 1: Apply basic fixes
+                    String fixedJson = fixTrailingCommas(embeddedJson);
+                    fixedJson = ensureKeyTermsAndDefinitions(fixedJson);
+                    return objectMapper.readValue(fixedJson, CourseResponseDto.class);
+                } catch (Exception e1) {
+                    logger.warn("Basic fixes failed. Attempting advanced bracket repair: {}", e1.getMessage());
 
-                logger.info("Cleaned JSON, attempting to parse again");
-                return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
+                    try {
+                        // Step 2: Apply more advanced bracket matching fixes
+                        String fixedJson = fixJsonBracketMismatches(embeddedJson);
+                        return objectMapper.readValue(fixedJson, CourseResponseDto.class);
+                    } catch (Exception e2) {
+                        logger.warn("Advanced fixes failed. Attempting last-resort fixes: {}", e2.getMessage());
+
+                        // Step 3: Last resort - try all fixes in combination
+                        String fixedJson = fixTrailingCommas(embeddedJson);
+                        fixedJson = fixJsonBracketMismatches(fixedJson);
+                        fixedJson = ensureKeyTermsAndDefinitions(fixedJson);
+
+                        // Try to parse again
+                        return objectMapper.readValue(fixedJson, CourseResponseDto.class);
+                    }
+                }
             }
-
         } catch (Exception e) {
             logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate course from Gemini API", e);
         }
     }
-
     /**
      * Fix issue with unbalanced array brackets by scanning and balancing them
      */
@@ -504,6 +535,45 @@ public class CourseService {
     }
 
     /**
+     * Ensure each module has keyTerms and definitions fields, adding empty arrays if missing
+     */
+    private String ensureKeyTermsAndDefinitions(String json) {
+        try {
+            // Parse the JSON into a JsonNode
+            JsonNode rootNode = objectMapper.readTree(json);
+
+            // Check if the modules array exists and has elements
+            if (rootNode.has("modules") && rootNode.get("modules").isArray()) {
+                JsonNode modulesNode = rootNode.get("modules");
+                boolean needsUpdate = false;
+
+                // Check each module for keyTerms and definitions
+                for (JsonNode moduleNode : modulesNode) {
+                    if ((!moduleNode.has("keyTerms") || !moduleNode.has("definitions"))) {
+                        needsUpdate = true;
+                        break;
+                    }
+                }
+
+                // If needs update, apply fixes
+                if (needsUpdate) {
+                    logger.info("Adding missing keyTerms and definitions fields to modules");
+
+                    // This is a simple string-based fix that adds empty arrays
+                    // A more robust solution would modify the JsonNode directly and reserialize
+                    json = json.replaceAll("(\"moduleId\"\\s*:\\s*\"[^\"]*\"[^{]*?)(\"title\")",
+                            "$1\"keyTerms\": [], \"definitions\": [], $2");
+                }
+            }
+
+            return json;
+        } catch (Exception e) {
+            logger.warn("Error while ensuring keyTerms and definitions: {}", e.getMessage());
+            return json; // Return original if we can't parse it
+        }
+    }
+
+    /**
      * Helper method to intelligently split a prerequisites string into a list
      * This can be added to your service class or as a utility method
      */
@@ -552,5 +622,133 @@ public class CourseService {
 
         // Default: return the whole string as a single item
         return List.of(input);
+    }
+
+    /**
+     * Advanced JSON repair function that specifically targets mismatched brackets
+     * This handles the case where ']' appears when '}' was expected
+     */
+    private String fixJsonBracketMismatches(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+
+        // Create a more comprehensive JSON repair
+        StringBuilder sb = new StringBuilder();
+        char[] chars = json.toCharArray();
+
+        // Stack to track opening brackets/braces
+        List<Character> stack = new ArrayList<>();
+        boolean inQuote = false;
+        boolean escaped = false;
+
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+
+            // Handle escaping
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                sb.append(c);
+                escaped = true;
+                continue;
+            }
+
+            // Handle quotes
+            if (c == '"' && !escaped) {
+                sb.append(c);
+                inQuote = !inQuote;
+                continue;
+            }
+
+            // Skip processing structure when in quotes
+            if (inQuote) {
+                sb.append(c);
+                continue;
+            }
+
+            // Process structural characters
+            switch (c) {
+                case '{':
+                    stack.add('{');
+                    sb.append(c);
+                    break;
+                case '[':
+                    stack.add('[');
+                    sb.append(c);
+                    break;
+                case '}':
+                    // Check if we have an opening brace to match
+                    if (!stack.isEmpty()) {
+                        char last = stack.get(stack.size() - 1);
+                        if (last == '{') {
+                            // Correct match
+                            stack.remove(stack.size() - 1);
+                            sb.append(c);
+                        } else if (last == '[') {
+                            // Error: We have a mismatch - found '}' but expected ']'
+                            // Replace with the correct closing bracket
+                            stack.remove(stack.size() - 1);
+                            sb.append(']');
+                            logger.warn("Fixed mismatched bracket: replaced '}' with ']' at position {}", i);
+                        } else {
+                            // Unexpected state
+                            sb.append(c);
+                        }
+                    } else {
+                        // No opening bracket/brace on stack
+                        sb.append(c);
+                    }
+                    break;
+                case ']':
+                    // Check if we have an opening bracket to match
+                    if (!stack.isEmpty()) {
+                        char last = stack.get(stack.size() - 1);
+                        if (last == '[') {
+                            // Correct match
+                            stack.remove(stack.size() - 1);
+                            sb.append(c);
+                        } else if (last == '{') {
+                            // Error: We have a mismatch - found ']' but expected '}'
+                            // Replace with the correct closing brace
+                            stack.remove(stack.size() - 1);
+                            sb.append('}');
+                            logger.warn("Fixed mismatched bracket: replaced ']' with '}' at position {}", i);
+                        } else {
+                            // Unexpected state
+                            sb.append(c);
+                        }
+                    } else {
+                        // No opening bracket/brace on stack
+                        sb.append(c);
+                    }
+                    break;
+                default:
+                    sb.append(c);
+            }
+        }
+
+        // Handle any remaining unclosed brackets/braces
+        if (!stack.isEmpty()) {
+            logger.warn("Found {} unclosed brackets/braces", stack.size());
+
+            // Add appropriate closing characters in reverse order
+            for (int i = stack.size() - 1; i >= 0; i--) {
+                char openChar = stack.get(i);
+                if (openChar == '{') {
+                    sb.append('}');
+                } else if (openChar == '[') {
+                    sb.append(']');
+                }
+            }
+
+            logger.info("Added missing closing brackets/braces");
+        }
+
+        return sb.toString();
     }
 }

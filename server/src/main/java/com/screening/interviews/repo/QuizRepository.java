@@ -2,6 +2,7 @@ package com.screening.interviews.repo;
 
 import com.screening.interviews.model.Quiz;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
