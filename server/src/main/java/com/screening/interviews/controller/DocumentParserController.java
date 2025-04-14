@@ -2,8 +2,6 @@ package com.screening.interviews.controller;
 
 import com.screening.interviews.dto.*;
 import com.screening.interviews.service.DocumentParserService;
-import com.screening.interviews.service.MinioService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,12 +22,10 @@ import java.util.Objects;
 public class DocumentParserController {
 
     private final DocumentParserService documentParserService;
-    private final MinioService minioService;
 
     @Autowired
-    public DocumentParserController(DocumentParserService documentParserService,  MinioService minioService) {
+    public DocumentParserController(DocumentParserService documentParserService) {
         this.documentParserService = documentParserService;
-        this.minioService = minioService;
     }
 
     @PostMapping("/parse")
