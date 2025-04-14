@@ -14,15 +14,17 @@ import {
   GraduationCap,
   LayoutDashboard,
   FileText,
-  Settings
+  Settings,
+  Trophy,
+  Flame,
+  Users,
+  Medal
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext"; // Changed from Clerk to our custom auth
 import { fetchWithAuth } from "@/lib/api";
 
 import { usePathname } from 'next/navigation';
-
-
-
+import Navbar2 from "./Navbar2";
 
 export default function Dashboard() {
   const pathname = usePathname();
@@ -34,6 +36,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user } = useAuth();
+  
+  // Leaderboard state
+  const [leaderboardTab, setLeaderboardTab] = useState("streak");
+  const [leaderboardData, setLeaderboardData] = useState({
+    streak: [],
+    xp: []
+  });
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   
   const [messages, setMessages] = useState([
     {
@@ -102,11 +112,6 @@ export default function Dashboard() {
     fetchUserProfile();
     
   }, [user]);
-  
-  useEffect(() => {
-    console.log("USerprofile" , userProfile)
-  }, [userProfile])
-
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -132,72 +137,230 @@ export default function Dashboard() {
       transition: { duration: 0.2 }
     }
   };
+  
+// Fetch leaderboard data
+useEffect(() => {
+  async function fetchLeaderboard() {
+    try {
+      setLeaderboardLoading(true);
+      
+      // Fetch data from real API endpoints
+      const streakResponse = await fetch('http://localhost:8007/api/leaderboard/streaks');
+      const xpResponse = await fetch('http://localhost:8007/api/leaderboard/xp');
+      
+      if (!streakResponse.ok || !xpResponse.ok) {
+        throw new Error('Failed to fetch leaderboard data');
+      }
+      
+      const streakData = await streakResponse.json();
+      const xpData = await xpResponse.json();
+      
+      // Set the data in state
+      setLeaderboardData({
+        streak: streakData,
+        xp: xpData
+      });
+      
+    } catch (err) {
+      console.error('Error fetching leaderboard data:', err);
+      
+      // Fall back to mock data if API fails
+      const mockStreakData = [
+        { userId: 1, username: "alex_m", firstName: "Alex", lastName: "Martin", currentStreak: 42, maxStreak: 42 },
+        { userId: 2, username: "sarah_j", firstName: "Sarah", lastName: "Johnson", currentStreak: 38, maxStreak: 40 },
+        { userId: 3, username: "mike_t", firstName: "Mike", lastName: "Thompson", currentStreak: 35, maxStreak: 35 },
+        { userId: 4, username: "emma_w", firstName: "Emma", lastName: "Wilson", currentStreak: 31, maxStreak: 35 },
+        { userId: 5, username: "vraj", firstName: "Vraj", lastName: "Shah", currentStreak: 28, maxStreak: 30 },
+        { userId: 6, username: "chris_d", firstName: "Chris", lastName: "Davis", currentStreak: 25, maxStreak: 40 },
+        { userId: 7, username: "ashley_b", firstName: "Ashley", lastName: "Brown", currentStreak: 23, maxStreak: 25 },
+        { userId: 8, username: "james_h", firstName: "James", lastName: "Harris", currentStreak: 20, maxStreak: 22 },
+        { userId: 9, username: "olivia_l", firstName: "Olivia", lastName: "Lee", currentStreak: 18, maxStreak: 30 },
+        { userId: 10, username: "david_m", firstName: "David", lastName: "Miller", currentStreak: 16, maxStreak: 20 }
+      ];
+      
+      const mockXPData = [
+        { userId: 5, username: "vraj", firstName: "Vraj", lastName: "Shah", xp: 8750, currentStreak: 28 },
+        { userId: 3, username: "mike_t", firstName: "Mike", lastName: "Thompson", xp: 7620, currentStreak: 35 },
+        { userId: 1, username: "alex_m", firstName: "Alex", lastName: "Martin", xp: 6845, currentStreak: 42 },
+        { userId: 2, username: "sarah_j", firstName: "Sarah", lastName: "Johnson", xp: 5930, currentStreak: 38 },
+        { userId: 6, username: "chris_d", firstName: "Chris", lastName: "Davis", xp: 5280, currentStreak: 25 },
+        { userId: 4, username: "emma_w", firstName: "Emma", lastName: "Wilson", xp: 4950, currentStreak: 31 },
+        { userId: 8, username: "james_h", firstName: "James", lastName: "Harris", xp: 4125, currentStreak: 20 },
+        { userId: 7, username: "ashley_b", firstName: "Ashley", lastName: "Brown", xp: 3870, currentStreak: 23 },
+        { userId: 10, username: "david_m", firstName: "David", lastName: "Miller", xp: 3540, currentStreak: 16 },
+        { userId: 9, username: "olivia_l", firstName: "Olivia", lastName: "Lee", xp: 3210, currentStreak: 18 }
+      ];
+      
+      setLeaderboardData({
+        streak: mockStreakData,
+        xp: mockXPData
+      });
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }
+  
+  fetchLeaderboard();
+}, []);
 
-  // Suggested courses component
-  const SuggestedCourses = () => (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="mt-12"
-    >
-      <motion.div variants={itemVariants} className="text-center space-y-4 mb-8">
-        <h2 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
-          <Sparkles className="h-5 w-5 text-blue-500" />
-          <span>Recommended Courses</span>
-          <Sparkles className="h-5 w-5 text-blue-500" />
-        </h2>
-        <p className="text-gray-500 max-w-2xl mx-auto">
-          These courses are tailored to your learning history and goals
-        </p>
-      </motion.div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {rawCourses.map((course, index) => (
-          <motion.div
-            key={index}
-            variants={itemVariants}
-            whileHover="hover"
-            whileTap={{ scale: 0.98 }}
-            className="cursor-pointer"
-          >
-            <div 
-              className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1"
-              variants={cardHoverVariants}
-              onClick={() => {
-                setGeneratedCourse({
-                  title: course.title,
-                  description: course.description,
-                  modules: [{
-                    title: "Introduction",
-                    lessons: [{ title: "Getting Started" }]
-                  }]
-                });
-                setActiveTab("course");
-              }}
+// Leaderboard component
+const Leaderboard = () => (
+  <motion.div 
+    variants={containerVariants}
+    initial="hidden"
+    animate="visible"
+    className="w-full mb-12"
+  >
+    <motion.div variants={itemVariants} className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+      <div className="p-6 border-b border-slate-200">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center">
+            <Trophy className="h-5 w-5 text-yellow-500 mr-2" />
+            Leaderboard
+          </h3>
+          <div className="flex bg-slate-100 rounded-lg p-1">
+            <button 
+              onClick={() => setLeaderboardTab("streak")}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                leaderboardTab === "streak" 
+                  ? "bg-white text-blue-600 shadow-sm" 
+                  : "text-slate-600 hover:text-blue-600"
+              }`}
             >
-              <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-              <div className="p-6">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  {course.icon ? (
-                    <span className="text-2xl">{course.icon}</span>
+              <span className="flex items-center">
+                <Flame className="h-4 w-4 mr-1.5" />
+                Longest Streaks
+              </span>
+            </button>
+            <button 
+              onClick={() => setLeaderboardTab("xp")}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                leaderboardTab === "xp" 
+                  ? "bg-white text-blue-600 shadow-sm" 
+                  : "text-slate-600 hover:text-blue-600"
+              }`}
+            >
+              <span className="flex items-center">
+                <Star className="h-4 w-4 mr-1.5" />
+                Highest XP
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <AnimatePresence mode="wait">
+        {leaderboardLoading ? (
+          <div className="p-12 flex justify-center items-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          <motion.div
+            key={`leaderboard-${leaderboardTab}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 text-left">
+                  <tr>
+                    <th className="p-4 text-sm font-medium text-slate-500">Rank</th>
+                    <th className="p-4 text-sm font-medium text-slate-500">User</th>
+                    <th className="p-4 text-sm font-medium text-slate-500 text-right">
+                      {leaderboardTab === "streak" ? "Current Streak" : "XP"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {leaderboardData[leaderboardTab] && leaderboardData[leaderboardTab].length > 0 ? (
+                    leaderboardData[leaderboardTab].map((userData, index) => {
+                      // Check if this is the current user
+                      const isCurrentUser = userData.username === userProfile?.username;
+                      
+                      return (
+                        <motion.tr 
+                          key={userData.userId}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={`hover:bg-slate-50 transition-colors ${isCurrentUser ? "bg-blue-50" : ""}`}
+                        >
+                          <td className="p-4">
+                            <div className="flex items-center">
+                              {index < 3 ? (
+                                <div className={`h-7 w-7 rounded-full flex items-center justify-center ${
+                                  index === 0 ? "bg-yellow-100 text-yellow-600" :
+                                  index === 1 ? "bg-slate-200 text-slate-600" :
+                                  "bg-amber-100 text-amber-600"
+                                }`}>
+                                  <Medal className="h-4 w-4" />
+                                </div>
+                              ) : (
+                                <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-600">
+                                  {index + 1}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center">
+                              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-medium mr-3">
+                                {userData.firstName?.charAt(0) || '?'}{userData.lastName?.charAt(0) || '?'}
+                              </div>
+                              <div>
+                                <div className="font-medium text-slate-800 flex items-center">
+                                  {userData.firstName || 'User'} {userData.lastName || ''}
+                                  {isCurrentUser && (
+                                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 py-0.5 px-1.5 rounded-full">You</span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-slate-500">@{userData.username}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-slate-100">
+                              {leaderboardTab === "streak" ? (
+                                <>
+                                  <Flame className="h-4 w-4 text-orange-500 mr-1.5" />
+                                  <span className="text-slate-800">{userData.currentStreak} days</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Star className="h-4 w-4 text-blue-500 mr-1.5" />
+                                  <span className="text-slate-800">{userData.xp.toLocaleString()} XP</span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </motion.tr>
+                      );
+                    })
                   ) : (
-                    <Book className="h-5 w-5 text-blue-500" />
+                    <tr>
+                      <td colSpan="3" className="p-8 text-center text-slate-500">
+                        No leaderboard data available yet
+                      </td>
+                    </tr>
                   )}
-                  {course.title}
-                </h3>
-                <p className="text-slate-600 mt-3">{course.description}</p>
-                <div className="mt-4 flex items-center text-blue-600 text-sm font-medium">
-                  Start Course
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </div>
-              </div>
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="p-4 bg-slate-50 text-center">
+              <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
+                View full leaderboard
+              </button>
             </div>
           </motion.div>
-        ))}
-      </div>
+        )}
+      </AnimatePresence>
     </motion.div>
-  );
+  </motion.div>
+);
+
 
   // Stats cards component
   const StatsCards = () => (
@@ -218,9 +381,9 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="mt-6 bg-white/20 h-2 rounded-full overflow-hidden">
-          <div className="bg-white h-full rounded-full" style={{ width: "65%" }}></div>
+          <div className="bg-white h-full rounded-full" style={{ width: `${userProfile?.levelProgress || 65}%` }}></div>
         </div>
-        <p className="text-sm mt-2 text-blue-100">65% to next level</p>
+        <p className="text-sm mt-2 text-blue-100">{userProfile?.levelProgress || 65}% to next level</p>
       </motion.div>
       
       <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
@@ -241,15 +404,15 @@ export default function Dashboard() {
       <motion.div variants={itemVariants} className="bg-white p-6 rounded-xl shadow-md border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all hover:-translate-y-1">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-slate-500">AI Tutor Chats</p>
-            <h3 className="text-3xl font-bold mt-1 text-slate-800">12</h3>
+            <p className="text-slate-500">Current Streak</p>
+            <h3 className="text-3xl font-bold mt-1 text-slate-800">{userProfile?.currentStreak || 0}</h3>
           </div>
-          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-            <MessageCircle className="h-6 w-6" />
+          <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+            <Flame className="h-6 w-6" />
           </div>
         </div>
-        <p className="text-sm mt-6 text-blue-600 font-medium cursor-pointer" onClick={() => setActiveTab("chat")}>
-          Continue conversation
+        <p className="text-sm mt-6 text-blue-600 font-medium cursor-pointer">
+          Keep learning daily
         </p>
       </motion.div>
     </motion.div>
@@ -258,65 +421,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
       {/* HEADER */}
-      <nav className="fixed w-full z-50 backdrop-blur-sm bg-white/80 border-b border-slate-200">
-        <div className="max-w-screen-xl mx-auto px-6 md:px-8">
-          <div className="flex items-center justify-between h-20">
-            {/* Logo */}
-            <Link href="/">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="h-10 w-10 bg-blue-600 rounded-tl-2xl rounded-br-2xl rotate-12"></div>
-                  <div className="absolute top-1 left-1 h-8 w-8 bg-indigo-500 rounded-tl-xl rounded-br-xl rotate-12 flex items-center justify-center">
-                    <span className="text-white font-bold text-lg -rotate-12">C</span>
-                  </div>
-                </div>
-                <span className="font-extrabold tracking-tight text-slate-800">
-                  Instruct<span className="text-blue-600">AI</span>
-                </span>
-              </div>
-            </Link>
-            
-            {/* Desktop navigation */}
-            <div className="hidden md:flex items-center space-x-1">
-  <Link 
-    href="/generate-course"
-    className="mr-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center group"
-  >
-    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-white bg-opacity-20 mr-2 group-hover:scale-110 transition-transform">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
-      </svg>
-    </span>
-    <span className="text-sm font-medium">New Course</span>
-  </Link>
-
-  <NavLink href="/home" active={pathname === "/home"}>Dashboard</NavLink>
-<NavLink href="/course-content" active={pathname === "/course-content"} disabled={!generatedCourse}>Courses</NavLink>
-<NavLink href="/ai-tutor" active={pathname === "/ai-tutor"}>AI Tutor</NavLink>
-<NavLink href="/resume-analyser" active={pathname === "/resume-analyser"}>Analyze Resume</NavLink>
-  
-  <div className="ml-8 flex items-center space-x-4">
-    <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
-      <Star className="h-4 w-4 mr-1" />
-      <span>{userProfile?.xp || 0} XP</span>
-    </div>
-    <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
-      <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
-    </div>
-  </div>
-</div>
-            
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <button className="text-slate-700 hover:text-blue-600 focus:outline-none">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar2 />
 
       {/* MAIN CONTENT */}
       <main className="pt-32 md:pt-32 pb-16 px-6 md:px-8 max-w-screen-xl mx-auto">
@@ -403,8 +508,11 @@ export default function Dashboard() {
                     
           {/* Stats Cards Section */}
           <StatsCards />
+          
+          {/* Leaderboard Section */}
+          <Leaderboard />
                     
-          {/* Recent Activity Section - Moved here */}
+          {/* Recent Activity Section */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -456,7 +564,7 @@ export default function Dashboard() {
             </div>
           </motion.div>
               
-              
+          {/* Suggested Courses Section */}
         </motion.div>
 
         </AnimatePresence>
@@ -501,94 +609,94 @@ export default function Dashboard() {
               <ul className="space-y-2">
                 {['Features', 'Pricing', 'Use Cases', 'Roadmap', 'Integrations'].map(link => (
                   <li key={link}>
-                    <a href="#" className="text-slate-400 hover:text-white transition">
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-bold text-lg mb-4">Resources</h3>
-              <ul className="space-y-2">
-                {['Documentation', 'Blog', 'Community', 'Support', 'Learning Center'].map(link => (
-                  <li key={link}>
-                    <a href="#" className="text-slate-400 hover:text-white transition">
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-bold text-lg mb-4">Company</h3>
-              <ul className="space-y-2">
-                {['About Us', 'Careers', 'Press', 'Privacy Policy', 'Terms of Service'].map(link => (
-                  <li key={link}>
-                    <a href="#" className="text-slate-400 hover:text-white transition">
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                  <a href="#" className="text-slate-400 hover:text-white transition">
+                    {link}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
           
-          {/* Bottom footer */}
-          <div className="py-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-slate-500 text-sm mb-4 md:mb-0">
-              &copy; {new Date().getFullYear()} InstructAI, Inc. All rights reserved.
-            </p>
-            <div className="flex space-x-6">
-              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Privacy</a>
-              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Terms</a>
-              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Cookies</a>
-              <a href="#" className="text-slate-500 hover:text-white transition text-sm">Contact</a>
-            </div>
+          <div>
+            <h3 className="font-bold text-lg mb-4">Resources</h3>
+            <ul className="space-y-2">
+              {['Documentation', 'Blog', 'Community', 'Support', 'Learning Center'].map(link => (
+                <li key={link}>
+                  <a href="#" className="text-slate-400 hover:text-white transition">
+                    {link}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          <div>
+            <h3 className="font-bold text-lg mb-4">Company</h3>
+            <ul className="space-y-2">
+              {['About Us', 'Careers', 'Press', 'Privacy Policy', 'Terms of Service'].map(link => (
+                <li key={link}>
+                  <a href="#" className="text-slate-400 hover:text-white transition">
+                    {link}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-      </footer>
-    </div>
-  );
+        
+        {/* Bottom footer */}
+        <div className="py-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center">
+          <p className="text-slate-500 text-sm mb-4 md:mb-0">
+            &copy; {new Date().getFullYear()} InstructAI, Inc. All rights reserved.
+          </p>
+          <div className="flex space-x-6">
+            <a href="#" className="text-slate-500 hover:text-white transition text-sm">Privacy</a>
+            <a href="#" className="text-slate-500 hover:text-white transition text-sm">Terms</a>
+            <a href="#" className="text-slate-500 hover:text-white transition text-sm">Cookies</a>
+            <a href="#" className="text-slate-500 hover:text-white transition text-sm">Contact</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+);
 }
 
 // Helper component for navigation links
 const NavLink = ({ href, active, disabled, children }) => (
-  <Link 
-    href={disabled ? "#" : href}
-    className={`px-3 py-2 rounded-md transition-colors relative group ${
-      disabled ? 'text-slate-400 cursor-not-allowed' :
-      active ? 'text-blue-700' : 'text-slate-700 hover:text-blue-600'
-    }`}
-    onClick={(e) => {
-      if (disabled) e.preventDefault();
-    }}
-  >
-    {children}
-    <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 transform origin-left transition-transform ${
-      active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-    }`}></span>
-  </Link>
+<Link 
+  href={disabled ? "#" : href}
+  className={`px-3 py-2 rounded-md transition-colors relative group ${
+    disabled ? 'text-slate-400 cursor-not-allowed' :
+    active ? 'text-blue-700' : 'text-slate-700 hover:text-blue-600'
+  }`}
+  onClick={(e) => {
+    if (disabled) e.preventDefault();
+  }}
+>
+  {children}
+  <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 transform origin-left transition-transform ${
+    active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+  }`}></span>
+</Link>
 );
 
 // Simple icon components for activity feed
 const CheckIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+</svg>
 );
 
 const PlayIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+</svg>
 );
 
 const TrophyIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-    <path fillRule="evenodd" d="M6 3.75A2.75 2.75 0 018.75 1h2.5A2.75 2.75 0 0114 3.75v.443c.795.077 1.584.24 2.287.491a.75.75 0 11-.574 1.385c-.708-.25-1.466-.4-2.212-.465V6.75a2.75 2.75 0 01-2.75 2.75h-2.5A2.75 2.75 0 016 6.75v-3zm7.5 3V3.75A1.25 1.25 0 0012.25 2.5h-2.5A1.25 1.25 0 008.5 3.75v3a1.25 1.25 0 001.25 1.25h2.5A1.25 1.25 0 0013.5 6.75z" clipRule="evenodd" />
-    <path d="M12.78 15.81l-3.214-4.018a.75.75 0 00-1.173 0L5.18 15.81a.75.75 0 001.173.938l2.147-2.683v3.684a.75.75 0 001.5 0v-3.684l2.147 2.683a.75.75 0 001.173-.938z" />
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+  <path fillRule="evenodd" d="M6 3.75A2.75 2.75 0 018.75 1h2.5A2.75 2.75 0 0114 3.75v.443c.795.077 1.584.24 2.287.491a.75.75 0 11-.574 1.385c-.708-.25-1.466-.4-2.212-.465V6.75a2.75 2.75 0 01-2.75 2.75h-2.5A2.75 2.75 0 016 6.75v-3zm7.5 3V3.75A1.25 1.25 0 0012.25 2.5h-2.5A1.25 1.25 0 008.5 3.75v3a1.25 1.25 0 001.25 1.25h2.5A1.25 1.25 0 0013.5 6.75z" clipRule="evenodd" />
+  <path d="M12.78 15.81l-3.214-4.018a.75.75 0 00-1.173 0L5.18 15.81a.75.75 0 001.173.938l2.147-2.683v3.684a.75.75 0 001.5 0v-3.684l2.147 2.683a.75.75 0 001.173-.938z" />
+</svg>
 );

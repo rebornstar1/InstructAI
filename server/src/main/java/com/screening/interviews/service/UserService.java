@@ -1,6 +1,7 @@
 package com.screening.interviews.service;
 
 import com.screening.interviews.dto.CourseCompletionDto;
+import com.screening.interviews.dto.StreakInfoDto;
 import com.screening.interviews.dto.XpUpdateDto;
 import com.screening.interviews.exception.ResourceNotFoundException;
 import com.screening.interviews.model.User;
@@ -19,6 +20,7 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final StreakService streakService;
 
     public User getCurrentUser() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -65,5 +67,15 @@ public class UserService {
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    @Transactional
+    public StreakInfoDto recordActivity(Long userId) {
+        User user = getCurrentUser();
+
+        StreakInfoDto streakInfo = streakService.updateUserStreak(user);
+
+        return streakInfo;
+        // Process other activity related logic...
     }
 }

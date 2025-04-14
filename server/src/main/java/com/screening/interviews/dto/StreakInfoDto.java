@@ -1,0 +1,14 @@
+package com.screening.interviews.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class StreakInfoDto {
+    private int currentStreak;
+    private int maxStreak;
+    private boolean streakExtended;
+}

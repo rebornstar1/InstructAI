@@ -11,6 +11,96 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRouter } from 'next/navigation';
+
+// Simple loader component that maintains height
+// Simple loader component that maintains component boundaries
+// Enhanced simple loader component with professional touches
+// Enhanced professional loader with appealing animations
+const SimpleLoader = ({ topic }) => {
+  const [loadingPhase, setLoadingPhase] = useState(0);
+  const messages = [
+    "Analyzing your topic and preparing content...",
+    "Structuring your learning path...",
+    "Designing interactive modules...",
+    "Optimizing content for effective learning..."
+  ];
+  
+  // Rotate through professional loading messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLoadingPhase(prev => (prev + 1) % messages.length);
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <div className="w-full min-h-[600px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-md p-8 flex flex-col items-center justify-center">
+      <div className="flex flex-col items-center gap-8 max-w-md">
+        {/* Appealing Spinner Animation */}
+        <div className="relative h-20 w-20">
+          {/* Outer spinning ring */}
+          <div className="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-indigo-500 border-l-transparent rounded-full animate-spin"></div>
+          
+          {/* Inner pulsing icon */}
+          <motion.div 
+            className="absolute inset-0 flex items-center justify-center"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 rounded-full">
+              <Brain className="h-8 w-8 text-white" />
+            </div>
+          </motion.div>
+        </div>
+        
+        <div className="text-center space-y-4">
+          <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
+            Creating Your Course
+          </h3>
+          <p className="text-gray-700 dark:text-gray-300 font-medium">"{topic}"</p>
+        </div>
+        
+        {/* Animated Message Container */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={loadingPhase}
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -10, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <Sparkles className="h-5 w-5 text-blue-500" />
+            </motion.div>
+            <p className="text-blue-800 dark:text-blue-200">{messages[loadingPhase]}</p>
+          </motion.div>
+        </AnimatePresence>
+        
+        <div className="w-full max-w-md mt-2">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600"
+              initial={{ width: "10%" }}
+              animate={{ width: "100%" }}
+              transition={{ duration: 12, repeat: Infinity }}
+            ></motion.div>
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span>Processing...</span>
+            <span>Please wait</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 export default function CourseCreationComponent({
   initialPrompt = "",
@@ -21,6 +111,7 @@ export default function CourseCreationComponent({
   setMessages,
 }) {
 
+  const router = useRouter();
   // Initialize coursePrompt state with initialPrompt
   const [coursePrompt, setCoursePrompt] = useState(initialPrompt);
 
@@ -29,6 +120,7 @@ export default function CourseCreationComponent({
   const [showValidationError, setShowValidationError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [skipInteractive, setSkipInteractive] = useState(false);
   
   // Interactive flow states
   const [interactiveMode, setInteractiveMode] = useState(false);
@@ -43,8 +135,17 @@ export default function CourseCreationComponent({
     if (initialPrompt) {
       setCoursePrompt(initialPrompt);
       setIsFormValid(true);
+      setSkipInteractive(true); // Skip interactive mode if we have an initial prompt
     }
   }, [initialPrompt]);
+
+  // When skipInteractive is set to true, automatically trigger the non-interactive course generation
+  useEffect(() => {
+    if (skipInteractive && coursePrompt && isFormValid && !isLoading) {
+      handleGenerateCourse({ preventDefault: () => {} });
+      setSkipInteractive(false); // Reset the flag after triggering
+    }
+  }, [skipInteractive, coursePrompt, isFormValid, isLoading]);
 
   useEffect(() => {
     setIsFormValid(coursePrompt.trim() !== "");
@@ -85,9 +186,10 @@ export default function CourseCreationComponent({
     }
   };
 
-  const handleSelectRawCourse = async (rawCourse) => {
+  const handleSelectRawCourse = (rawCourse) => {
     setCoursePrompt(rawCourse.title);
-    await handleStartInteractiveFlow({ preventDefault: () => {} });
+    // Instead of triggering interactive flow, set skipInteractive to true
+    setSkipInteractive(true);
   };
 
   // Start the interactive course creation flow
@@ -95,6 +197,12 @@ export default function CourseCreationComponent({
     event.preventDefault();
     if (!isFormValid) {
       setShowValidationError(true);
+      return;
+    }
+    
+    // If skipInteractive is true, use the direct flow instead
+    if (skipInteractive) {
+      handleGenerateCourse(event);
       return;
     }
     
@@ -222,7 +330,13 @@ export default function CourseCreationComponent({
       
       // Set the generated course and switch to the course tab
       setGeneratedCourse(data);
-      setActiveTab("course");
+      // setActiveTab("course");
+
+      if (data.id) {
+        router.push(`/courses/${data.id}`);
+      } else if (data._id) {
+        router.push(`/courses/${data._id}`);
+      }
       
       // Count modules by complexity level for informative message
       const complexityLevels = {};
@@ -270,7 +384,11 @@ export default function CourseCreationComponent({
       setShowValidationError(true);
       return;
     }
+    
+    // Ensure we're not in interactive mode when generating directly
+    setInteractiveMode(false);
     setIsLoading(true);
+    
     try {
       const response = await fetch("http://localhost:8007/api/courses/simplified/generate", {
         method: "POST",
@@ -283,7 +401,12 @@ export default function CourseCreationComponent({
       const data = await response.json();
       console.log("Generated Course Structure:", data);
       setGeneratedCourse(data);
-      setActiveTab("course");
+
+      if (data.id) {
+        router.push(`/courses/${data.id}`);
+      } else if (data._id) {
+        router.push(`/courses/${data._id}`);
+      }
       
       // Count modules by complexity level for informative message
       const complexityLevels = {};
@@ -446,7 +569,17 @@ export default function CourseCreationComponent({
 
   return (
     <AnimatePresence mode="wait">
-      {!interactiveMode ? (
+      {isLoading ? (
+      // Simple loader that maintains component height
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="mx-auto max-w-6xl"
+      >
+        <SimpleLoader topic={coursePrompt} />
+      </motion.div>
+    ) : !interactiveMode ? (
         <motion.div 
           className="mx-auto max-w-6xl space-y-8"
           variants={containerVariants}
@@ -467,48 +600,6 @@ export default function CourseCreationComponent({
               tailored to your specific learning goals and preferences.
             </p>
           </motion.div>
-
-          {/* Suggested Courses Section
-          <motion.div variants={itemVariants} className="space-y-4">
-            <h2 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-500" />
-              <span>Suggested Courses</span>
-              <Sparkles className="h-5 w-5 text-blue-500" />
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {rawCourses.map((course, idx) => (
-                <motion.div
-                  key={idx}
-                  variants={itemVariants}
-                  whileHover="hover"
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Card
-                    className="cursor-pointer h-full overflow-hidden border-gray-200 transition-all"
-                    variants={cardHoverVariants}
-                    onClick={() => handleSelectRawCourse(course)}
-                  >
-                    <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-                    <CardContent className="p-6">
-                      <h3 className="text-xl font-bold flex items-center gap-2">
-                        {course.icon ? (
-                          <span className="text-2xl">{course.icon}</span>
-                        ) : (
-                          <BookOpen className="h-5 w-5 text-blue-500" />
-                        )}
-                        {course.title}
-                      </h3>
-                      <p className="text-gray-600 mt-3">{course.description}</p>
-                      <div className="mt-4 flex items-center text-blue-600 text-sm font-medium">
-                        Start Course
-                        <ChevronRight className="ml-1 h-4 w-4" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div> */}
 
           {/* Generate New Course Section */}
           <motion.div variants={itemVariants}>
@@ -562,37 +653,72 @@ export default function CourseCreationComponent({
                     </motion.p>
                   )}
                   
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Button 
-                      onClick={handleStartInteractiveFlow} 
-                      disabled={isLoading} 
-                      className="w-full mt-6 py-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={{ duration: 0.2 }}
                     >
-                      {isLoading ? (
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex items-center justify-center"
-                        >
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Starting Your Personal Course Creation...
-                        </motion.div>
-                      ) : (
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex items-center justify-center"
-                        >
-                          <Sparkles className="mr-2 h-5 w-5" />
-                          Start Interactive Course Creation
-                        </motion.div>
-                      )}
-                    </Button>
-                  </motion.div>
+                      <Button 
+                        onClick={handleStartInteractiveFlow} 
+                        disabled={isLoading || !isFormValid} 
+                        className="w-full py-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                      >
+                        {isLoading ? (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Starting Your Personal Course Creation...
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <Sparkles className="mr-2 h-5 w-5" />
+                            Start Interactive Course Creation
+                          </motion.div>
+                        )}
+                      </Button>
+                    </motion.div>
+                    
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Button 
+                        onClick={handleGenerateCourse} 
+                        disabled={isLoading || !isFormValid}
+                        variant="outline"
+                        className="w-full py-6 rounded-lg border-blue-300 text-blue-700 hover:bg-blue-50 transition-all"
+                      >
+                        {isLoading ? (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Generating Course...
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center"
+                          >
+                            <ArrowRight className="mr-2 h-5 w-5" />
+                            Generate Course Directly
+                          </motion.div>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </div>
                   
                   <motion.div 
                     variants={itemVariants}

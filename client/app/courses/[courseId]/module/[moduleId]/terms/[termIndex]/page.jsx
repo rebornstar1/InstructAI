@@ -3,9 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import {
   ChevronLeft,
   BookOpen,
@@ -16,6 +19,12 @@ import {
   ArrowRight,
   FileText,
   BookmarkCheck,
+  Info,
+  Clock,
+  Award,
+  Lock,
+  Unlock,
+  Star
 } from "lucide-react";
 
 import CustomMarkdownRenderer from "@/components/ui/CustomMarkdownRenderer";
@@ -38,6 +47,22 @@ export default function TermDetailPage({ params }) {
   const currentTermIndex = parseInt(termIndex, 10);
   const termController = useTermController(moduleId);
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+  
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -59,6 +84,11 @@ export default function TermDetailPage({ params }) {
         await getModuleProgress(moduleId);
       } catch (error) {
         console.error("Error loading term data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load term data. Please try again.",
+          variant: "destructive",
+        });
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -97,11 +127,26 @@ export default function TermDetailPage({ params }) {
           module.quizzes[termIndex].id,
           score
         );
+        toast({
+          title: "Quiz completed!",
+          description: `You scored ${score}%. Great job!`,
+          variant: "success",
+        });
       } else {
         await termController.completeResource(moduleId, termIndex, resourceType);
+        toast({
+          title: `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} completed!`,
+          description: "Your progress has been saved.",
+          variant: "success",
+        });
       }
     } catch (error) {
       console.error(`Error completing ${resourceType}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to record ${resourceType} completion.`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -113,12 +158,21 @@ export default function TermDetailPage({ params }) {
 
     isGeneratingRef.current = true;
     try {
+      toast({
+        title: "Generating content",
+        description: "Please wait while we prepare your learning materials...",
+      });
       console.log(
         `Generating content for moduleId: ${moduleId}, termIndex: ${currentTermIndex}`
       );
       await termController.generateTermContent(moduleId, currentTermIndex);
     } catch (error) {
       console.error("Error generating term content:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate content. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       isGeneratingRef.current = false;
     }
@@ -135,7 +189,12 @@ export default function TermDetailPage({ params }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="relative">
+          <div className="absolute inset-0 bg-blue-600/20 rounded-full blur-2xl opacity-70"></div>
+          <div className="relative">
+            <div className="h-16 w-16 animate-spin text-blue-600 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -162,12 +221,18 @@ export default function TermDetailPage({ params }) {
 
   if (!currentTerm) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
-        <h1 className="text-2xl font-bold mb-4">Term not found</h1>
-        <Button onClick={navigateToModule}>
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Back to Module
-        </Button>
+      <div className="container mx-auto px-4 py-8 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-2xl font-bold mb-4">Term not found</h1>
+          <Button onClick={navigateToModule}>
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Back to Module
+          </Button>
+        </motion.div>
       </div>
     );
   }
@@ -192,8 +257,13 @@ export default function TermDetailPage({ params }) {
             <div className="w-[88px]"></div>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="text-center max-w-md">
+        <div className="container mx-auto flex-1 flex items-center justify-center p-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-center max-w-md"
+          >
             <div className="bg-blue-100 dark:bg-blue-900/20 p-6 rounded-full inline-flex mb-6">
               <BookOpen className="h-12 w-12 text-blue-600 dark:text-blue-400" />
             </div>
@@ -214,7 +284,7 @@ export default function TermDetailPage({ params }) {
                 ? "Generating..."
                 : "Generate Content"}
             </Button>
-          </div>
+          </motion.div>
         </div>
       </div>
     );
@@ -240,7 +310,7 @@ export default function TermDetailPage({ params }) {
             <div className="w-[88px]"></div>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-8">
+        <div className="container mx-auto flex-1 flex items-center justify-center p-8">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -324,306 +394,312 @@ export default function TermDetailPage({ params }) {
           </div>
         </div>
       </div>
+      
       <div className="container mx-auto px-4 py-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6 p-1 inline-flex">
-          <Button
-            variant={activeContent === "article" ? "default" : "ghost"}
-            onClick={() => setActiveContent("article")}
-            className={`gap-2 ${
-              activeContent === "article"
-                ? ""
-                : "text-gray-600 dark:text-gray-400"
-            }`}
-          >
-            <FileText className="h-4 w-4" />
-            Article
-            {isArticleCompleted && (
-              <CheckCircle className="h-3 w-3 text-green-500" />
-            )}
-          </Button>
-          {termContent?.videoUrl && (
-            <Button
-              variant={activeContent === "video" ? "default" : "ghost"}
-              onClick={() => setActiveContent("video")}
-              className={`gap-2 ${
-                activeContent === "video" ? "" : "text-gray-600 dark:text-gray-400"
-              }`}
-            >
-              <PlayCircle className="h-4 w-4" />
-              Video
-              {isVideoCompleted && (
-                <CheckCircle className="h-3 w-3 text-green-500" />
-              )}
-            </Button>
-          )}
-          {termContent?.quiz && (
-            <Button
-              variant={activeContent === "quiz" ? "default" : "ghost"}
-              onClick={() => setActiveContent("quiz")}
-              className={`gap-2 ${
-                activeContent === "quiz" ? "" : "text-gray-600 dark:text-gray-400"
-              }`}
-            >
-              <HelpCircle className="h-4 w-4" />
-              Quiz
-              {isQuizCompleted && (
-                <CheckCircle className="h-3 w-3 text-green-500" />
-              )}
-            </Button>
-          )}
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-          <div className="flex items-center justify-between mb-2 text-sm text-gray-500 dark:text-gray-400">
-            <span>Term Progress</span>
-            <div className="flex items-center gap-2">
-              {isArticleCompleted ? (
-                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
-                  <FileText className="h-3 w-3 mr-1" />
-                  Article: Complete
-                </Badge>
-              ) : (
-                <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border-none">
-                  <FileText className="h-3 w-3 mr-1" />
-                  Article
-                </Badge>
-              )}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          
+          {/* Content Navigation Tabs */}
+          <motion.div variants={itemVariants} className="mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-1 inline-flex">
+              <Button
+                variant={activeContent === "article" ? "default" : "ghost"}
+                onClick={() => setActiveContent("article")}
+                className={`gap-2 ${
+                  activeContent === "article"
+                    ? ""
+                    : "text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+                Article
+                {isArticleCompleted && (
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                )}
+              </Button>
               {termContent?.videoUrl && (
-                isVideoCompleted ? (
-                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
-                    <PlayCircle className="h-3 w-3 mr-1" />
-                    Video: Complete
-                  </Badge>
-                ) : (
-                  <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border-none">
-                    <PlayCircle className="h-3 w-3 mr-1" />
-                    Video
-                  </Badge>
-                )
+                <Button
+                  variant={activeContent === "video" ? "default" : "ghost"}
+                  onClick={() => setActiveContent("video")}
+                  className={`gap-2 ${
+                    activeContent === "video" ? "" : "text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  Video
+                  {isVideoCompleted && (
+                    <CheckCircle className="h-3 w-3 text-green-500" />
+                  )}
+                </Button>
               )}
               {termContent?.quiz && (
-                isQuizCompleted ? (
-                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
-                    <HelpCircle className="h-3 w-3 mr-1" />
-                    Quiz: Complete
-                  </Badge>
-                ) : (
-                  <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border-none">
-                    <HelpCircle className="h-3 w-3 mr-1" />
-                    Quiz
-                  </Badge>
-                )
-              )}
-            </div>
-          </div>
-          {(() => {
-            let totalItems = 1;
-            let completedItems = isArticleCompleted ? 1 : 0;
-            if (termContent?.videoUrl) {
-              totalItems++;
-              if (isVideoCompleted) completedItems++;
-            }
-            if (termContent?.quiz) {
-              totalItems++;
-              if (isQuizCompleted) completedItems++;
-            }
-            const progressPercentage = Math.round(
-              (completedItems / totalItems) * 100
-            );
-            return <Progress value={progressPercentage} className="h-2" />;
-          })()}
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <AnimatePresence mode="wait">
-            {activeContent === "article" && (
-              <motion.div
-                key="article"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                {termContent?.article && (
-                  <div className="space-y-6">
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                      {termContent.article.subModuleTitle || termContent.term}
-                    </h2>
-                    <div className="prose max-w-none dark:prose-invert">
-                      <CustomMarkdownRenderer
-                        markdown={termContent.article.article || ""}
-                      />
-                    </div>
-                    <UpdatedArticleProgressTracker
-                      moduleId={moduleId}
-                      termIndex={termContent.termIndex}
-                      article={termContent.article}
-                      isCompleted={isArticleCompleted}
-                      resourceProgress={termContent.resourceProgress}
-                      onComplete={() => {
-                        handleResourceComplete(
-                          moduleId,
-                          currentTermIndex,
-                          "article"
-                        );
-                      }}
-                    />
-                  </div>
-                )}
-              </motion.div>
-            )}
-            {activeContent === "video" && termContent?.videoUrl && (
-              <motion.div
-                key="video"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                    Video: {termContent.term}
-                  </h2>
-                  <div className="aspect-video overflow-hidden rounded-lg shadow-md mb-6">
-                    <iframe
-                      title={`Video: ${termContent.term}`}
-                      className="w-full h-full"
-                      src={convertToEmbedUrl(termContent.videoUrl)}
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    ></iframe>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold mb-2 text-gray-800 dark:text-gray-200">
-                      {termContent.term} - Video Explanation
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      This video provides a comprehensive explanation of{" "}
-                      {termContent.term}, demonstrating key concepts and practical
-                      applications.
-                    </p>
-                  </div>
-                  <UpdatedVideoProgressTracker
-                    moduleId={moduleId}
-                    termIndex={termContent.termIndex}
-                    videoUrl={termContent.videoUrl}
-                    isCompleted={isVideoCompleted}
-                    resourceProgress={termContent.resourceProgress}
-                    onComplete={() => {
-                      handleResourceComplete(
-                        moduleId,
-                        currentTermIndex,
-                        "video"
-                      );
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-            {activeContent === "quiz" && termContent?.quiz && (
-              <motion.div
-                key="quiz"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                    {termContent.quiz.quizTitle || `${termContent.term} Quiz`}
-                  </h2>
-                  <UpdatedEnhancedQuiz
-                    moduleId={moduleId}
-                    termIndex={termContent.termIndex}
-                    quiz={termContent.quiz}
-                    isCompleted={isQuizCompleted}
-                    resourceProgress={termContent.resourceProgress}
-                    onComplete={(score) => {
-                      handleResourceComplete(
-                        moduleId,
-                        currentTermIndex,
-                        "quiz",
-                        score
-                      );
-                    }}
-                    onClose={() => {}}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        {allCompleted && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mt-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded-lg p-6 text-center"
-          >
-            <div className="inline-flex items-center justify-center p-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full mb-4">
-              <BookmarkCheck className="h-10 w-10" />
-            </div>
-            <h3 className="text-2xl font-bold text-green-700 dark:text-green-400 mb-2">
-              Congratulations! Term Completed
-            </h3>
-            <p className="text-green-600 dark:text-green-500 mb-4">
-              You've successfully completed all learning materials for this term.
-            </p>
-            <div className="flex justify-center gap-4 mt-6">
-              {previousTerm && (
                 <Button
-                  variant="outline"
-                  onClick={() => navigateToTerm(previousTerm.termIndex)}
+                  variant={activeContent === "quiz" ? "default" : "ghost"}
+                  onClick={() => setActiveContent("quiz")}
+                  className={`gap-2 ${
+                    activeContent === "quiz" ? "" : "text-gray-600 dark:text-gray-400"
+                  }`}
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Previous Term
-                </Button>
-              )}
-              {nextTerm ? (
-                <Button
-                  onClick={() => navigateToTerm(nextTerm.termIndex)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Continue to Next Term
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={navigateToModule}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  Complete Module
-                  <CheckCircle className="h-4 w-4 ml-2" />
+                  <HelpCircle className="h-4 w-4" />
+                  Quiz
+                  {isQuizCompleted && (
+                    <CheckCircle className="h-3 w-3 text-green-500" />
+                  )}
                 </Button>
               )}
             </div>
           </motion.div>
-        )}
-        {!allCompleted && (
-          <div className="flex justify-between mt-6">
-            <Button
-              variant="outline"
-              onClick={() =>
-                previousTerm && navigateToTerm(previousTerm.termIndex)
-              }
-              disabled={!previousTerm}
+
+          {/* Content Card */}
+          <motion.div variants={itemVariants}>
+            <Card className="border-none shadow-lg overflow-hidden mb-6">
+              <CardHeader className={`bg-gradient-to-r ${
+                activeContent === "article" 
+                  ? "from-blue-100 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20" 
+                  : activeContent === "video"
+                  ? "from-purple-100 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20"
+                  : "from-amber-100 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20"
+              } border-b border-blue-200 dark:border-blue-800/50`}>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  {activeContent === "article" ? (
+                    <>
+                      <FileText className="h-5 w-5 text-blue-600" />
+                      Article: {termContent.term}
+                    </>
+                  ) : activeContent === "video" ? (
+                    <>
+                      <PlayCircle className="h-5 w-5 text-purple-600" />
+                      Video: {termContent.term}
+                    </>
+                  ) : (
+                    <>
+                      <HelpCircle className="h-5 w-5 text-amber-600" />
+                      Quiz: {termContent.quiz?.quizTitle || `${termContent.term} Quiz`}
+                    </>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              
+              <CardContent className="p-6">
+                <AnimatePresence mode="wait">
+                  {activeContent === "article" && (
+                    <motion.div
+                      key="article"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {termContent?.article && (
+                        <div className="space-y-6">
+                          <div className="prose max-w-none dark:prose-invert">
+                            <CustomMarkdownRenderer
+                              markdown={termContent.article.article || ""}
+                            />
+                          </div>
+                          <UpdatedArticleProgressTracker
+                            moduleId={moduleId}
+                            termIndex={termContent.termIndex}
+                            article={termContent.article}
+                            isCompleted={isArticleCompleted}
+                            resourceProgress={termContent.resourceProgress}
+                            onComplete={() => {
+                              handleResourceComplete(
+                                moduleId,
+                                currentTermIndex,
+                                "article"
+                              );
+                            }}
+                          />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                  {activeContent === "video" && termContent?.videoUrl && (
+                    <motion.div
+                      key="video"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="space-y-6">
+                        <div className="aspect-video overflow-hidden rounded-lg shadow-md mb-6">
+                          <iframe
+                            title={`Video: ${termContent.term}`}
+                            className="w-4/5 h-screen items-center justify-center"
+                            src={convertToEmbedUrl(termContent.videoUrl)}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          ></iframe>
+                        </div>
+                        <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-800/50">
+                          <h3 className="text-lg font-bold mb-2 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <Info className="h-5 w-5 text-blue-600" />
+                            About This Video
+                          </h3>
+                          <p className="text-gray-600 dark:text-gray-400">
+                            This video provides a comprehensive explanation of{" "}
+                            {termContent.term}, demonstrating key concepts and practical
+                            applications to enhance your understanding.
+                          </p>
+                        </div>
+                        <UpdatedVideoProgressTracker
+                          moduleId={moduleId}
+                          termIndex={termContent.termIndex}
+                          videoUrl={termContent.videoUrl}
+                          isCompleted={isVideoCompleted}
+                          resourceProgress={termContent.resourceProgress}
+                          onComplete={() => {
+                            handleResourceComplete(
+                              moduleId,
+                              currentTermIndex,
+                              "video"
+                            );
+                          }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                  {activeContent === "quiz" && termContent?.quiz && (
+                    <motion.div
+                      key="quiz"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="space-y-6">
+                        <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-lg border border-amber-100 dark:border-amber-800/50 mb-4">
+                          <h3 className="text-lg font-bold mb-2 text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                            <Info className="h-5 w-5 text-amber-600" />
+                            Quiz Instructions
+                          </h3>
+                          <p className="text-gray-600 dark:text-gray-400">
+                            Test your knowledge of {termContent.term} with this quiz. 
+                            Select the best answer for each question and submit when complete.
+                          </p>
+                        </div>
+                        <UpdatedEnhancedQuiz
+                          moduleId={moduleId}
+                          termIndex={termContent.termIndex}
+                          quiz={termContent.quiz}
+                          isCompleted={isQuizCompleted}
+                          resourceProgress={termContent.resourceProgress}
+                          onComplete={(score) => {
+                            handleResourceComplete(
+                              moduleId,
+                              currentTermIndex,
+                              "quiz",
+                              score
+                            );
+                          }}
+                          onClose={() => {}}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Completion Status */}
+          {allCompleted && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mt-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded-lg p-6 text-center"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Previous Term
-            </Button>
-            <Button variant="outline" onClick={navigateToModule}>
-              Back to Module
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => nextTerm && navigateToTerm(nextTerm.termIndex)}
-              disabled={!nextTerm}
+              <div className="inline-flex items-center justify-center p-4 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full mb-4">
+                <Star className="h-10 w-10" />
+              </div>
+              <h3 className="text-2xl font-bold text-green-700 dark:text-green-400 mb-2">
+                Congratulations! Term Completed
+              </h3>
+              <p className="text-green-600 dark:text-green-500 mb-4">
+                You've successfully completed all learning materials for this term.
+              </p>
+              <div className="flex justify-center gap-3 mb-6">
+                <Badge className="px-3 py-1 text-sm bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-none">
+                  <Star className="h-3.5 w-3.5 mr-1" />
+                  XP Earned
+                </Badge>
+              </div>
+              <div className="flex justify-center gap-4">
+                {previousTerm && (
+                  <Button
+                    variant="outline"
+                    onClick={() => navigateToTerm(previousTerm.termIndex)}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Previous Term
+                  </Button>
+                )}
+                {nextTerm ? (
+                  <Button
+                    onClick={() => navigateToTerm(nextTerm.termIndex)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Continue to Next Term
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={navigateToModule}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    Complete Module
+                    <CheckCircle className="h-4 w-4 ml-2" />
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          )}
+          
+          {/* Navigation Footer */}
+          {!allCompleted && (
+            <motion.div 
+              variants={itemVariants}
+              className="flex justify-between mt-6"
             >
-              Next Term
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        )}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  previousTerm && navigateToTerm(previousTerm.termIndex)
+                }
+                disabled={!previousTerm}
+                className="border-gray-200 dark:border-gray-700"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Previous Term
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={navigateToModule}
+                className="border-gray-200 dark:border-gray-700"
+              >
+                Back to Module
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => nextTerm && navigateToTerm(nextTerm.termIndex)}
+                disabled={!nextTerm}
+                className="border-gray-200 dark:border-gray-700"
+              >
+                Next Term
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
+      
+      <Toaster />
     </div>
   );
 }

@@ -96,7 +96,7 @@ const navigateToModule = async (moduleId) => {
     console.log(`Preparing to navigate to module: ${module?.title || moduleId}`);
     
     // Show loading indicator
-    setIsNavigating(true); // You'll need to add this state variable
+    setIsNavigating(true);
     
     // Step 1: Start the module first to ensure terms are unlocked
     console.log(`Starting module ${moduleId} before navigation...`);
@@ -285,7 +285,7 @@ const navigateToModule = async (moduleId) => {
                   {getCourseMetadata('title', 'Course Title')}
                 </h1>
                 
-                <p className="text-white/80 text-lg mb-6 max-w-3xl">
+                <p className="text-white/80 text-lg mb-6">
                   {getCourseMetadata('description', 'Course description not available.')}
                 </p>
                 
@@ -347,10 +347,7 @@ const navigateToModule = async (moduleId) => {
           <Tabs defaultValue="overview" className="w-full">
             <TabsList className="mb-8">
               <TabsTrigger value="overview" className="text-base py-2 px-4">Overview</TabsTrigger>
-              <TabsTrigger value="curriculum" className="text-base py-2 px-4">Curriculum</TabsTrigger>
-              {courseProgress && (
-                <TabsTrigger value="progress" className="text-base py-2 px-4">My Progress</TabsTrigger>
-              )}
+              <TabsTrigger value="curriculum" className="text-base py-2 px-4">Curriculum & Progress</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="mt-0">
@@ -428,123 +425,9 @@ const navigateToModule = async (moduleId) => {
             
             <TabsContent value="curriculum" className="mt-0">
               <div className="space-y-6">
-                <Card className="overflow-hidden border-none shadow-lg">
-                  <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-blue-600" />
-                        Course Curriculum
-                      </CardTitle>
-                      <div className="text-sm text-gray-500">
-                        {getModules().length} modules
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0 divide-y">
-                  {getModules().map((module, index) => {
-                    // Get module progress data if available
-                    const moduleProgress = courseProgress && courseProgress.moduleProgressMap 
-                      ? courseProgress.moduleProgressMap[module.id || module.moduleId]
-                      : null;
-                    
-                    // Determine module state for UI
-                    const moduleState = moduleProgress ? moduleProgress.state : null;
-                    const isLocked = moduleState === "LOCKED";
-                    const isCompleted = moduleState === "COMPLETED";
-                    const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
-                    const earnedXP = moduleProgress ? moduleProgress.earnedXP : 0;
-                    
-                    return (
-                      <motion.div 
-                        key={module.moduleId || module.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className={`group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${
-                          isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                      >
-                        <div 
-                          className="p-5"
-                          onClick={() => !isLocked && navigateToModule(module.id || module.moduleId)}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                {/* Module status icon */}
-                                {isCompleted && (
-                                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
-                                    <CheckCircle className="h-4 w-4" />
-                                  </div>
-                                )}
-                                
-                                {isLocked && (
-                                  <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">
-                                    <Lock className="h-4 w-4" />
-                                  </div>
-                                )}
-                                
-                                <h3 className={`text-lg font-medium group-hover:text-blue-700 transition-colors ${
-                                  isCompleted ? "text-green-700 dark:text-green-400" : "text-gray-800 dark:text-gray-200"
-                                }`}>
-                                  {module.title}
-                                </h3>
-                                
-                                {/* Progress badge if exists */}
-                                {moduleProgress && moduleProgress.progressPercentage > 0 && moduleProgress.progressPercentage < 100 && (
-                                  <Badge className="bg-blue-100 text-blue-800 border-none ml-2">
-                                    {moduleProgress.progressPercentage}% Complete
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                                <div className="flex items-center">
-                                  <Clock className="h-4 w-4 mr-1" />
-                                  <span>{module.duration || "1-2 hours"}</span>
-                                </div>
-                                {module.complexityLevel && (
-                                  <>
-                                    <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
-                                    <span>{module.complexityLevel}</span>
-                                  </>
-                                )}
-                                
-                                {/* XP indicator if enrolled */}
-                                {moduleProgress && moduleProgress.earnedXP > 0 && (
-                                  <>
-                                    <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
-                                    <div className="flex items-center">
-                                    <Star className="h-4 w-4 mr-1 text-yellow-500" />
-                                      <span>{moduleProgress.earnedXP} XP</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                              <p className="text-gray-600 mt-2 line-clamp-2">
-                                {module.description}
-                              </p>
-                            </div>
-                            <div className={`text-blue-600 group-hover:translate-x-1 transition-transform ${
-                              isLocked ? "opacity-50" : ""
-                            }`}>
-                              <ChevronRight className="h-5 w-5" />
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-            
-            {/* Progress Tab (only shown when enrolled) */}
-            {courseProgress && (
-              <TabsContent value="progress" className="mt-0">
-                <div className="space-y-6">
-                  {/* Overall Progress Card */}
-                  <Card className="overflow-hidden border-none shadow-lg">
+                {/* Course Progress Summary (shown when enrolled) */}
+                {courseProgress && (
+                  <Card className="overflow-hidden border-none shadow-lg mb-6">
                     <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
                       <CardTitle className="text-xl">Your Learning Journey</CardTitle>
                     </CardHeader>
@@ -574,82 +457,161 @@ const navigateToModule = async (moduleId) => {
                             {courseProgress.earnedXP} XP
                           </div>
                         </div>
-                        
-                        {/* Module completion status */}
-                        <div>
-                          <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-4">Module Progress</h3>
-                          <div className="space-y-3">
-                            {getModules().map((module, index) => {
-                              // Get module progress data if available
-                              const moduleProgress = courseProgress.moduleProgressMap
-                                ? courseProgress.moduleProgressMap[module.id || module.moduleId]
-                                : null;
-                              
-                              // Default to locked if no progress data
-                              const moduleState = moduleProgress ? moduleProgress.state : "LOCKED";
-                              const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
-                              
-                              return (
-                                <div key={module.id || module.moduleId} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
-                                  <div className="flex justify-between items-center mb-2">
-                                    <div className="flex items-center gap-2">
-                                      {moduleState === "COMPLETED" ? (
-                                        <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
-                                          <CheckCircle className="h-4 w-4" />
-                                        </div>
-                                      ) : moduleState === "IN_PROGRESS" ? (
-                                        <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
-                                          <Clock className="h-4 w-4" />
-                                        </div>
-                                      ) : moduleState === "UNLOCKED" ? (
-                                        <div className="p-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full text-yellow-600 dark:text-yellow-400">
-                                          <Unlock className="h-4 w-4" />
-                                        </div>
-                                      ) : (
-                                        <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">
-                                          <Lock className="h-4 w-4" />
-                                        </div>
-                                      )}
-                                      
-                                      <h4 className="font-medium text-gray-800 dark:text-gray-200">
-                                        {module.title}
-                                      </h4>
-                                    </div>
-                                    
-                                    <Badge className={`
-                                      ${moduleState === "COMPLETED" ? "bg-green-100 text-green-800" : 
-                                        moduleState === "IN_PROGRESS" ? "bg-blue-100 text-blue-800" :
-                                        moduleState === "UNLOCKED" ? "bg-yellow-100 text-yellow-800" :
-                                        "bg-gray-100 text-gray-800"}
-                                      border-none
-                                    `}>
-                                      {moduleState.replace("_", " ")}
-                                    </Badge>
-                                  </div>
-                                  
-                                  <Progress value={progressPercentage} className="h-1" />
-                                  
-                                  <div className="flex justify-between items-center mt-2 text-sm">
-                                    <span className="text-gray-500">{progressPercentage}% Complete</span>
-                                    
-                                    {moduleProgress && moduleProgress.earnedXP > 0 && (
-                                      <div className="flex items-center text-yellow-600">
-                                        <Star className="h-3.5 w-3.5 mr-1" />
-                                        <span>{moduleProgress.earnedXP} XP</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
-                </div>
-              </TabsContent>
-            )}
+                )}
+
+                {/* Modules with Progress */}
+                <Card className="overflow-hidden border-none shadow-lg">
+                  <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xl flex items-center gap-2">
+                        <BookOpen className="h-5 w-5 text-blue-600" />
+                        Course Curriculum
+                      </CardTitle>
+                      <div className="text-sm text-gray-500">
+                        {getModules().length} modules
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0 divide-y">
+                  {getModules().map((module, index) => {
+                    // Get module progress data if available
+                    const moduleProgress = courseProgress && courseProgress.moduleProgressMap 
+                      ? courseProgress.moduleProgressMap[module.id || module.moduleId]
+                      : null;
+                    
+                    // Determine module state for UI
+                    const moduleState = moduleProgress ? moduleProgress.state : null;
+                    const isLocked = moduleState === "LOCKED";
+                    const isCompleted = moduleState === "COMPLETED";
+                    const isInProgress = moduleState === "IN_PROGRESS";
+                    const progressPercentage = moduleProgress ? moduleProgress.progressPercentage : 0;
+                    const earnedXP = moduleProgress ? moduleProgress.earnedXP : 0;
+                    
+                    return (
+                      <motion.div 
+                        key={module.moduleId || module.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className={`group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors ${
+                          isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                      >
+                        <div className="p-5">
+                          <div className="flex flex-col space-y-4">
+                            {/* Module header with title and status */}
+                            <div 
+                              className="flex justify-between items-center"
+                              onClick={() => !isLocked && navigateToModule(module.id || module.moduleId)}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  {/* Module status icon */}
+                                  {isCompleted && (
+                                    <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400">
+                                      <CheckCircle className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                  
+                                  {isInProgress && (
+                                    <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                                      <Clock className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                  
+                                  {isLocked && (
+                                    <div className="p-1 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">
+                                      <Lock className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                  
+                                  <h3 className={`text-lg font-medium group-hover:text-blue-700 transition-colors ${
+                                    isCompleted ? "text-green-700 dark:text-green-400" : 
+                                    isInProgress ? "text-blue-700 dark:text-blue-400" :
+                                    "text-gray-800 dark:text-gray-200"
+                                  }`}>
+                                    {module.title}
+                                  </h3>
+                                  
+                                  {/* Module status badge */}
+                                  {moduleProgress && (
+                                    <Badge className={`
+                                      ${isCompleted ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : 
+                                        isInProgress ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" :
+                                        moduleState === "UNLOCKED" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" :
+                                        "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"}
+                                      border-none ml-2
+                                    `}>
+                                      {moduleState?.replace("_", " ") || "Not Started"}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                                  <div className="flex items-center">
+                                    <Clock className="h-4 w-4 mr-1" />
+                                    <span>{module.duration || "1-2 hours"}</span>
+                                  </div>
+                                  {module.complexityLevel && (
+                                    <>
+                                      <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
+                                      <span>{module.complexityLevel}</span>
+                                    </>
+                                  )}
+                                  
+                                  {/* XP indicator if enrolled */}
+                                  {moduleProgress && moduleProgress.earnedXP > 0 && (
+                                    <>
+                                      <div className="h-1 w-1 bg-gray-300 rounded-full"></div>
+                                      <div className="flex items-center">
+                                      <Star className="h-4 w-4 mr-1 text-yellow-500" />
+                                        <span>{moduleProgress.earnedXP} XP</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                <p className="text-gray-600 mt-2 line-clamp-2">
+                                  {module.description}
+                                </p>
+                              </div>
+                              <div className={`text-blue-600 group-hover:translate-x-1 transition-transform ${
+                                isLocked ? "opacity-50" : ""
+                              }`}>
+                                <ChevronRight className="h-5 w-5" />
+                              </div>
+                            </div>
+                            
+                            {/* Progress bar for module (only if enrolled) */}
+                            {moduleProgress && (
+                              <div className="pt-2">
+                                <div className="flex justify-between items-center text-sm mb-1">
+                                  <span className="text-gray-600 dark:text-gray-400">Progress</span>
+                                  <span className="font-medium">{progressPercentage}%</span>
+                                </div>
+                                <Progress value={progressPercentage} className="h-1.5" />
+                                
+                                {/* Additional module stats if in progress */}
+                                {isInProgress && moduleProgress.lastAccessed && (
+                                  <div className="flex justify-end mt-2">
+                                    <Badge variant="outline" className="bg-transparent text-xs text-gray-500">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Last studied: {new Date(moduleProgress.lastAccessed).toLocaleDateString()}
+                                    </Badge>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
           </Tabs>
         </motion.div>
       </motion.div>

@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +26,15 @@ public class User {
 
     private String password;
 
+    @Column(unique = true)
+    private String email;
+
+    private String firstName;
+
+    private String lastName;
+
+    private String linkedinUrl;
+
     private int xp = 0;
 
     @ElementCollection
@@ -35,6 +45,14 @@ public class User {
     @ManyToMany(mappedBy = "members")
     @OrderBy("name ASC")
     private List<Thread> threads = new ArrayList<>();
+
+    // Streak related fields
+    private int currentStreak = 0;
+    private int maxStreak = 0;
+
+    @Column(name = "last_activity_date")
+    private LocalDate lastActivityDate;
+
 
     public String getRole() {
         return "USER";

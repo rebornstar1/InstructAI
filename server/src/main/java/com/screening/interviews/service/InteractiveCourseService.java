@@ -168,106 +168,120 @@ public class InteractiveCourseService {
 
     private String generateFirstStagePrompt(String topic) {
         return String.format("""
-            You are an expert educational AI helping to design a personalized course about "%s".
-            
-            To create a tailored learning experience specifically about %s, you need to ask the user important background questions that are directly relevant to learning %s.
-            
-            Generate 3-4 questions focused on:
-            1. Their current skill/knowledge level with %s (beginner, intermediate, expert)
-            2. Their primary goals or what they want to achieve by learning %s
-            3. How they plan to apply %s knowledge (personal projects, professional work, academic)
-            
-            For each question, provide 3-5 specific answer options that are tailored specifically to %s and will be most helpful for course customization.
-                        
-            Format your response as a valid JSON object with this exact structure:
+        You are an expert educational AI helping to design a personalized course about "%s".
+        
+        To create a tailored learning experience about %s, you need to ask the user important background questions that will help customize their learning journey effectively.
+        
+        Generate 3-4 questions focused on:
+        1. Their current skill/knowledge level with %s (from complete beginner to advanced)
+        2. Their primary goals or what they want to achieve by learning %s
+        3. Their available time commitment for learning %s (hours per week, overall timeframe)
+        4. Their preferred balance between theoretical knowledge and practical application in %s
+        
+        For each question, provide 3-5 specific answer options that:
+        - Are directly relevant to mainstream aspects of %s
+        - Cover a broad range of skill levels from beginner to advanced
+        - Focus on widely documented concepts and skills that have ample learning resources available
+        - Avoid overly niche or highly specialized segments that might lack sufficient learning materials
+                    
+        Format your response as a valid JSON object with this exact structure:
+        {
+          "title": "Let's customize your %s learning journey",
+          "description": "To create your personalized %s course, I'll need to understand your background, goals, and preferences.",
+          "questions": [
             {
-              "title": "Let's customize your %s learning experience",
-              "description": "To create a personalized %s course, I need to understand your background and goals.",
-              "questions": [
-                {
-                  "id": "skill_level",
-                  "question": "What is your current skill level with %s?",
-                  "options": ["Complete beginner with no %s experience", "Some basic knowledge of %s", "Intermediate %s skills", "Advanced %s practitioner"]
-                },
-                {
-                  "id": "primary_goal",
-                  "question": "What is your primary goal for learning %s?",
-                  "options": ["Option 1 specific to %s", "Option 2 specific to %s", "Option 3 specific to %s", "Option 4 specific to %s"]
-                }
-              ]
+              "id": "skill_level",
+              "question": "What best describes your current knowledge of %s?",
+              "options": ["Complete beginner with no prior exposure to %s", "Beginner with some basic familiarity with %s concepts", "Intermediate understanding of %s fundamentals", "Advanced knowledge seeking to deepen specific %s skills"]
+            },
+            {
+              "id": "primary_goal",
+              "question": "What is your main goal for learning %s?",
+              "options": ["Option 1 related to common applications of %s", "Option 2 related to common applications of %s", "Option 3 related to common applications of %s", "Option 4 related to common applications of %s"]
             }
-            
-            Make questions highly specific to %s - avoid generic questions that could apply to any topic. Each question should provide clear, distinct options relevant to this specific subject area.
-            """, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
+          ]
+        }
+        
+        Make questions relevant to %s but ensure they're focused on mainstream aspects that have abundant learning resources available. The options should cover a range from beginner to advanced levels to accommodate different learners.
+        """, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
     }
 
     /**
-     * Generate prompt for the second stage questions with stronger topic emphasis
+     * Generate prompt for the second stage questions with focus on practical learning path construction
      */
     private String generateSecondStagePrompt(String topic, Map<String, String> previousAnswers) {
         return String.format("""
-            You are an expert educational AI helping to design a personalized course about "%s".
-            
-            The user has provided these answers to previous questions about %s:
-            %s
-            
-            Based on these answers for learning %s, generate 3-4 more specific questions focusing on:
-            1. Specific subtopics or areas within %s they're most interested in
-            2. Any specific %s technologies, tools, or frameworks they want to focus on
-            3. Their preferred depth of coverage for different %s components
-            4. Any specific %s projects or outcomes they want to accomplish
-            
-            For each question, provide 3-5 specific answer options uniquely relevant to %s and their previous answers.
-            
-            Format your response as a valid JSON object with this exact structure:
+        You are an expert educational AI helping to design a personalized course about "%s".
+        
+        The user has provided these answers to previous questions about %s:
+        %s
+        
+        Based on these answers, generate 3-4 more specific questions focusing on:
+        1. Which mainstream subtopics or fundamental areas of %s they want to prioritize
+        2. Which widely-used %s tools, frameworks, or methodologies they're interested in learning
+        3. What specific types of projects or exercises they'd prefer for practicing %s skills
+        4. How they prefer to measure their progress when learning %s
+        
+        For each question, provide 3-5 specific answer options that:
+        - Focus on well-established, widely-documented aspects of %s
+        - Align with the user's previously indicated skill level and goals
+        - Represent topics with abundant learning resources and tutorials available online
+        - Cover a reasonable progression path for their indicated level of expertise
+        
+        Format your response as a valid JSON object with this exact structure:
+        {
+          "title": "Let's structure your %s learning path",
+          "description": "Based on your background, let's determine what specific aspects of %s to focus on.",
+          "questions": [
             {
-              "title": "Let's get more specific about %s",
-              "description": "I'd like to understand more about your specific %s interests.",
-              "questions": [
-                {
-                  "id": "subtopic_focus",
-                  "question": "Which aspect of %s are you most interested in focusing on?",
-                  "options": ["%s subtopic 1", "%s subtopic 2", "%s subtopic 3", "%s subtopic 4"]
-                }
-              ]
+              "id": "content_priorities",
+              "question": "Which areas of %s would you like to prioritize in your learning?",
+              "options": ["Fundamental %s concepts and principles", "Practical %s applications and implementations", "Advanced %s techniques and optimizations", "Comprehensive coverage of both basics and advanced %s topics"]
             }
-            
-            Make questions and options highly specific to %s - avoid generic questions. Each option should be directly relevant to %s and their previous answers.
-            """, topic, topic, formatPreviousAnswers(previousAnswers), topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
+          ]
+        }
+        
+        Keep the questions focused on mainstream %s knowledge that has sufficient learning resources available online. Avoid overly specialized or niche areas that might be difficult to find comprehensive materials for.
+        """, topic, topic, formatPreviousAnswers(previousAnswers), topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
     }
 
     /**
-     * Generate prompt for the third stage questions with stronger topic emphasis
+     * Generate prompt for the third stage questions with focus on learning style and practical implementation
      */
     private String generateThirdStagePrompt(String topic, Map<String, String> previousAnswers) {
         return String.format("""
-            You are an expert educational AI helping to design a personalized course about "%s".
-            
-            The user has provided these answers about learning %s:
-            %s
-            
-            Based on all their answers about %s so far, generate 2-3 final questions focusing on:
-            1. Their preferred learning style for %s (practical projects, theoretical concepts, mixed)
-            2. Time constraints or how in-depth they want the %s course to be
-            3. Any specific learning challenges they anticipate with %s
-            
-            For each question, provide 3-5 specific answer options relevant to %s and their previous answers.
-            
-            Format your response as a valid JSON object with this exact structure:
+        You are an expert educational AI helping to design a personalized course about "%s".
+        
+        The user has provided these answers about their %s learning preferences:
+        %s
+        
+        Based on all their answers so far, generate 2-3 final questions focusing on:
+        1. Their preferred learning formats for %s (videos, interactive exercises, reading materials, projects)
+        2. How they want to balance theory and practice in their %s learning journey
+        3. What level of guidance they need when learning %s (step-by-step instructions vs. exploratory challenges)
+        4. How they prefer to apply their %s knowledge (following structured examples vs. creative projects)
+        
+        For each question, provide 3-5 specific answer options that:
+        - Accommodate different learning styles while remaining practical for %s education
+        - Focus on approaches that can be implemented with readily available learning resources
+        - Can be adapted to different skill levels based on their previous answers
+        - Will help create a well-rounded learning experience for mainstream %s topics
+        
+        Format your response as a valid JSON object with this exact structure:
+        {
+          "title": "Finalizing your %s learning experience",
+          "description": "Let's determine the best way to deliver your personalized %s course.",
+          "questions": [
             {
-              "title": "Final customization questions for your %s course",
-              "description": "Just a few more questions to perfect your %s learning experience.",
-              "questions": [
-                {
-                  "id": "learning_style",
-                  "question": "What is your preferred learning style for %s?",
-                  "options": ["%s learning approach 1", "%s learning approach 2", "%s learning approach 3", "%s learning approach 4"]
-                }
-              ]
+              "id": "learning_format",
+              "question": "How do you prefer to learn %s concepts?",
+              "options": ["Through comprehensive text explanations with examples", "Through video tutorials and demonstrations", "Through interactive coding/practice exercises", "Through a mix of different formats"]
             }
-            
-            Make questions and options highly specific to %s. Each option should directly relate to learning %s based on all previous answers.
-            """, topic, topic, formatPreviousAnswers(previousAnswers), topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
+          ]
+        }
+        
+        Keep the focus on creating a practical and achievable %s learning experience using widely available resources and formats. The goal is to create a customized course that can be effectively delivered with existing educational materials.
+        """, topic, topic, formatPreviousAnswers(previousAnswers), topic, topic, topic, topic, topic, topic, topic, topic, topic, topic, topic);
     }
 
     /**
