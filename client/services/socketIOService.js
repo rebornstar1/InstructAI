@@ -16,11 +16,12 @@ const SocketIOService = {
       return new Promise((resolve, reject) => {
         try {
           // Connect to Socket.IO server with proper options
-          this.socket = io('http://localhost:9092', {
+          this.socket = io(`${process.env.NEXT_PUBLIC_API_URL}`, {
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
+            path: "/socket.io",
             transports: ['websocket', 'polling'],  // Try WebSocket first, fall back to polling
             query: {
               userId: userId,
