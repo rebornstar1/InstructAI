@@ -60,8 +60,6 @@ import { getThreadById, getUsersByThreadId } from "@/services/threadApi";
 import { getConversationsByThreadId } from "@/services/conversationApi.js";
 import { getMessagesByConversationId, createMessage, createReply } from "@/services/messageApi";
 
-// const API_URL = 'http://localhost:8007/api';
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 
 
@@ -201,7 +199,7 @@ export default function ThreadDetailPage({ params }) {
         // Fetch related courses
         if (threadData.relatedCourseIds && threadData.relatedCourseIds.length > 0) {
           try {
-            const coursesResponse = await fetch(`http://localhost:8007/api/courses/simplified?ids=${threadData.relatedCourseIds.join(',')}`);
+            const coursesResponse = await fetch(`${API_URL}/api/courses/simplified?ids=${threadData.relatedCourseIds.join(',')}`);
             if (coursesResponse.ok) {
               const coursesData = await coursesResponse.json();
               setRelatedCourses(coursesData);
@@ -447,7 +445,7 @@ export default function ThreadDetailPage({ params }) {
     if (!newConversationTitle.trim()) return;
 
     try {
-      const response = await fetch(`http://localhost:8007/api/threads/${threadId}/conversations`, {
+      const response = await fetch(`${API_URL}/api/threads/${threadId}/conversations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
