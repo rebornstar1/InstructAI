@@ -7,6 +7,7 @@ import { Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense } from "react";
 
 import CourseCreationComponent from "../../components/CourseCreationComponent";
 
