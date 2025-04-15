@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: interview-feedback-service
+    env: docker
+    plan: starter
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: PORT
+        value: 8007
+    ports:
+      - port: 8007
+        protocol: http
+      - port: 9092
+        protocol: http

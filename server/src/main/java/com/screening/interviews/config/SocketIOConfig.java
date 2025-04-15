@@ -25,6 +25,7 @@ public class SocketIOConfig {
 
         // Allow all origins for development
         config.setOrigin("*");
+        config.setContext("/socket.io");
 
         // Configure socket options for better performance
         SocketConfig socketConfig = new SocketConfig();
@@ -49,8 +50,7 @@ public class SocketIOConfig {
         // Important: Allow client to reconnect
         config.setRandomSession(false);
 
-        final SocketIOServer server = new SocketIOServer(config);
-        return server;
+        return new SocketIOServer(config);
     }
 
     @Bean
