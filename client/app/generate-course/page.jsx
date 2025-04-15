@@ -7,6 +7,7 @@ import { Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { usePathname } from 'next/navigation';
+import Navbar2 from "@/components/Navbar2";
 
 import CourseCreationComponent from "../../components/CourseCreationComponent";
 
@@ -95,65 +96,7 @@ export default function CourseCreation() {
   return(
     <Suspense fallback={<div>Loading...</div>}>
       <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
-        <nav className="fixed w-full z-50 backdrop-blur-sm bg-white/80 border-b border-slate-200">
-          <div className="max-w-screen-xl mx-auto px-6 md:px-8">
-            <div className="flex items-center justify-between h-20">
-              {/* Logo */}
-              <Link href="/">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="h-10 w-10 bg-blue-600 rounded-tl-2xl rounded-br-2xl rotate-12"></div>
-                    <div className="absolute top-1 left-1 h-8 w-8 bg-indigo-500 rounded-tl-xl rounded-br-xl rotate-12 flex items-center justify-center">
-                      <span className="text-white font-bold text-lg -rotate-12">C</span>
-                    </div>
-                  </div>
-                  <span className="font-extrabold tracking-tight text-slate-800">
-                    Instruct<span className="text-blue-600">AI</span>
-                  </span>
-                </div>
-              </Link>
-              
-              {/* Desktop navigation */}
-              <div className="hidden md:flex items-center space-x-1">
-                <Link 
-                  href="/generate-course"
-                  className="mr-3 px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center group"
-                >
-                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-white bg-opacity-20 mr-2 group-hover:scale-110 transition-transform">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </span>
-                  <span className="text-sm font-medium">New Course</span>
-                </Link>
-
-                <NavLink href="/home" active={pathname === "/home"}>Dashboard</NavLink>
-                <NavLink href="/course-content" active={pathname === "/course-content"} disabled={!generatedCourse}>Courses</NavLink>
-                <NavLink href="/ai-tutor" active={pathname === "/ai-tutor"}>AI Tutor</NavLink>
-                <NavLink href="/resume-analyser" active={pathname === "/resume-analyser"}>Analyze Resume</NavLink>
-                
-                <div className="ml-8 flex items-center space-x-4">
-                  <div className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1 rounded-full text-sm">
-                    <Star className="h-4 w-4 mr-1" />
-                    <span>{userProfile?.xp || 0} XP</span>
-                  </div>
-                  <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
-                    <span className="font-medium text-slate-600">{userProfile?.username ? userProfile.username.slice(0, 2).toUpperCase() : "U"}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Mobile menu button */}
-              <div className="md:hidden">
-                <button className="text-slate-700 hover:text-blue-600 focus:outline-none">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <Navbar2/>
 
         {/* Main content with proper padding to avoid navbar overlap */}
         <div className="pt-28 px-6 md:px-8 max-w-screen-xl mx-auto pb-16">

@@ -22,6 +22,7 @@ public class WebClientConfig {
 
         // Allow requests from your frontend origin
         config.addAllowedOrigin("http://localhost:3000");
+        config.addAllowedOrigin("https://instruct-ai-oher.vercel.app");
 
         // Allow common HTTP methods
         config.addAllowedMethod("GET");
