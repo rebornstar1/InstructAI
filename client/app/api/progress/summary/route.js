@@ -50,11 +50,6 @@ export async function GET(request) {
   }
 }
 
-// app/api/progress/modules/[moduleId]/check-completion/route.js
-
-import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
-
 /**
  * API route to check if a module should be auto-completed
  */
