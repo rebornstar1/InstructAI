@@ -16,7 +16,7 @@ const SocketIOService = {
       return new Promise((resolve, reject) => {
         try {
           // Connect to Socket.IO server with proper options
-          this.socket = io(`${process.env.NEXT_PUBLIC_API_URL}`, {
+          this.socket = io(`${process.env.NEXT_PUBLIC_API_URL}:9092`, {
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
