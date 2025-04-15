@@ -37,3 +37,29 @@ export async function fetchWithAuth(endpoint, options = {}) {
   
   return response;
 }
+
+export async function getStreaKWithAuth(endpoint, options = {}) {
+  console.log("JSNDJSDJSND" , options)
+  const token = localStorage.getItem('token');
+  
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    console.log("TOKEN" , token)
+    defaultHeaders['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(`${API_URL}/api/users/record`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    
+  });
+    
+  
+  return response;
+}
