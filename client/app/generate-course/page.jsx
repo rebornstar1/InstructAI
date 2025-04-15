@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star } from "lucide-react";
@@ -77,6 +77,7 @@ export default function CourseCreation() {
   }, [user]);
 
   return(
+    <Suspense fallback={<div>Loading...</div>}>
     <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
       <nav className="fixed w-full z-50 backdrop-blur-sm bg-white/80 border-b border-slate-200">
         <div className="max-w-screen-xl mx-auto px-6 md:px-8">
@@ -174,5 +175,6 @@ export default function CourseCreation() {
         </motion.div>
       </div>
     </div>
+    </Suspense>
   );
 }
