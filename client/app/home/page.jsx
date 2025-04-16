@@ -1,15 +1,15 @@
 "use client";
 
-import React from 'react'
-import Dashboard from '../dashboard/page'
-import DashboardComponent from '@/components/dashboard'
+import React from 'react';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import DashboardComponent from '@/components/dashboard';
 
-const page = () => {
+const HomePage = () => {
   return (
-    <div>
-        <DashboardComponent/>
-    </div>
-  )
-}
+    <ProtectedRoute>
+      <DashboardComponent />
+    </ProtectedRoute>
+  );
+};
 
-export default page
+export default HomePage;

@@ -3,6 +3,8 @@ package com.screening.interviews.controller;
 import com.screening.interviews.dto.LearningResourceDto;
 import com.screening.interviews.dto.LearningResourceRequestDto;
 import com.screening.interviews.dto.QuizDto;
+import com.screening.interviews.dto.QuizDto;
+import com.screening.interviews.model.Quiz;
 import com.screening.interviews.service.LearningResourceService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -82,6 +84,13 @@ public class LearningResourceController {
         }
         logger.info("Successfully generated {} quizzes", quizzes.size());
         return ResponseEntity.ok(quizzes);
+    }
+
+    @PostMapping("/generate-quiz")
+    public ResponseEntity<QuizDto> generateQuiz(@RequestBody String concept){
+        QuizDto quiz = learningResourceService.generateQuiz(concept);
+
+        return ResponseEntity.ok(quiz);
     }
 
     /**

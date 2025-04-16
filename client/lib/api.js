@@ -2,7 +2,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 
 
 export async function fetchWithAuth(endpoint, options = {}) {
-  console.log("okay" , options)
+  
   const token = localStorage.getItem('token');
   
   const defaultHeaders = {
@@ -22,7 +22,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
     },
   };
 
-  console.log("configg" , config)
+  
   const response = await fetch(`${API_URL}/api/users/profile`, {
     method: "GET",
     headers: {
@@ -39,7 +39,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
 }
 
 export async function getStreaKWithAuth(endpoint, options = {}) {
-  console.log("JSNDJSDJSND" , options)
+  
   const token = localStorage.getItem('token');
   
   const defaultHeaders = {

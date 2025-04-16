@@ -1,5 +1,9 @@
 "use client";
 
+//==================================================
+// OLD ONE
+//==================================================
+
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { CardContent, Card } from "@/components/ui/card";
@@ -46,6 +50,10 @@ export default function Dashboard() {
   };
 
   return (
+    //==================================================
+    // OLD ONEE
+    //===================================================
+    
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <header className="px-4 lg:px-6 h-14 flex items-center border-b bg-white dark:bg-gray-800 shadow-sm">
         <Link className="flex items-center justify-center" href="#">

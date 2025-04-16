@@ -17,7 +17,8 @@ import {
 
 import Navbar2 from '@/components/Navbar2';
 import { useAuth } from '@/context/AuthContext';
-import { fetchWithAuth } from '@/lib/api'; // Assuming this is your API utility
+import { fetchWithAuth , getStreaKWithAuth } from '@/lib/api'; // Assuming this is your API utility
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
@@ -26,6 +27,7 @@ const ProfilePage = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const { user } = useAuth(); // Get the authenticated user from context
+  const [streakDays, setStreakDays] = useState(0);
 
   // Profile data state
   const [profileData, setProfileData] = useState({
@@ -73,6 +75,40 @@ const ProfilePage = () => {
         setIsLoaded(true);
       }
     }
+
+    async function checkStreak() {
+            console.log("Check Streak")
+            try {
+              
+              if (!user) return;
+              
+              
+              setLoading(true);
+              const response = await getStreaKWithAuth('/users/record');
+              
+              if (!response.ok) {
+                throw new Error('Failed to fetch user profile');
+              }
+              
+              const data = await response.json();
+    
+              console.log("Streak Data" , data)
+    
+              setStreakDays(data.currentStreak);
+              
+              
+            } catch (err) {
+              
+              console.error('Error fetching streaks:', err);
+              setError('Could not load user streaks');
+            } finally {
+              
+              setLoading(false);
+              setIsLoaded(true);
+            }
+          }
+
+    checkStreak();
 
     fetchUserProfile();
   }, [user]);
@@ -209,6 +245,7 @@ const ProfilePage = () => {
   }
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
       <Navbar2/>
       
@@ -474,25 +511,25 @@ const ProfilePage = () => {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-blue-50 rounded-lg p-4">
+                      <div className="bg-gradient-to-r from-orange-400 to-red-400 rounded-lg p-4">
                         <div className="flex items-center mb-2">
-                          <Activity className="h-5 w-5 text-blue-600 mr-2" />
-                          <h3 className="font-semibold text-slate-800">Current Streak</h3>
+                          <Activity className="h-5 w-5  text-blue-600 mr-2" />
+                          <h3 className="font-semibold text-white">Current Streak</h3>
                         </div>
-                        <div className="flex items-baseline">
-                          <span className="text-2xl font-bold text-blue-600 mr-1">{userProfile?.currentStreak || 0}</span>
-                          <span className="text-slate-600">days</span>
+                        <div className="flex items-baseline ">
+                          <span className="text-2xl font-bold text-white mr-1">{streakDays || 0}</span>
+                          <span className="text-slate-200">days</span>
                         </div>
                       </div>
                       
-                      <div className="bg-gradient-to-r from-orange-400 to-red-400 rounded-lg p-4">
+                      <div className="bg-blue-50 rounded-lg p-4">
                         <div className="flex items-center mb-2">
                           <TrendingUp className="h-5 w-5 text-blue-600 mr-2" />
-                          <h3 className="font-semibold text-white">Longest Streak</h3>
+                          <h3 className="font-semibold text-slate-800">Longest Streak</h3>
                         </div>
                         <div className="flex items-baseline">
-                          <span className="text-2xl font-bold text-white mr-1">{userProfile?.maxStreak || 0}</span>
-                          <span className="text-slate-200">days</span>
+                          <span className="text-2xl font-bold text-blue-600 mr-1">{userProfile?.maxStreak || 0}</span>
+                          <span className="text-slate-600">days</span>
                         </div>
                       </div>
                     </div>
@@ -564,55 +601,7 @@ const ProfilePage = () => {
                     </div>
                   </div>
                 </motion.div>
-                
-                {/* Current Learning Card */}
-                <motion.div 
-                  variants={itemVariants}
-                  className="bg-white rounded-xl shadow-md overflow-hidden border border-slate-200"
-                >
-                  <div className="p-6 border-b border-slate-200">
-                    <h3 className="text-lg font-bold text-slate-800">Current Learning</h3>
-                  </div>
-                  <div className="divide-y divide-slate-200">
-                    {[
-                      {
-                        title: "Advanced React Patterns",
-                        progress: 75,
-                        lastAccessed: "2 hours ago"
-                      },
-                      {
-                        title: "Machine Learning Fundamentals",
-                        progress: 45,
-                        lastAccessed: "Yesterday"
-                      },
-                      {
-                        title: "Data Visualization with D3.js",
-                        progress: 20,
-                        lastAccessed: "3 days ago"
-                      }
-                    ].map((course, i) => (
-                      <div key={i} className="p-4 hover:bg-slate-50 transition-colors">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium text-slate-800">{course.title}</h4>
-                          <span className="text-sm text-blue-600">{course.progress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-200 rounded-full h-2 mb-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${course.progress}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-slate-500">Last accessed: {course.lastAccessed}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-4 bg-slate-50">
-                    <a href="#" className="text-blue-600 text-sm font-medium flex items-center justify-center hover:text-blue-800 transition-colors">
-                      View all courses
-                      <ChevronRight className="ml-1 h-4 w-4" />
-                    </a>
-                  </div>
-                </motion.div>
+               
                 
                 {/* Skills Card */}
                 
@@ -624,6 +613,7 @@ const ProfilePage = () => {
 
       {/* FOOTER would go here */}
     </div>
+    </ProtectedRoute>
   );
 };
 

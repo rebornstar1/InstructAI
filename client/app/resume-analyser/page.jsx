@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 import Navbar2 from "@/components/Navbar2";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const ResumeAnalyzerPage = () => {
   const pathname = usePathname();
@@ -475,6 +476,7 @@ const handleRetryQuiz = (topicKey) => {
   }, [completedQuizResults, generatedQuizzes, quizPlaceholders]);
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
       {/* Navbar */}
       <Navbar2/>
@@ -849,6 +851,7 @@ const handleRetryQuiz = (topicKey) => {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   );
 };
 

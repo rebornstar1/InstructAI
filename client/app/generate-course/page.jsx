@@ -7,9 +7,10 @@ import { Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fetchWithAuth } from "@/lib/api";
 import { usePathname } from 'next/navigation';
-import Navbar2 from "@/components/Navbar2";
 
 import CourseCreationComponent from "../../components/CourseCreationComponent";
+import Navbar2 from "@/components/Navbar2";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Add this dynamic configuration to opt out of static generation
 export const dynamic = 'force-dynamic';
@@ -94,6 +95,7 @@ export default function CourseCreation() {
   }, [user]);
 
   return(
+    <ProtectedRoute>
     <Suspense fallback={<div>Loading...</div>}>
       <div className="min-h-screen font-sans bg-gradient-to-b from-slate-50 to-white">
         <Navbar2/>
@@ -136,5 +138,6 @@ export default function CourseCreation() {
         </div>
       </div>
     </Suspense>
+    </ProtectedRoute>
   );
 }

@@ -32,12 +32,21 @@ public class AuthService {
             throw new RuntimeException("Username already exists");
         }
 
+        // Check if email already exists
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new RuntimeException("Email already exists");
+        }
+
         // Create new user
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setXp(0);
         user.setCompletedCourses(new HashSet<>());
+        user.setEmail(request.getEmail());
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setLinkedinUrl(request.getLinkedinUrl());
 
         userRepository.save(user);
 

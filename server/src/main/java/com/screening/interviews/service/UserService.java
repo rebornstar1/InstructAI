@@ -2,6 +2,7 @@ package com.screening.interviews.service;
 
 import com.screening.interviews.dto.CourseCompletionDto;
 import com.screening.interviews.dto.StreakInfoDto;
+import com.screening.interviews.dto.StreakInfoDto;
 import com.screening.interviews.dto.XpUpdateDto;
 import com.screening.interviews.exception.ResourceNotFoundException;
 import com.screening.interviews.model.User;
@@ -70,7 +71,7 @@ public class UserService {
     }
 
     @Transactional
-    public StreakInfoDto recordActivity(Long userId) {
+    public StreakInfoDto recordActivity() {
         User user = getCurrentUser();
 
         StreakInfoDto streakInfo = streakService.updateUserStreak(user);
@@ -78,4 +79,5 @@ public class UserService {
         return streakInfo;
         // Process other activity related logic...
     }
+
 }

@@ -7,20 +7,15 @@ import {
   Brain, 
   Star, 
   Book, 
-  MessageCircle, 
-  Home, 
   ChevronRight, 
   Sparkles,
-  GraduationCap,
-  LayoutDashboard,
-  FileText,
-  Settings,
   Trophy,
   Flame,
   Users,
-  Medal
+  Medal,
+  Settings
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext"; // Changed from Clerk to our custom auth
+import { useAuth } from "@/context/AuthContext"; 
 import { fetchWithAuth } from "@/lib/api";
 
 import { usePathname } from 'next/navigation';
@@ -29,10 +24,7 @@ import Navbar2 from "./Navbar2";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
 
 export default function Dashboard() {
-  const pathname = usePathname();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [generatedCourse, setGeneratedCourse] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,13 +39,6 @@ export default function Dashboard() {
   });
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   
-  const [messages, setMessages] = useState([
-    {
-      role: "ai",
-      content:
-        "Hello! I'm your AI tutor. Enter a prompt to generate a course on any topic you'd like to learn about.",
-    },
-  ]);
 
   // Example raw course suggestions - will still be hardcoded for the UI
   const rawCourses = [
@@ -114,6 +99,7 @@ export default function Dashboard() {
     fetchUserProfile();
     
   }, [user]);
+ 
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -211,40 +197,41 @@ const Leaderboard = () => (
     variants={containerVariants}
     initial="hidden"
     animate="visible"
-    className="w-full mb-12"
+    className="w-full mb-8 sm:mb-12"
   >
     <motion.div variants={itemVariants} className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-      <div className="p-6 border-b border-slate-200">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center">
-            <Trophy className="h-5 w-5 text-yellow-500 mr-2" />
+      {/* Header section with responsive adjustments */}
+      <div className="p-4 sm:p-6 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+          <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center">
+            <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 mr-2" />
             Leaderboard
           </h3>
-          <div className="flex bg-slate-100 rounded-lg p-1">
+          <div className="flex bg-slate-100 rounded-lg p-1 w-full sm:w-auto">
             <button 
               onClick={() => setLeaderboardTab("streak")}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 sm:flex-initial px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                 leaderboardTab === "streak" 
                   ? "bg-white text-blue-600 shadow-sm" 
                   : "text-slate-600 hover:text-blue-600"
               }`}
             >
-              <span className="flex items-center">
-                <Flame className="h-4 w-4 mr-1.5" />
-                Longest Streaks
+              <span className="flex items-center justify-center sm:justify-start">
+                <Flame className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
+                <span className="hidden xs:inline">Longest</span> Streaks
               </span>
             </button>
             <button 
               onClick={() => setLeaderboardTab("xp")}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 sm:flex-initial px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                 leaderboardTab === "xp" 
                   ? "bg-white text-blue-600 shadow-sm" 
                   : "text-slate-600 hover:text-blue-600"
               }`}
             >
-              <span className="flex items-center">
-                <Star className="h-4 w-4 mr-1.5" />
-                Highest XP
+              <span className="flex items-center justify-center sm:justify-start">
+                <Star className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />
+                <span className="hidden xs:inline">Highest</span> XP
               </span>
             </button>
           </div>
@@ -253,8 +240,8 @@ const Leaderboard = () => (
       
       <AnimatePresence mode="wait">
         {leaderboardLoading ? (
-          <div className="p-12 flex justify-center items-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+          <div className="p-8 sm:p-12 flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-600"></div>
           </div>
         ) : (
           <motion.div
@@ -263,14 +250,16 @@ const Leaderboard = () => (
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
+            className="w-full"
           >
-            <div className="overflow-x-auto">
+            {/* Table for tablet and desktop */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 text-left">
                   <tr>
-                    <th className="p-4 text-sm font-medium text-slate-500">Rank</th>
-                    <th className="p-4 text-sm font-medium text-slate-500">User</th>
-                    <th className="p-4 text-sm font-medium text-slate-500 text-right">
+                    <th className="p-4 text-xs sm:text-sm font-medium text-slate-500">Rank</th>
+                    <th className="p-4 text-xs sm:text-sm font-medium text-slate-500">User</th>
+                    <th className="p-4 text-xs sm:text-sm font-medium text-slate-500 text-right">
                       {leaderboardTab === "streak" ? "Current Streak" : "XP"}
                     </th>
                   </tr>
@@ -351,17 +340,220 @@ const Leaderboard = () => (
               </table>
             </div>
             
-            <div className="p-4 bg-slate-50 text-center">
-              <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
-                View full leaderboard
-              </button>
+            {/* Mobile-friendly card layout */}
+            <div className="sm:hidden">
+              <div className="divide-y divide-slate-200">
+                {leaderboardData[leaderboardTab] && leaderboardData[leaderboardTab].length > 0 ? (
+                  leaderboardData[leaderboardTab].map((userData, index) => {
+                    // Check if this is the current user
+                    const isCurrentUser = userData.username === userProfile?.username;
+                    
+                    return (
+                      <motion.div 
+                        key={userData.userId}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`p-4 ${isCurrentUser ? "bg-blue-50" : ""}`}
+                      >
+                        <div className="flex items-center">
+                          <div className="mr-3 flex-shrink-0">
+                            {index < 3 ? (
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center ${
+                                index === 0 ? "bg-yellow-100 text-yellow-600" :
+                                index === 1 ? "bg-slate-200 text-slate-600" :
+                                "bg-amber-100 text-amber-600"
+                              }`}>
+                                <Medal className="h-4 w-4" />
+                              </div>
+                            ) : (
+                              <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-600">
+                                {index + 1}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-shrink-0 mr-3">
+                            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-medium">
+                              {userData.firstName?.charAt(0) || '?'}{userData.lastName?.charAt(0) || '?'}
+                            </div>
+                          </div>
+                          
+                          <div className="flex-grow min-w-0">
+                            <div className="font-medium text-slate-800 flex items-center flex-wrap">
+                              <span className="truncate mr-1.5">
+                                {userData.firstName || 'User'} {userData.lastName || ''}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="mt-0.5 text-xs bg-blue-100 text-blue-600 py-0.5 px-1.5 rounded-full">You</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">@{userData.username}</div>
+                          </div>
+                          
+                          <div className="flex-shrink-0 ml-auto">
+                            <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100">
+                              {leaderboardTab === "streak" ? (
+                                <>
+                                  <Flame className="h-3.5 w-3.5 text-orange-500 mr-1" />
+                                  <span className="text-slate-800">{userData.currentStreak} days</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Star className="h-3.5 w-3.5 text-blue-500 mr-1" />
+                                  <span className="text-slate-800">{userData.xp.toLocaleString()} XP</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-slate-500">
+                    No leaderboard data available yet
+                  </div>
+                )}
+              </div>
             </div>
+            
+            
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
   </motion.div>
 );
+
+  // Suggested courses component
+//   const SuggestedCourses = () => (
+//     <motion.div 
+//       variants={containerVariants}
+//       initial="hidden"
+//       animate="visible"
+//       className="mt-12"
+//     >
+//       <motion.div variants={itemVariants} className="text-center space-y-4 mb-8">
+//         <h2 className="text-2xl font-bold text-center flex items-center justify-center gap-2">
+//           <Sparkles className="h-5 w-5 text-blue-500" />
+//           <span>Recommended Courses</span>
+//           <Sparkles className="h-5 w-5 text-blue-500" />
+//         </h2>
+//         <p className="text-gray-500 max-w-2xl mx-auto">
+//           These courses are tailored to your learning history and goals
+//         </p>
+//       </motion.div>
+
+//       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+//         {rawCourses.map((course, index) => (
+//           <motion.div
+//             key={`leaderboard-${leaderboardTab}`}
+//             initial={{ opacity: 0 }}
+//             animate={{ opacity: 1 }}
+//             exit={{ opacity: 0 }}
+//             transition={{ duration: 0.3 }}
+//           >
+//             <div className="overflow-x-auto">
+//               <table className="w-full">
+//                 <thead className="bg-slate-50 text-left">
+//                   <tr>
+//                     <th className="p-4 text-sm font-medium text-slate-500">Rank</th>
+//                     <th className="p-4 text-sm font-medium text-slate-500">User</th>
+//                     <th className="p-4 text-sm font-medium text-slate-500 text-right">
+//                       {leaderboardTab === "streak" ? "Current Streak" : "XP"}
+//                     </th>
+//                   </tr>
+//                 </thead>
+//                 <tbody className="divide-y divide-slate-200">
+//                   {leaderboardData[leaderboardTab] && leaderboardData[leaderboardTab].length > 0 ? (
+//                     leaderboardData[leaderboardTab].map((userData, index) => {
+//                       // Check if this is the current user
+//                       const isCurrentUser = userData.username === userProfile?.username;
+                      
+//                       return (
+//                         <motion.tr 
+//                           key={userData.userId}
+//                           initial={{ opacity: 0, y: 10 }}
+//                           animate={{ opacity: 1, y: 0 }}
+//                           transition={{ delay: index * 0.05 }}
+//                           className={`hover:bg-slate-50 transition-colors ${isCurrentUser ? "bg-blue-50" : ""}`}
+//                         >
+//                           <td className="p-4">
+//                             <div className="flex items-center">
+//                               {index < 3 ? (
+//                                 <div className={`h-7 w-7 rounded-full flex items-center justify-center ${
+//                                   index === 0 ? "bg-yellow-100 text-yellow-600" :
+//                                   index === 1 ? "bg-slate-200 text-slate-600" :
+//                                   "bg-amber-100 text-amber-600"
+//                                 }`}>
+//                                   <Medal className="h-4 w-4" />
+//                                 </div>
+//                               ) : (
+//                                 <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-600">
+//                                   {index + 1}
+//                                 </div>
+//                               )}
+//                             </div>
+//                           </td>
+//                           <td className="p-4">
+//                             <div className="flex items-center">
+//                               <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-medium mr-3">
+//                                 {userData.firstName?.charAt(0) || '?'}{userData.lastName?.charAt(0) || '?'}
+//                               </div>
+//                               <div>
+//                                 <div className="font-medium text-slate-800 flex items-center">
+//                                   {userData.firstName || 'User'} {userData.lastName || ''}
+//                                   {isCurrentUser && (
+//                                     <span className="ml-2 text-xs bg-blue-100 text-blue-600 py-0.5 px-1.5 rounded-full">You</span>
+//                                   )}
+//                                 </div>
+//                                 <div className="text-sm text-slate-500">@{userData.username}</div>
+//                               </div>
+//                             </div>
+//                           </td>
+//                           <td className="p-4 text-right">
+//                             <div className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-slate-100">
+//                               {leaderboardTab === "streak" ? (
+//                                 <>
+//                                   <Flame className="h-4 w-4 text-orange-500 mr-1.5" />
+//                                   <span className="text-slate-800">{userData.currentStreak} days</span>
+//                                 </>
+//                               ) : (
+//                                 <>
+//                                   <Star className="h-4 w-4 text-blue-500 mr-1.5" />
+//                                   <span className="text-slate-800">{userData.xp.toLocaleString()} XP</span>
+//                                 </>
+//                               )}
+//                             </div>
+//                           </td>
+//                         </motion.tr>
+//                       );
+//                     })
+//                   ) : (
+//                     <tr>
+//                       <td colSpan="3" className="p-8 text-center text-slate-500">
+//                         No leaderboard data available yet
+//                       </td>
+//                     </tr>
+//                   )}
+//                 </tbody>
+//               </table>
+//             </div>
+            
+//             <div className="p-4 bg-slate-50 text-center">
+//               <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
+//                 View full leaderboard
+//               </button>
+//             </div>
+//           </motion.div>
+          
+//         )}
+//         </div>
+//       </AnimatePresence>
+//     </motion.div>
+//   </motion.div>
+// );
 
 
   // Stats cards component
@@ -460,7 +652,7 @@ const Leaderboard = () => (
                 </h1>
 
                 <motion.div
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.95 }}
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -473,7 +665,7 @@ const Leaderboard = () => (
                 >
                   <a 
                     href="/generate-course"
-                    className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-md shadow-sm relative overflow-hidden"
+                    className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 text-white text-md font-medium rounded-md shadow-sm relative overflow-hidden"
                     style={{
                       background: "linear-gradient(45deg, #3b82f6, #2563eb)"
                     }}
@@ -512,60 +704,7 @@ const Leaderboard = () => (
           <StatsCards />
           
           {/* Leaderboard Section */}
-          <Leaderboard />
-                    
-          {/* Recent Activity Section */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="w-full"
-          >
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-              <div className="p-6 border-b border-slate-200">
-                <h3 className="text-lg font-bold text-slate-800">Recent Activity</h3>
-              </div>
-              <div className="divide-y divide-slate-200">
-                {[
-                  {
-                    title: "Completed lesson",
-                    description: "Introduction to Python Variables",
-                    time: "2 hours ago",
-                    icon: <CheckIcon />
-                  },
-                  {
-                    title: "Started new course",
-                    description: "Web Development Fundamentals",
-                    time: "Yesterday",
-                    icon: <PlayIcon />
-                  },
-                  {
-                    title: "Earned achievement",
-                    description: "Coding Streak: 7 Days",
-                    time: "3 days ago",
-                    icon: <TrophyIcon />
-                  }
-                ].map((activity, i) => (
-                  <div key={i} className="p-4 flex items-start hover:bg-slate-50 transition-colors">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3 flex-shrink-0">
-                      {activity.icon}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-slate-800">{activity.title}</h4>
-                      <p className="text-sm text-slate-600">{activity.description}</p>
-                    </div>
-                    <div className="text-xs text-slate-500">{activity.time}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-4 bg-slate-50 text-center">
-                <button className="text-blue-600 text-sm font-medium hover:text-blue-800 transition-colors">
-                  View all activity
-                </button>
-              </div>
-            </div>
-          </motion.div>
-              
+          <Leaderboard />                       
           {/* Suggested Courses Section */}
         </motion.div>
 

@@ -1,20 +1,29 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
+    setMounted(true);
+  }, []);
 
-  if (loading) {
+  useEffect(() => {
+    // Only run this effect after component mounts client-side and auth state is determined
+    if (mounted && !loading) {
+      if (!user) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, router, mounted]);
+
+  // Don't render anything during initial SSR or when loading
+  if (!mounted || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -25,9 +34,11 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
+  // If not authenticated after loading completes, don't render the children
   if (!user) {
     return null;
   }
 
+  // User is authenticated, render the protected content
   return children;
 }
