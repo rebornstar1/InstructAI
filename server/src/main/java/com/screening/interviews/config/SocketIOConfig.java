@@ -25,7 +25,6 @@ public class SocketIOConfig {
 
         // Allow all origins for development
         config.setOrigin("*");
-        config.setContext("/socket.io");
 
         // Configure socket options for better performance
         SocketConfig socketConfig = new SocketConfig();
