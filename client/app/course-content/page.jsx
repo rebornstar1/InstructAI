@@ -11,6 +11,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 export default function CourseContent(){
 
 const [generatedCourse, setGeneratedCourse] = useState(null);
+const [messages, setMessages] = useState([]);
 
 
 return(
