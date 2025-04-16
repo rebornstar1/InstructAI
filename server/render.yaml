@@ -11,4 +11,4 @@ services:
       - port: 8007
         protocol: http
       - port: 9092
-        protocol: http
+        protocol: tcp
