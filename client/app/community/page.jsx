@@ -54,6 +54,10 @@ import { Textarea } from "@/components/ui/textarea";
 import Navbar2 from "@/components/Navbar2";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8007';
+
+
+
 export default function CommunityPage() {
   const [threads, setThreads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,7 +80,7 @@ export default function CommunityPage() {
     // Fetch available threads from backend
     const fetchThreads = async () => {
       try {
-        const response = await fetch("http://localhost:8007/api/threads/main");
+        const response = await fetch(`${API_URL}/api/threads/main`);
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
@@ -103,7 +107,7 @@ useEffect(() => {
     // Fetch available threads from backend
     const fetchUsers     = async () => {
       try {
-        const response = await fetch("http://localhost:8007/api/users");
+        const response = await fetch(`${API_URL}/api/users`);
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
@@ -124,7 +128,7 @@ useEffect(() => {
   }, []);
 
   const navigateToThread = (threadId) => {
-    router.push(`/threads/${threadId}`);
+    router.push(`/thread/${threadId}`);
   };
 
   const navigateBack = () => {
@@ -164,7 +168,7 @@ useEffect(() => {
     // Refetch threads on retry
     const fetchThreads = async () => {
       try {
-        const response = await fetch("http://localhost:8007/api/threads/main");
+        const response = await fetch(`${API_URL}/api/threads/main`);
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
