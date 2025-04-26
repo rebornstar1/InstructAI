@@ -15,9 +15,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service for detailed progress tracking of learning content
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -29,16 +26,11 @@ public class DetailedProgressService {
     private final UserSubmoduleProgressRepository userSubmoduleProgressRepository;
     private final ProgressService progressService;
 
-    /**
-     * Get detailed progress for a module including all content items
-     */
     public DetailedModuleProgressDto getDetailedModuleProgress(Long userId, Long moduleId) {
-        // Get module progress
         UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Module progress not found for user id: " + userId + " and module id: " + moduleId));
 
-        // Get all submodule progress items
         List<UserSubmoduleProgress> submoduleItems = userSubmoduleProgressRepository
                 .findByUserIdAndModuleIdAndContentType(userId, moduleId, UserSubmoduleProgress.ContentType.SUBMODULE);
 
@@ -46,7 +38,6 @@ public class DetailedProgressService {
                 .map(ContentProgressDto::fromEntity)
                 .collect(Collectors.toList());
 
-        // Get all video progress items
         List<UserSubmoduleProgress> videoItems = userSubmoduleProgressRepository
                 .findByUserIdAndModuleIdAndContentType(userId, moduleId, UserSubmoduleProgress.ContentType.VIDEO);
 
@@ -54,7 +45,6 @@ public class DetailedProgressService {
                 .map(ContentProgressDto::fromEntity)
                 .collect(Collectors.toList());
 
-        // Get all quiz progress items
         List<UserSubmoduleProgress> quizItems = userSubmoduleProgressRepository
                 .findByUserIdAndModuleIdAndContentType(userId, moduleId, UserSubmoduleProgress.ContentType.QUIZ);
 
@@ -62,24 +52,18 @@ public class DetailedProgressService {
                 .map(ContentProgressDto::fromEntity)
                 .collect(Collectors.toList());
 
-        // Create the detailed DTO
         return DetailedModuleProgressDto.fromEntities(
                 moduleProgress, submoduleDtos, videoDtos, quizDtos);
     }
 
-    /**
-     * Unlock a module and initialize all content items for tracking
-     */
     @Transactional
     public void unlockAndInitializeModule(Long userId, Long moduleId) {
-        // Get user and module
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
         Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
 
-        // Get or create module progress
         UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseGet(() -> {
                     UserModuleProgress newProgress = new UserModuleProgress();
@@ -89,21 +73,15 @@ public class DetailedProgressService {
                     return newProgress;
                 });
 
-        // Set to unlocked if not already started
         if (moduleProgress.getState() == UserModuleProgress.ModuleState.LOCKED) {
             moduleProgress.setState(UserModuleProgress.ModuleState.UNLOCKED);
             userModuleProgressRepository.save(moduleProgress);
         }
 
-        // Initialize all content items
         initializeContentItems(user, module);
     }
 
-    /**
-     * Initialize content items for tracking when a module is unlocked
-     */
     private void initializeContentItems(User user, Module module) {
-        // Initialize submodules
         if (module.getSubModules() != null) {
             for (SubModule subModule : module.getSubModules()) {
                 createSubmoduleProgressIfNotExists(
@@ -115,7 +93,6 @@ public class DetailedProgressService {
             }
         }
 
-        // Initialize quizzes
         if (module.getQuizzes() != null) {
             for (Quiz quiz : module.getQuizzes()) {
                 createSubmoduleProgressIfNotExists(
@@ -127,7 +104,6 @@ public class DetailedProgressService {
             }
         }
 
-        // Initialize videos
         if (module.getVideoUrls() != null) {
             for (String videoUrl : module.getVideoUrls()) {
                 createSubmoduleProgressIfNotExists(
@@ -140,9 +116,6 @@ public class DetailedProgressService {
         }
     }
 
-    /**
-     * Create a submodule progress entry if it doesn't exist
-     */
     private UserSubmoduleProgress createSubmoduleProgressIfNotExists(
             Long userId, Long moduleId, UserSubmoduleProgress.ContentType contentType, String contentId) {
 

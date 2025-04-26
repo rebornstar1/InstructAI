@@ -11,6 +11,7 @@ import com.screening.interviews.dto.QuestionDto;
 import com.screening.interviews.model.Quiz;
 import com.screening.interviews.model.QuizQuestion;
 import com.screening.interviews.model.SubModule;
+import com.screening.interviews.prompts.LearningResourcePrompts;
 import com.screening.interviews.repo.ModuleRepository;
 import com.screening.interviews.repo.QuizRepository;
 import lombok.RequiredArgsConstructor;
@@ -79,12 +80,12 @@ public class LearningResourceService {
         List<QuizDto> quizzes = generateQuizzes(conceptTitle, moduleTitle);
         List<QuizDto> persistedQuizzes = persistQuizzes(quizzes, moduleId);
 
-
+        // 7) Find YouTube videos for key terms
         List<String> allVideos = new ArrayList<>();
 
         // Find definition videos for each key term and add them to the combined list
         keyTerms.forEach((term, definition) -> {
-            List<String> termVideos = findDefinitionVideos(term,definition);
+            List<String> termVideos = findDefinitionVideos(term, definition);
             if (!termVideos.isEmpty()) {
                 // Take the first video for each term and add it directly to allVideos
                 termVideos.stream().findFirst().ifPresent(allVideos::add);
@@ -93,7 +94,6 @@ public class LearningResourceService {
 
         module.setVideoUrls(allVideos);
         moduleRepository.save(module);
-
 
         // 8) Build the final learning resource DTO
         LearningResourceDto result = LearningResourceDto.builder()
@@ -114,74 +114,19 @@ public class LearningResourceService {
 
     private String generateMainContent(String conceptTitle, String moduleTitle) {
         logger.info("Generating main content for concept: {}", conceptTitle);
-        String mainContentPrompt = String.format(
-                "Create a comprehensive learning resource about '%s' in markdown format for module '%s'. " +
-                        "The content should be approximately 400-500 words or about 5-7 minutes of reading time. " +
-                        "Follow this educational structure: " +
-                        "1. Start with clear learning objectives that state exactly what the reader will learn " +
-                        "2. Write an engaging introduction that provides context and explains why this topic matters " +
-                        "3. Include conceptual definitions for all key terms to build a solid foundation " +
-                        "4. Break down complex ideas with detailed step-by-step explanations " +
-                        "5. Illustrate with at least 2 real-world examples or case studies " +
-                        "6. Describe visual aids that would enhance understanding (in markdown, describe what the image would show) " +
-                        "7. Add 2-3 reflective questions that encourage readers to apply the concepts " +
-                        "8. End with a concise summary that reinforces key points " +
-                        "9. Include a mini-glossary of 3-5 essential terms " +
-                        "Use proper markdown formatting with headings (##, ###), bullet points, numbered lists, *emphasis*, " +
-                        "**strong emphasis**, `code blocks` when applicable, and > blockquotes for important points.",
-                conceptTitle, moduleTitle
-        );
+        String mainContentPrompt = LearningResourcePrompts.mainContentPrompt(conceptTitle, moduleTitle);
         return callGeminiApi(mainContentPrompt);
     }
 
     private String generateTranscript(String conceptTitle) {
-        String transcriptPrompt = String.format(
-                "Create a transcript for a 3-5 minute educational video about '%s'. " +
-                        "The transcript should follow this educational narrative structure: " +
-                        "1. Start with an attention-grabbing hook or question (10-15 seconds) " +
-                        "2. Introduce yourself and the learning objectives (20-30 seconds) " +
-                        "3. Provide a brief overview using a relatable analogy (30 seconds) " +
-                        "4. Explain core concepts clearly with pauses for emphasis (1-2 minutes) " +
-                        "5. Walk through a visual example, describing what viewers would see (1 minute) " +
-                        "6. Address a common misconception or challenge (30 seconds) " +
-                        "7. Summarize key points with clear takeaways (30 seconds) " +
-                        "8. End with a call to action and preview of related topics (15-20 seconds) " +
-                        "Use a conversational, engaging tone suitable for narration. Include natural transitions " +
-                        "between sections and occasional rhetorical questions to maintain engagement. " +
-                        "Format the transcript with speaker cues and [Action] descriptions for visual elements.",
-                conceptTitle
-        );
+        String transcriptPrompt = LearningResourcePrompts.transcriptPrompt(conceptTitle);
         return callGeminiApi(transcriptPrompt);
     }
 
     public Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
         logger.info("Analyzing topic complexity and extracting key terms for: {}", conceptTitle);
 
-        String analysisPrompt = String.format(
-                "Analyze the topic '%s' in the context of module '%s' and identify 5-7 key terms or concepts " +
-                        "that would benefit from detailed explanation. " +
-                        "IMPORTANT: Focus on WELL-KNOWN, FUNDAMENTAL concepts that most beginners would need to understand. " +
-                        "Avoid highly specialized or advanced technical terms. " +
-                        "Each key term MUST be specific to the domain and maintain full context. " +
-                        "For example, if the topic is 'Web Development', use 'Web Hooks' instead of just 'Hooks', " +
-                        "or 'JavaScript Closures' instead of just 'Closures'. " +
-                        "For each term, provide a short 1-2 sentence definition that is accessible to beginners. " +
-                        "Format your response as a JSON object with the term as key and definition as value: " +
-                        "{ " +
-                        "  \"Domain-Specific Term 1\": \"definition1\", " +
-                        "  \"Domain-Specific Term 2\": \"definition2\" " +
-                        "} " +
-                        "Focus on identifying terms that are: " +
-                        "1. Core foundational concepts that everyone in this field should know " +
-                        "2. Commonly referenced in introductory materials " +
-                        "3. Broadly applicable rather than niche or specialized " +
-                        "4. Important for building a solid understanding of the topic " +
-                        "5. Frequently used in everyday discussions about this subject " +
-                        "Remember: Every term MUST include the proper domain-specific context (e.g., '%s Hooks' not just 'Hooks') " +
-                        "and should be recognizable to most people with basic knowledge of the field.",
-                conceptTitle, moduleTitle, conceptTitle
-        );
-
+        String analysisPrompt = LearningResourcePrompts.topicAnalysisPrompt(conceptTitle, moduleTitle);
         String analysisResult = callGeminiApi(analysisPrompt);
 
         // Parse the JSON response to extract key terms and definitions
@@ -321,25 +266,7 @@ public class LearningResourceService {
     }
 
     private SubModuleDto createIntroductionSubModule(String conceptTitle) {
-        String introPrompt = String.format(
-                "Create an introductory article about '%s' in markdown format. " +
-                        "The article should be approximately 400-500 words or 5 minutes reading time. " +
-                        "Structure the article following these educational best practices: " +
-                        "1. Begin with 3-4 specific learning objectives in a bulleted list (what readers will learn) " +
-                        "2. Write an engaging introduction that hooks the reader with a relevant analogy or question " +
-                        "3. Define all fundamental concepts in a clear, accessible way " +
-                        "4. Use a step-by-step approach for explaining basics with numbered lists " +
-                        "5. Include 1-2 beginner-friendly examples that illustrate the concepts " +
-                        "6. Suggest a simple visualization that would help beginners understand (describe what an image would show) " +
-                        "7. Add 2 reflection questions that check basic understanding " +
-                        "8. Include a 'Key Takeaways' section that summarizes essential points " +
-                        "9. Close with a brief preview of more advanced topics " +
-                        "Ensure all explanations are beginner-friendly and avoid jargon without explanation. " +
-                        "Use markdown formatting effectively with ## headings, ### subheadings, **bold** for important terms, " +
-                        "and `code examples` if relevant.",
-                conceptTitle
-        );
-
+        String introPrompt = LearningResourcePrompts.introductionSubmodulePrompt(conceptTitle);
         String introArticle = callGeminiApi(introPrompt);
 
         return SubModuleDto.builder()
@@ -352,22 +279,7 @@ public class LearningResourceService {
     }
 
     private SubModuleDto createTermSubModule(String term, String definition, String conceptTitle) {
-        String termPrompt = String.format(
-                "Create a focused educational article about '%s' in the context of %s. " +
-                        "The article should be approximately 300-400 words or 3-4 minutes reading time. " +
-                        "Begin with this definition as your starting point: '%s' " +
-                        "Then structure the article as follows: " +
-                        "1. Expand on the definition with more detail and context " +
-                        "2. Explain why this term/concept is important in understanding %s " +
-                        "3. Provide at least one clear, concrete example of this term/concept in action " +
-                        "4. Describe how this term/concept relates to other key ideas in %s " +
-                        "5. Include a simple diagram or visual description that would help illustrate this concept " +
-                        "6. Add 1-2 practice exercises or reflection questions related to this term " +
-                        "Use clear, accessible language and markdown formatting with appropriate headings, " +
-                        "emphasis, and code blocks if relevant.",
-                term, conceptTitle, definition, conceptTitle, conceptTitle
-        );
-
+        String termPrompt = LearningResourcePrompts.termSubmodulePrompt(term, definition, conceptTitle);
         String termArticle = callGeminiApi(termPrompt);
 
         return SubModuleDto.builder()
@@ -383,24 +295,7 @@ public class LearningResourceService {
         // Join key terms for context
         String termsList = String.join(", ", keyTerms.keySet());
 
-        String advancedPrompt = String.format(
-                "Create an advanced application article about '%s' that integrates these key terms: %s. " +
-                        "The article should be approximately 500-600 words or 6 minutes reading time. " +
-                        "Structure the article following these educational best practices: " +
-                        "1. Begin with 3-4 advanced learning objectives that build on foundational knowledge " +
-                        "2. Present a complex, real-world scenario where %s is applied " +
-                        "3. Walk through a step-by-step solution that demonstrates how to apply multiple concepts together " +
-                        "4. Highlight how the key terms/concepts interact with each other in this scenario " +
-                        "5. Discuss common pitfalls or challenges in advanced applications " +
-                        "6. Provide troubleshooting tips or best practices " +
-                        "7. Include a section on emerging trends or future developments " +
-                        "8. Add 2-3 advanced practice exercises that require integrating multiple concepts " +
-                        "Use appropriate technical language with explanations where needed. " +
-                        "Format with markdown using proper headings, code blocks for technical examples, " +
-                        "and emphasized text for important points.",
-                conceptTitle, termsList, conceptTitle
-        );
-
+        String advancedPrompt = LearningResourcePrompts.advancedApplicationSubmodulePrompt(conceptTitle, termsList);
         String advancedArticle = callGeminiApi(advancedPrompt);
 
         return SubModuleDto.builder()
@@ -433,7 +328,7 @@ public class LearningResourceService {
         return persistedQuizzes;
     }
 
-    public List<String> findDefinitionVideos(String term,String definition) {
+    public List<String> findDefinitionVideos(String term, String definition) {
         logger.info("Searching for definition videos for term: {}", term);
         // Search for definition-style videos for key terms
         String searchQuery = term + " " + definition;
@@ -568,29 +463,7 @@ public class LearningResourceService {
         logger.info("Generating quizzes for concept: {}", conceptTitle);
 
         // Basic concepts quiz
-        String basicQuizPrompt = String.format(
-                "Create a quiz to test basic understanding of '%s' with 5 multiple-choice questions. " +
-                        "For each question: " +
-                        "1. Write a clear question focused on fundamental concepts " +
-                        "2. Provide 4 answer options (A, B, C, D) " +
-                        "3. Indicate the correct answer " +
-                        "4. Include a brief explanation for why the answer is correct " +
-                        "5. Ensure questions progress from simple recall to basic application " +
-                        "Format as a structured JSON object with these exact fields: " +
-                        "{ " +
-                        "  \"questions\": [ " +
-                        "    { " +
-                        "      \"question\": \"What is...?\", " +
-                        "      \"options\": [\"A. option 1\", \"B. option 2\", \"C. option 3\", \"D. option 4\"], " +
-                        "      \"correctAnswer\": \"B\", " +
-                        "      \"explanation\": \"Explanation why B is correct...\" " +
-                        "    } " +
-                        "  ] " +
-                        "} " +
-                        "Focus on essential terminology and foundational principles that every beginner should master.",
-                conceptTitle
-        );
-
+        String basicQuizPrompt = LearningResourcePrompts.basicQuizPrompt(conceptTitle);
         String basicQuizJson = callGeminiApi(basicQuizPrompt);
         List<QuestionDto> basicQuestions = parseQuizQuestions(basicQuizJson);
 
@@ -604,29 +477,7 @@ public class LearningResourceService {
                 .build());
 
         // Advanced concepts quiz
-        String advancedQuizPrompt = String.format(
-                "Create a quiz to test advanced understanding of '%s' with 5 challenging multiple-choice questions. " +
-                        "For each question: " +
-                        "1. Write a question that tests deeper understanding or application of complex concepts " +
-                        "2. Provide 4 answer options (A, B, C, D) with plausible distractors " +
-                        "3. Indicate the correct answer " +
-                        "4. Include a detailed explanation that clarifies misconceptions " +
-                        "5. Ensure questions require analysis, evaluation, or synthesis of knowledge " +
-                        "Format as a structured JSON object with these exact fields: " +
-                        "{ " +
-                        "  \"questions\": [ " +
-                        "    { " +
-                        "      \"question\": \"In a complex scenario where...?\", " +
-                        "      \"options\": [\"A. option 1\", \"B. option 2\", \"C. option 3\", \"D. option 4\"], " +
-                        "      \"correctAnswer\": \"C\", " +
-                        "      \"explanation\": \"C is correct because...\" " +
-                        "    } " +
-                        "  ] " +
-                        "} " +
-                        "Focus on nuanced understanding, common misconceptions, and practical applications of advanced principles.",
-                conceptTitle
-        );
-
+        String advancedQuizPrompt = LearningResourcePrompts.advancedQuizPrompt(conceptTitle);
         String advancedQuizJson = callGeminiApi(advancedQuizPrompt);
         List<QuestionDto> advancedQuestions = parseQuizQuestions(advancedQuizJson);
 
@@ -642,8 +493,6 @@ public class LearningResourceService {
         return quizzes;
     }
 
-
-
     public List<QuizDto> generateMultipleQuiz(List<String> conceptTitles) {
         List<QuizDto> quizzes = new ArrayList<>();
         for (String conceptTitle : conceptTitles) {
@@ -653,51 +502,14 @@ public class LearningResourceService {
         return quizzes;
     }
 
-
     public QuizDto generateQuiz(String term) {
         logger.info("Creating quiz for term: {}", term);
 
         // Sanitize inputs to handle special characters safely
         String safeTerm = sanitizeInput(term);
 
-        // Generate a more structured prompt with clear JSON format instructions
-        // Using a similar approach to InteractiveCourseService
-        String quizPrompt = String.format(
-                """
-                You are an educational quiz creator specializing in precise JSON responses.
-                
-                Create a quiz about '%s' with 5 multiple-choice questions.
-                
-                Format your response EXACTLY as follows:
-                {
-                  "questions": [
-                    {
-                      "question": "Question text here?",
-                      "options": [
-                        "A. First option",
-                        "B. Second option",
-                        "C. Third option",
-                        "D. Fourth option"
-                      ],
-                      "correctAnswer": "A",
-                      "explanation": "Explanation for correct answer"
-                    },
-                    // more questions here...
-                  ]
-                }
-                
-                CRITICAL FORMATTING RULES:
-                1. Use double quotes for all JSON keys and string values
-                2. Ensure proper JSON syntax with correct commas between items
-                3. DO NOT include any markdown formatting (```json, etc.)
-                4. DO NOT include any explanatory text before or after the JSON
-                5. Ensure each question follows the EXACT format shown above
-                6. Do not use line breaks within string values
-                
-                The questions should test understanding of different aspects of %s.
-                """,
-                safeTerm, safeTerm
-        );
+        // Use the standard quiz prompt from the prompts class
+        String quizPrompt = LearningResourcePrompts.standardQuizPrompt(safeTerm);
 
         // Call Gemini with the enhanced prompt
         String quizJson = callGeminiForQuiz(quizPrompt);
@@ -755,7 +567,7 @@ public class LearningResourceService {
 
             if (generatedText == null || generatedText.trim().isEmpty()) {
                 logger.warn("Gemini API returned empty text content");
-                return generateFallbackQuizJson();
+                return LearningResourcePrompts.fallbackQuizJson();
             }
 
             // Clean up any potential formatting issues
@@ -774,7 +586,7 @@ public class LearningResourceService {
 
         } catch (Exception e) {
             logger.error("Error calling Gemini API for quiz: {}", e.getMessage());
-            return generateFallbackQuizJson();
+            return LearningResourcePrompts.fallbackQuizJson();
         }
     }
 
@@ -802,7 +614,7 @@ public class LearningResourceService {
             return potentialJson;
         } catch (Exception e) {
             logger.error("Failed to repair JSON: {}", e.getMessage());
-            return generateFallbackQuizJson();
+            return LearningResourcePrompts.fallbackQuizJson();
         }
     }
 
@@ -816,73 +628,6 @@ public class LearningResourceService {
                 .replace("\r", " ")
                 .trim();
     }
-
-    private String generateFallbackQuizJson() {
-        return """
-    {
-      "questions": [
-        {
-          "question": "What is the best way to understand this concept?",
-          "options": [
-            "A. Study core principles",
-            "B. Apply in practical scenarios",
-            "C. Memorize definitions",
-            "D. Compare with similar concepts"
-          ],
-          "correctAnswer": "B",
-          "explanation": "Practical application helps reinforce understanding."
-        },
-        {
-          "question": "Which statement best defines this term?",
-          "options": [
-            "A. A fundamental building block",
-            "B. An advanced technique",
-            "C. A specialized application",
-            "D. A theoretical framework"
-          ],
-          "correctAnswer": "A",
-          "explanation": "This term represents a core concept in the field."
-        },
-        {
-          "question": "What is the primary purpose of this concept?",
-          "options": [
-            "A. To simplify complex processes",
-            "B. To enable additional functionality",
-            "C. To standardize approaches",
-            "D. To optimize performance"
-          ],
-          "correctAnswer": "C",
-          "explanation": "Standardization is the main benefit."
-        },
-        {
-          "question": "How would you implement this in a real-world scenario?",
-          "options": [
-            "A. Through careful planning",
-            "B. With specialized tools",
-            "C. Following established patterns",
-            "D. Using an incremental approach"
-          ],
-          "correctAnswer": "C",
-          "explanation": "Following patterns ensures reliable implementation."
-        },
-        {
-          "question": "What is a common misconception about this concept?",
-          "options": [
-            "A. It's only for advanced users",
-            "B. It's difficult to implement",
-            "C. It's not widely applicable",
-            "D. It requires specialized knowledge"
-          ],
-          "correctAnswer": "D",
-          "explanation": "While helpful, specialized knowledge is not required."
-        }
-      ]
-    }
-    """;
-    }
-
-
-
 
     private List<QuestionDto> parseQuizQuestions(String quizJson) {
         List<QuestionDto> questions = new ArrayList<>();
@@ -978,235 +723,6 @@ public class LearningResourceService {
         return questions;
     }
 
-    /**
-     * Clean the JSON string to make it more likely to parse successfully
-     */
-    private String cleanJsonString(String rawJson) {
-        if (rawJson == null || rawJson.trim().isEmpty()) {
-            return "{}";
-        }
-
-        String cleaned = rawJson;
-
-        // Remove Markdown code block markers
-        cleaned = cleaned.replaceAll("```(json)?", "").replaceAll("```", "").trim();
-
-        // Remove any leading text before first opening brace
-        cleaned = cleaned.replaceAll("^[^{]*\\{", "{");
-
-        // Remove any trailing text after last closing brace
-        cleaned = cleaned.replaceAll("\\}[^}]*$", "}");
-
-        // Fix trailing commas in arrays and objects (common issue from LLMs)
-        cleaned = cleaned.replaceAll(",\\s*]", "]");
-        cleaned = cleaned.replaceAll(",\\s*}", "}");
-
-        // Fix missing commas between array elements (just after a closing brace or bracket)
-        cleaned = cleaned.replaceAll("(\\}|\\])\\s*(\\{)", "$1,$2");
-        cleaned = cleaned.replaceAll("(\\}|\\])\\s*(\\[)", "$1,$2");
-
-        // Fix property names without quotes
-        cleaned = cleaned.replaceAll("([{,]\\s*)(\\w+)(:)", "$1\"$2\"$3");
-
-        // Fix colons used instead of commas in array elements
-        // Pattern matches after a closing quote, bracket, or brace followed by a colon (when a comma should be used)
-        cleaned = cleaned.replaceAll("(\"[^\"]*\"|\\}|\\])\\s*:\\s*(\"|\\\"|\\{|\\[)", "$1,$2");
-
-        // Make sure array elements have commas between them
-        cleaned = cleaned.replaceAll("\"\\s*\\{", "\",{");
-
-        // Ensure enclosing brackets if missing
-        if (!cleaned.trim().startsWith("{") && !cleaned.trim().startsWith("[")) {
-            // Try to determine if it should be an array or object
-            if (cleaned.contains("\"question\"") || cleaned.contains("\"options\"")) {
-                cleaned = "{" + cleaned + "}";
-            } else {
-                cleaned = "[" + cleaned + "]";
-            }
-        }
-
-        // If we don't have a "questions" wrapper, add it for consistency if it looks like an array of questions
-        if (cleaned.trim().startsWith("[") &&
-                (cleaned.contains("\"question\"") || cleaned.contains("\"options\""))) {
-            cleaned = "{\"questions\":" + cleaned + "}";
-        }
-
-        // Log the cleaned JSON for debugging
-        logger.debug("Cleaned JSON: {}", cleaned);
-
-        return cleaned;
-    }
-
-    /**
-     * Extract a single question from a JsonNode
-     */
-    private QuestionDto extractSingleQuestion(JsonNode questionNode) {
-        try {
-            String questionText = extractStringValue(questionNode, "question");
-
-            // If question is empty, this node probably isn't a question
-            if (questionText == null || questionText.trim().isEmpty()) {
-                return null;
-            }
-
-            List<String> options = extractOptions(questionNode);
-            String correctAnswer = extractStringValue(questionNode, "correctAnswer");
-
-            // Try "correct_answer" if "correctAnswer" is not found
-            if (correctAnswer == null || correctAnswer.trim().isEmpty()) {
-                correctAnswer = extractStringValue(questionNode, "correct_answer");
-            }
-
-            // Also check for possible numeric index as correctAnswerIndex
-            if ((correctAnswer == null || correctAnswer.trim().isEmpty()) && questionNode.has("correctAnswerIndex")) {
-                JsonNode indexNode = questionNode.get("correctAnswerIndex");
-                if (indexNode.isInt() && indexNode.asInt() >= 0 && indexNode.asInt() < options.size()) {
-                    int index = indexNode.asInt();
-                    // Convert numeric index to A, B, C, D format
-                    correctAnswer = String.valueOf((char)('A' + index));
-                }
-            }
-
-            String explanation = extractStringValue(questionNode, "explanation");
-
-            // Only create the question if we have at least question text and options
-            if (!options.isEmpty()) {
-                return QuestionDto.builder()
-                        .question(questionText)
-                        .options(options)
-                        .correctAnswer(correctAnswer)
-                        .explanation(explanation)
-                        .build();
-            }
-        } catch (Exception e) {
-            logger.warn("Error extracting individual question: {}", e.getMessage());
-        }
-
-        return null;
-    }
-
-    /**
-     * Improved extraction of string value with null safety
-     */
-    private String extractStringValue(JsonNode node, String fieldName) {
-        if (node == null || !node.has(fieldName)) {
-            return "";
-        }
-
-        JsonNode fieldNode = node.get(fieldName);
-        if (fieldNode.isTextual()) {
-            return fieldNode.asText();
-        } else if (fieldNode.isValueNode()) {
-            // Convert numeric or boolean to string
-            return fieldNode.asText();
-        }
-
-        return "";
-    }
-
-    /**
-     * Improved extraction of options with better error handling
-     */
-    private List<String> extractOptions(JsonNode questionNode) {
-        List<String> options = new ArrayList<>();
-
-        if (questionNode == null || !questionNode.has("options")) {
-            return options;
-        }
-
-        JsonNode optionsNode = questionNode.get("options");
-
-        if (optionsNode.isArray()) {
-            for (JsonNode optionNode : optionsNode) {
-                if (optionNode.isTextual()) {
-                    options.add(optionNode.asText());
-                } else if (optionNode.isValueNode()) {
-                    // Convert other value nodes (numbers, booleans) to strings
-                    options.add(optionNode.asText());
-                }
-            }
-        } else if (optionsNode.isTextual()) {
-            // Sometimes LLMs might incorrectly format options as a comma-separated string
-            String[] optionArray = optionsNode.asText().split(",");
-            for (String option : optionArray) {
-                options.add(option.trim());
-            }
-        }
-
-        return options;
-    }
-
-    /**
-     * Create a default question as a fallback
-     */
-    private QuestionDto createDefaultQuestion() {
-        return QuestionDto.builder()
-                .question("What is the main focus of this topic?")
-                .options(Arrays.asList(
-                        "A. Understanding core concepts",
-                        "B. Practical applications",
-                        "C. Historical development",
-                        "D. Future trends"))
-                .correctAnswer("A")
-                .explanation("This is a default question created because the system encountered an error while generating custom questions.")
-                .build();
-    }
-
-    private String callGeminiApi(String prompt) {
-        // Construct the payload for Gemini API
-        String payload = String.format("""
-            {
-                "contents": [{
-                    "parts": [{
-                        "text": "%s"
-                    }]
-                }]
-            }
-            """, prompt.replace("\"", "\\\""));
-
-        try {
-            // Call Gemini API
-            String rawResponse = geminiWebClient.post()
-                    .uri("") // URL is already set in the WebClient bean
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            if (logger.isTraceEnabled()) {
-                logger.trace("Raw response from Gemini API: {}", rawResponse);
-            }
-
-            // Parse the response to extract the content
-            JsonNode root = objectMapper.readTree(rawResponse);
-            // Typically, the structure is "candidates" -> [0] -> "content" -> "parts" -> [0] -> "text"
-            JsonNode textNode = root.path("candidates")
-                    .path(0)
-                    .path("content")
-                    .path("parts")
-                    .path(0)
-                    .path("text");
-
-            String generatedText = textNode.asText();
-
-            if (generatedText == null || generatedText.trim().isEmpty()) {
-                logger.warn("Gemini API returned empty text content");
-                return "Content generation failed. Please try again.";
-            }
-
-            // Clean up triple backticks if the LLM included them
-            generatedText = generatedText.replaceAll("```markdown", "")
-                    .replaceAll("```", "")
-                    .trim();
-
-            return generatedText;
-
-        } catch (Exception e) {
-            logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to generate content from Gemini API", e);
-        }
-    }
-
     private List<QuestionDto> createFallbackQuestions() {
         List<QuestionDto> fallbackQuestions = new ArrayList<>();
 
@@ -1266,5 +782,60 @@ public class LearningResourceService {
                 .build());
 
         return fallbackQuestions;
+    }
+
+    private String callGeminiApi(String prompt) {
+        // Construct the payload for Gemini API
+        String payload = String.format("""
+            {
+                "contents": [{
+                    "parts": [{
+                        "text": "%s"
+                    }]
+                }]
+            }
+            """, prompt.replace("\"", "\\\""));
+
+        try {
+            // Call Gemini API
+            String rawResponse = geminiWebClient.post()
+                    .uri("") // URL is already set in the WebClient bean
+                    .bodyValue(payload)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (logger.isTraceEnabled()) {
+                logger.trace("Raw response from Gemini API: {}", rawResponse);
+            }
+
+            // Parse the response to extract the content
+            JsonNode root = objectMapper.readTree(rawResponse);
+            // Typically, the structure is "candidates" -> [0] -> "content" -> "parts" -> [0] -> "text"
+            JsonNode textNode = root.path("candidates")
+                    .path(0)
+                    .path("content")
+                    .path("parts")
+                    .path(0)
+                    .path("text");
+
+            String generatedText = textNode.asText();
+
+            if (generatedText == null || generatedText.trim().isEmpty()) {
+                logger.warn("Gemini API returned empty text content");
+                return "Content generation failed. Please try again.";
+            }
+
+            // Clean up triple backticks if the LLM included them
+            generatedText = generatedText.replaceAll("```markdown", "")
+                    .replaceAll("```", "")
+                    .trim();
+
+            return generatedText;
+
+        } catch (Exception e) {
+            logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate content from Gemini API", e);
+        }
     }
 }

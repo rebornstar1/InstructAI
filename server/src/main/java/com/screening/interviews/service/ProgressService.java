@@ -34,12 +34,8 @@ public class ProgressService {
     private final ObjectMapper objectMapper;
     private final UserModuleStepProgressRepository userModuleStepProgressRepository;
 
-    /**
-     * Enroll user in a course and initialize progress
-     */
     @Transactional
     public UserCourseProgress enrollInCourse(Long userId, Long courseId) {
-        // Check if already enrolled
         Optional<UserCourseProgress> existingProgress = userCourseProgressRepository
                 .findByUserIdAndCourseId(userId, courseId);
 
@@ -47,14 +43,12 @@ public class ProgressService {
             return existingProgress.get();
         }
 
-        // Get user and course
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
 
-        // Create course progress
         UserCourseProgress courseProgress = new UserCourseProgress();
         courseProgress.setUser(user);
         courseProgress.setCourse(course);
@@ -64,7 +58,6 @@ public class ProgressService {
 
         userCourseProgressRepository.save(courseProgress);
 
-        // Initialize the first module as UNLOCKED, others as LOCKED
         List<Module> modules = course.getModules();
         if (modules != null && !modules.isEmpty()) {
             for (int i = 0; i < modules.size(); i++) {
@@ -74,15 +67,12 @@ public class ProgressService {
                 moduleProgress.setUser(user);
                 moduleProgress.setModule(module);
 
-                // Count all learning content items for more precise progress tracking
                 int totalSubmodules = countLearningItems(module);
                 moduleProgress.setTotalSubmodules(totalSubmodules);
 
-                // First module is unlocked, others locked
                 if (i == 0) {
                     moduleProgress.setState(UserModuleProgress.ModuleState.UNLOCKED);
 
-                    // Initialize key term progress with first term unlocked
                     if (module.getKeyTerms() != null && !module.getKeyTerms().isEmpty()) {
                         moduleProgress.setActiveTerm(0);
                         moduleProgress.unlockTerm(0);
@@ -95,40 +85,27 @@ public class ProgressService {
             }
         }
 
-        // Add user to threads associated with this course
         addUserToThreadsByCourse(user, course);
 
         return courseProgress;
     }
 
-    /**
-     * Get all course progress for a user
-     */
     public List<UserCourseProgress> getAllCourseProgress(Long userId) {
         return userCourseProgressRepository.findByUserId(userId);
     }
 
-    /**
-     * Get specific course progress
-     */
     public UserCourseProgress getCourseProgress(Long userId, Long courseId) {
         return userCourseProgressRepository.findByUserIdAndCourseId(userId, courseId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Progress not found for user id: " + userId + " and course id: " + courseId));
     }
 
-    /**
-     * Get module progress for a specific module
-     */
     public UserModuleProgress getModuleProgress(Long userId, Long moduleId) {
         return userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Module progress not found for user id: " + userId + " and module id: " + moduleId));
     }
 
-    /**
-     * Start a module (mark as IN_PROGRESS)
-     */
     @Transactional
     public UserModuleProgress startModule(Long userId, Long moduleId) {
         UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
@@ -136,49 +113,36 @@ public class ProgressService {
 
         log.info("progress ye rahi bhai {}",progress);
 
-        // Only allow starting if UNLOCKED
         if (progress.getState() == UserModuleProgress.ModuleState.UNLOCKED) {
             progress.setState(UserModuleProgress.ModuleState.IN_PROGRESS);
             progress.setStartedAt(LocalDateTime.now());
 
-            // Initialize key term progress if not already set up
             Module module = progress.getModule();
 
             log.info("module toh ye raha {}",module);
 
             if (module.getKeyTerms() != null && !module.getKeyTerms().isEmpty() &&
                     (progress.getUnlockedTerms() == null || progress.getUnlockedTerms().isEmpty())) {
-                // Set first term as active and unlocked
                 progress.setActiveTerm(0);
                 progress.unlockTerm(0);
             }
 
             userModuleProgressRepository.save(progress);
 
-            // Update course last accessed
             updateCourseLastAccessed(userId, module.getCourse().getId(), moduleId);
         }
 
         return progress;
     }
 
-    /**
-     * Complete a submodule and update all related progress
-     */
     @Transactional
     public UserModuleProgress completeSubmodule(Long userId, Long moduleId, Long submoduleId) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
-
-        // Increment completed submodules if not already completed
-        // Check if this submodule was already completed to avoid double-counting
         boolean isNewCompletion = incrementCompletedSubmodule(progress);
 
-        // Calculate percentage
         updateModuleProgressPercentage(progress);
 
-        // Only award XP if this is a new completion
         if (isNewCompletion) {
-            // Add XP for submodule completion (10 XP per submodule)
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
             user.setXp(user.getXp() + 10);
@@ -186,52 +150,37 @@ public class ProgressService {
             userRepository.save(user);
         }
 
-        // Update course last accessed
         Module module = progress.getModule();
         updateCourseLastAccessed(userId, module.getCourse().getId(), moduleId);
 
-        // Check if all required elements completed
         checkAndUpdateModuleCompletion(progress);
 
         return userModuleProgressRepository.save(progress);
     }
 
-    /**
-     * Complete a key term and update progress
-     */
     @Transactional
     public UserModuleProgress completeKeyTerm(Long userId, Long moduleId, Integer termIndex) {
         log.info("Completing key term {} for module {} and user {}", termIndex, moduleId, userId);
 
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
         Module module = progress.getModule();
-
-        // Verify the term index is valid
         if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
             throw new IllegalArgumentException("Invalid term index: " + termIndex);
         }
-
-        // Check if term is already completed
         if (progress.isTermCompleted(termIndex)) {
             log.info("Term {} is already completed for module {} and user {}", termIndex, moduleId, userId);
             return progress;
         }
-
-        // Mark term as completed
         progress.completeTerm(termIndex);
 
-        // Increment submodule counter and update progress
         incrementCompletedSubmodule(progress);
         updateModuleProgressPercentage(progress);
-
-        // Award XP for term completion (25 XP per term)
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
         user.setXp(user.getXp() + 25);
         progress.setEarnedXP(progress.getEarnedXP() + 25);
         userRepository.save(user);
 
-        // Unlock the next term if available
         int nextTermIndex = termIndex + 1;
         if (nextTermIndex < module.getKeyTerms().size()) {
             progress.unlockTerm(nextTermIndex);
@@ -241,30 +190,24 @@ public class ProgressService {
             log.info("No more terms to unlock for module {} and user {}", moduleId, userId);
         }
 
-        // Check if all terms are completed and update module state if needed
         if (progress.getCompletedTerms().size() == module.getKeyTerms().size()) {
             log.info("All terms completed for module {} and user {}", moduleId, userId);
             progress.setState(UserModuleProgress.ModuleState.COMPLETED);
             progress.setCompletedAt(LocalDateTime.now());
             progress.setProgressPercentage(100);
 
-            // Update course progress
             updateCourseProgress(userId, module.getCourse().getId());
         }
 
         return userModuleProgressRepository.save(progress);
     }
 
-    /**
-     * Store generated content for a term
-     */
     @Transactional
     public UserModuleProgress saveTermResources(Long userId, Long moduleId, Integer termIndex,
                                                 Map<String, Object> resources) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
 
         try {
-            // Get existing term resources from JSON or initialize new map
             Map<String, Object> allTermResources;
             if (progress.getTermResourcesData() != null && !progress.getTermResourcesData().isEmpty()) {
                 allTermResources = objectMapper.readValue(progress.getTermResourcesData(), Map.class);
@@ -272,10 +215,8 @@ public class ProgressService {
                 allTermResources = new HashMap<>();
             }
 
-            // Store resources for this term
             allTermResources.put(String.valueOf(termIndex), resources);
 
-            // Convert back to JSON
             progress.setTermResourcesData(objectMapper.writeValueAsString(allTermResources));
 
             return userModuleProgressRepository.save(progress);
@@ -285,19 +226,14 @@ public class ProgressService {
         }
     }
 
-    /**
-     * Get detailed progress information for key terms in a module
-     */
     public List<KeyTermProgressDto> getKeyTermProgress(Long userId, Long moduleId) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
         Module module = progress.getModule();
 
-        // Handle case if module doesn't have key terms
         if (module.getKeyTerms() == null || module.getKeyTerms().isEmpty()) {
             return new ArrayList<>();
         }
 
-        // Parse term resources data if available
         Map<String, Object> termResources = null;
         if (progress.getTermResourcesData() != null && !progress.getTermResourcesData().isEmpty()) {
             try {
@@ -307,7 +243,6 @@ public class ProgressService {
             }
         }
 
-        // Build key term progress DTOs
         return KeyTermProgressDto.createFromModuleProgress(
                 module.getKeyTerms(),
                 module.getDefinitions(),
@@ -318,20 +253,15 @@ public class ProgressService {
         );
     }
 
-    /**
-     * Set active term for a user
-     */
     @Transactional
     public UserModuleProgress setActiveTerm(Long userId, Long moduleId, Integer termIndex) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
         Module module = progress.getModule();
 
-        // Verify term index is valid
         if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
             throw new IllegalArgumentException("Invalid term index: " + termIndex);
         }
 
-        // Verify term is unlocked
         if (!progress.isTermUnlocked(termIndex)) {
             throw new IllegalArgumentException("Term is not unlocked: " + termIndex);
         }
@@ -340,38 +270,28 @@ public class ProgressService {
         return userModuleProgressRepository.save(progress);
     }
 
-    /**
-     * Complete a quiz and record the score
-     */
     @Transactional
     public UserModuleProgress completeQuiz(Long userId, Long moduleId, int score) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
 
-        // Check if quiz was already completed to determine if this is a new completion or retake
         boolean isFirstCompletion = !progress.isQuizCompleted();
 
-        // Update quiz status
         progress.setQuizCompleted(true);
 
-        // Update best score if this is higher
         boolean improvedScore = false;
         if (progress.getBestQuizScore() == null || score > progress.getBestQuizScore()) {
             progress.setBestQuizScore(score);
             improvedScore = true;
         }
 
-        // Add XP based on score and whether it's a new completion or improved score
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
         if (isFirstCompletion || improvedScore) {
-            // Calculate XP to award - 1 XP per percentage point on first completion
-            // For improved scores, award the difference
             int xpToAward;
             if (isFirstCompletion) {
                 xpToAward = score;
             } else {
-                // Only award XP for improvement
                 xpToAward = score - progress.getBestQuizScore();
             }
 
@@ -382,29 +302,18 @@ public class ProgressService {
             }
         }
 
-        // If this is a first-time quiz completion, count it toward module progress
         if (isFirstCompletion) {
-            // Mark quiz as a completed learning item
             incrementCompletedSubmodule(progress);
         }
 
-        // Update progress percentage
         updateModuleProgressPercentage(progress);
-
-        // Check if module should be completed
         checkAndUpdateModuleCompletion(progress);
-
-        // Update course last accessed
-        // Update course last accessed
         Module module = progress.getModule();
         updateCourseLastAccessed(userId, module.getCourse().getId(), moduleId);
 
         return userModuleProgressRepository.save(progress);
     }
 
-    /**
-     * Complete a video and update progress
-     */
     @Transactional
     public UserModuleProgress completeVideo(Long userId, Long moduleId, String videoId) {
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
@@ -848,14 +757,12 @@ public class ProgressService {
         UserModuleProgress nextModuleProgress = userModuleProgressRepository
                 .findByUserIdAndModuleId(userId, nextModuleId)
                 .orElseGet(() -> {
-                    // Create new progress if it doesn't exist
                     UserModuleProgress newProgress = new UserModuleProgress();
                     newProgress.setUser(userRepository.findById(userId).orElseThrow(
                             () -> new ResourceNotFoundException("User not found")));
                     Module nextModule = moduleService.getModuleById(tempModuleId);
                     newProgress.setModule(nextModule);
 
-                    // Count all learning content items
                     int totalSubmodules = countLearningItems(nextModule);
                     newProgress.setTotalSubmodules(totalSubmodules);
 
@@ -864,7 +771,6 @@ public class ProgressService {
 
         nextModuleProgress.setState(UserModuleProgress.ModuleState.UNLOCKED);
 
-        // Initialize key term progress with first term unlocked if module has key terms
         Module nextModule = nextModuleProgress.getModule();
         if (nextModule.getKeyTerms() != null && !nextModule.getKeyTerms().isEmpty() &&
                 (nextModuleProgress.getUnlockedTerms() == null || nextModuleProgress.getUnlockedTerms().isEmpty())) {
@@ -877,39 +783,28 @@ public class ProgressService {
         log.info("Successfully unlocked module {} for user {}", nextModuleId, userId);
     }
 
-    /**
-     * Count total learning items in a module
-     */
     private int countLearningItems(Module module) {
         int count = 0;
 
-        // Count submodules
         if (module.getSubModules() != null) {
             count += module.getSubModules().size();
         }
 
-        // Count videos
         if (module.getVideoUrls() != null) {
             count += module.getVideoUrls().size();
         }
 
-        // Count quizzes
         if (module.getQuizzes() != null) {
             count += module.getQuizzes().size();
         }
 
-        // Count key terms if present
         if (module.getKeyTerms() != null && !module.getKeyTerms().isEmpty()) {
             count += module.getKeyTerms().size();
         }
 
-        // Ensure at least 1 item for progress calculation
         return Math.max(count, 1);
     }
 
-    /**
-     * Update course progress when a module is completed
-     */
     private void updateCourseProgress(Long userId, Long courseId) {
         UserCourseProgress courseProgress = userCourseProgressRepository
                 .findByUserIdAndCourseId(userId, courseId)
@@ -922,7 +817,6 @@ public class ProgressService {
             return;
         }
 
-        // Get all module progress for this course
         List<UserModuleProgress> moduleProgressList = userModuleProgressRepository
                 .findByUserIdAndModuleCourseId(userId, courseId);
 
@@ -930,7 +824,6 @@ public class ProgressService {
         int totalModules = allModules.size();
         int totalEarnedXP = 0;
 
-        // Calculate total progress percentage across all modules
         double totalProgressPercentage = 0;
 
         for (UserModuleProgress moduleProgress : moduleProgressList) {
@@ -941,26 +834,22 @@ public class ProgressService {
             totalProgressPercentage += moduleProgress.getProgressPercentage();
         }
 
-        // Calculate overall course progress percentage
         int progressPercentage =
                 moduleProgressList.isEmpty() ? 0 : (int) (totalProgressPercentage / moduleProgressList.size());
 
         courseProgress.setProgressPercentage(progressPercentage);
         courseProgress.setEarnedXP(totalEarnedXP);
 
-        // Check if course is completed
         if (completedModules == totalModules) {
             courseProgress.setState(UserCourseProgress.ProgressState.COMPLETED);
             courseProgress.setCompletedAt(LocalDateTime.now());
             courseProgress.setProgressPercentage(100);
 
-            // Add course completion XP bonus (100 XP)
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
             user.setXp(user.getXp() + 100);
             courseProgress.setEarnedXP(courseProgress.getEarnedXP() + 100);
 
-            // Add to user's completed courses set
             user.getCompletedCourses().add(courseId);
             userRepository.save(user);
         }
@@ -974,34 +863,28 @@ public class ProgressService {
         log.info("Completing {} for user {} module {} term {}",
                 resourceType, userId, moduleId, termIndex);
 
-        // Get module progress
         UserModuleProgress progress = getModuleProgress(userId, moduleId);
         Module module = progress.getModule();
 
-        // Verify the term index is valid
         if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
             throw new IllegalArgumentException("Invalid term index: " + termIndex);
         }
 
-        // Verify term is unlocked
         if (!progress.isTermUnlocked(termIndex)) {
             throw new IllegalArgumentException("Term is not unlocked: " + termIndex);
         }
 
-        // Get term resources
         Map<String, Object> termResources = getTermResources(progress, termIndex);
         if (termResources == null) {
             termResources = new HashMap<>();
         }
 
-        // Build response
         ResourceCompletionResponse response = new ResourceCompletionResponse();
         response.setSuccess(true);
         response.setResourceType(resourceType);
         response.setResourceCompleted(true);
         response.setTermIndex(termIndex);
 
-        // Complete the appropriate resource
         boolean resourceCompleted = false;
         switch (resourceType.toLowerCase()) {
             case "article":
@@ -1020,10 +903,8 @@ public class ProgressService {
                 return response;
         }
 
-        // Save updated term resources
         saveTermResources(userId, moduleId, termIndex, termResources);
 
-        // Check if all resources are completed and if the term should be automatically completed
         boolean isTermCompleted = false;
         boolean nextTermUnlocked = false;
         Integer nextTermIndex = null;
@@ -1031,12 +912,10 @@ public class ProgressService {
         if (checkAllResourcesCompleted(termResources)) {
             log.info("All resources completed for term {}, automatically completing term", termIndex);
 
-            // Mark term as completed
             if (!progress.isTermCompleted(termIndex)) {
                 completeKeyTerm(userId, moduleId, termIndex);
                 isTermCompleted = true;
 
-                // Check for next term
                 if (termIndex + 1 < module.getKeyTerms().size()) {
                     nextTermIndex = termIndex + 1;
                     nextTermUnlocked = progress.isTermUnlocked(nextTermIndex);
@@ -1046,10 +925,8 @@ public class ProgressService {
             }
         }
 
-        // Get updated module progress
         progress = getModuleProgress(userId, moduleId);
 
-        // Update response with term completion status
         response.setTermCompleted(isTermCompleted);
         response.setNextTermUnlocked(nextTermUnlocked);
         response.setNextTermIndex(nextTermIndex);
@@ -1060,26 +937,22 @@ public class ProgressService {
     }
 
     public boolean checkAllResourcesCompleted(Map<String, Object> termResources) {
-        boolean articleCompleted = true; // Default to true if not available
-        boolean videoCompleted = true;   // Default to true if not available
-        boolean quizCompleted = true;    // Default to true if not available
+        boolean articleCompleted = true;
+        boolean videoCompleted = true;
+        boolean quizCompleted = true;
 
-        // Check article completion if available
         if (termResources.containsKey("subModuleId")) {
             articleCompleted = Boolean.TRUE.equals(termResources.get("articleCompleted"));
         }
 
-        // Check video completion if available
         if (termResources.containsKey("videoId")) {
             videoCompleted = Boolean.TRUE.equals(termResources.get("videoCompleted"));
         }
 
-        // Check quiz completion if available
         if (termResources.containsKey("quizId")) {
             quizCompleted = Boolean.TRUE.equals(termResources.get("quizCompleted"));
         }
 
-        // All resources are considered completed if all available resources are completed
         return articleCompleted && videoCompleted && quizCompleted;
     }
 
@@ -1090,14 +963,11 @@ public class ProgressService {
             return false;
         }
 
-        // Get the submodule ID
         Long subModuleId = Long.valueOf(termResources.get("subModuleId").toString());
 
-        // Mark article as completed in term resources
         termResources.put("articleCompleted", true);
         termResources.put("articleProgress", 100);
 
-        // Also update step progress if available
         try {
             userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleIdAndKeyTermIndex(
                             userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, subModuleId, termIndex)
@@ -1109,7 +979,6 @@ public class ProgressService {
             log.error("Error updating article step progress: {}", e.getMessage());
         }
 
-        // Add XP for article completion if not already completed
         if (!Boolean.TRUE.equals(termResources.get("articleCompletedBefore"))) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));

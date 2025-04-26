@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
+import com.screening.interviews.prompts.ModuleContentPrompts;
+import com.screening.interviews.fallback.ModuleContentFallback;
 
 import java.lang.Thread;
 import java.net.URLEncoder;
@@ -53,16 +55,6 @@ public class ModuleContentService {
     private static final String YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(3);
-
-    /**
-     * Generate content for a single term and definition
-     * Creates a submodule, quiz, and finds relevant video content
-     */
-    /**
-     * Generate content for a single term and definition
-     * Creates a submodule, quiz, and finds relevant video content
-     * Now includes submodule ID in the response
-     */
     public TermContentResponseDto generateTermContent(TermContentRequestDto request) {
         logger.info("Starting term content generation for term: {}", request.getTerm());
 
@@ -174,9 +166,6 @@ public class ModuleContentService {
         executorService.shutdown();
     }
 
-
-
-
     public KeyTermResponseDto extractTheKeyTerms(KeyTermRequestDto request) {
         String conceptTitle = request.getConceptTitle() != null ? request.getConceptTitle() : request.getModuleTitle();
         String moduleTitle = request.getModuleTitle();
@@ -208,57 +197,15 @@ public class ModuleContentService {
         return response;
     }
 
-    /**
-     * Create a quiz specifically for a single term/concept
-     */
     public QuizDto createTermQuiz(String term, String definition, String contextTitle) {
         logger.info("Creating quiz for term: {}", term);
 
-        // Sanitize inputs to handle special characters safely
         String safeTerm = sanitizeInput(term);
         String safeDefinition = sanitizeInput(definition);
         String safeContext = contextTitle != null ? sanitizeInput(contextTitle) : safeTerm.split(" ")[0];
 
-        // Generate a more structured prompt with clear JSON format instructions
-        // Using a similar approach to InteractiveCourseService
-        String quizPrompt = String.format(
-                """
-                You are an educational quiz creator specializing in precise JSON responses.
-                
-                Create a quiz about '%s' with 5 multiple-choice questions based on this definition: '%s'
-                
-                Format your response EXACTLY as follows:
-                {
-                  "questions": [
-                    {
-                      "question": "Question text here?",
-                      "options": [
-                        "A. First option",
-                        "B. Second option",
-                        "C. Third option",
-                        "D. Fourth option"
-                      ],
-                      "correctAnswer": "A",
-                      "explanation": "Explanation for correct answer"
-                    },
-                    // more questions here...
-                  ]
-                }
-                
-                CRITICAL FORMATTING RULES:
-                1. Use double quotes for all JSON keys and string values
-                2. Ensure proper JSON syntax with correct commas between items
-                3. DO NOT include any markdown formatting (```json, etc.)
-                4. DO NOT include any explanatory text before or after the JSON
-                5. Ensure each question follows the EXACT format shown above
-                6. Do not use line breaks within string values
-                
-                The questions should test understanding of different aspects of %s in the context of %s.
-                """,
-                safeTerm, safeDefinition, safeTerm, safeContext
-        );
+        String quizPrompt = ModuleContentPrompts.createTermQuiPrompt(safeTerm, safeDefinition, safeContext);
 
-        // Call Gemini with the enhanced prompt
         String quizJson = callGeminiForQuiz(quizPrompt);
         List<QuestionDto> questions = parseQuizQuestions(quizJson);
 
@@ -275,11 +222,9 @@ public class ModuleContentService {
 
     private String callGeminiForQuiz(String prompt) {
         try {
-            // Properly escape the prompt for JSON payload
             String escapedPrompt = objectMapper.writeValueAsString(prompt);
             escapedPrompt = escapedPrompt.substring(1, escapedPrompt.length() - 1);
 
-            // Construct a cleaner payload using the approach from InteractiveCourseService
             String payload = String.format("""
         {
             "contents": [{
@@ -292,7 +237,7 @@ public class ModuleContentService {
 
             logger.info("Calling Gemini API for quiz generation...");
             String rawResponse = geminiWebClient.post()
-                    .uri("") // URL is already set in the WebClient bean
+                    .uri("")
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToMono(String.class)
@@ -302,7 +247,6 @@ public class ModuleContentService {
                 logger.trace("Raw response from Gemini API: {}", rawResponse);
             }
 
-            // Extract the text using the more reliable method from InteractiveCourseService
             JsonNode root = objectMapper.readTree(rawResponse);
             JsonNode textNode = root.path("candidates")
                     .path(0)
@@ -318,12 +262,10 @@ public class ModuleContentService {
                 return generateFallbackQuizJson();
             }
 
-            // Clean up any potential formatting issues
             generatedText = generatedText.replaceAll("```json", "")
                     .replaceAll("```", "")
                     .trim();
 
-            // Validate JSON before returning
             try {
                 objectMapper.readTree(generatedText);
                 return generatedText;
@@ -340,7 +282,6 @@ public class ModuleContentService {
 
     private String cleanAndRepairJson(String potentialJson) {
         try {
-            // First remove any text before the first { and after the last }
             int firstBrace = potentialJson.indexOf('{');
             int lastBrace = potentialJson.lastIndexOf('}');
 
@@ -348,16 +289,14 @@ public class ModuleContentService {
                 potentialJson = potentialJson.substring(firstBrace, lastBrace + 1);
             }
 
-            // Common replacements for malformed JSON
             potentialJson = potentialJson
-                    .replaceAll("\\\\\"", "\"") // Fix escaped quotes
-                    .replaceAll(",\\s*}", "}") // Remove trailing commas
-                    .replaceAll(",\\s*]", "]") // Remove trailing commas in arrays
-                    .replaceAll("([{,])\\s*\"?(\\w+)\"?\\s*:", "$1\"$2\":") // Ensure keys are quoted
-                    .replaceAll("\"\\s*:\\s*\"([^\"]+)\"\\s*([,}])", "\":\"$1\"$2") // Fix string values
-                    .replaceAll("(\\d),([0-9])", "$1.$2"); // Fix numbers (if commas used instead of dots)
+                    .replaceAll("\\\\\"", "\"")
+                    .replaceAll(",\\s*}", "}")
+                    .replaceAll(",\\s*]", "]")
+                    .replaceAll("([{,])\\s*\"?(\\w+)\"?\\s*:", "$1\"$2\":")
+                    .replaceAll("\"\\s*:\\s*\"([^\"]+)\"\\s*([,}])", "\":\"$1\"$2")
+                    .replaceAll("(\\d),([0-9])", "$1.$2");
 
-            // Try to parse the JSON now
             objectMapper.readTree(potentialJson);
             return potentialJson;
         } catch (Exception e) {
@@ -367,126 +306,35 @@ public class ModuleContentService {
     }
 
     private String generateFallbackQuizJson() {
-        return """
-    {
-      "questions": [
-        {
-          "question": "What is the best way to understand this concept?",
-          "options": [
-            "A. Study core principles",
-            "B. Apply in practical scenarios",
-            "C. Memorize definitions",
-            "D. Compare with similar concepts"
-          ],
-          "correctAnswer": "B",
-          "explanation": "Practical application helps reinforce understanding."
-        },
-        {
-          "question": "Which statement best defines this term?",
-          "options": [
-            "A. A fundamental building block",
-            "B. An advanced technique",
-            "C. A specialized application",
-            "D. A theoretical framework"
-          ],
-          "correctAnswer": "A",
-          "explanation": "This term represents a core concept in the field."
-        },
-        {
-          "question": "What is the primary purpose of this concept?",
-          "options": [
-            "A. To simplify complex processes",
-            "B. To enable additional functionality",
-            "C. To standardize approaches",
-            "D. To optimize performance"
-          ],
-          "correctAnswer": "C",
-          "explanation": "Standardization is the main benefit."
-        },
-        {
-          "question": "How would you implement this in a real-world scenario?",
-          "options": [
-            "A. Through careful planning",
-            "B. With specialized tools",
-            "C. Following established patterns",
-            "D. Using an incremental approach"
-          ],
-          "correctAnswer": "C",
-          "explanation": "Following patterns ensures reliable implementation."
-        },
-        {
-          "question": "What is a common misconception about this concept?",
-          "options": [
-            "A. It's only for advanced users",
-            "B. It's difficult to implement",
-            "C. It's not widely applicable",
-            "D. It requires specialized knowledge"
-          ],
-          "correctAnswer": "D",
-          "explanation": "While helpful, specialized knowledge is not required."
-        }
-      ]
-    }
-    """;
+        return ModuleContentFallback.FallBackQuizJson();
     }
 
     public Map<String, String> analyzeTopicAndExtractKeyTerms(String conceptTitle, String moduleTitle) {
         logger.info("Analyzing topic complexity and extracting key terms for: {}", conceptTitle);
 
-        String analysisPrompt = String.format(
-                "Analyze the topic '%s' in the context of module '%s' and identify 5-7 key terms or concepts " +
-                        "that would benefit from detailed explanation. " +
-                        "IMPORTANT: Focus on WELL-KNOWN, FUNDAMENTAL concepts that most beginners would need to understand. " +
-                        "Avoid highly specialized or advanced technical terms. " +
-                        "Each key term MUST be specific to the domain and maintain full context. " +
-                        "For example, if the topic is 'Web Development', use 'Web Hooks' instead of just 'Hooks', " +
-                        "or 'JavaScript Closures' instead of just 'Closures'. " +
-                        "For each term, provide a short 1-2 sentence definition that is accessible to beginners. " +
-                        "Format your response as a JSON object with the term as key and definition as value: " +
-                        "{ " +
-                        "  \"Domain-Specific Term 1\": \"definition1\", " +
-                        "  \"Domain-Specific Term 2\": \"definition2\" " +
-                        "} " +
-                        "Focus on identifying terms that are: " +
-                        "1. Core foundational concepts that everyone in this field should know " +
-                        "2. Commonly referenced in introductory materials " +
-                        "3. Broadly applicable rather than niche or specialized " +
-                        "4. Important for building a solid understanding of the topic " +
-                        "5. Frequently used in everyday discussions about this subject " +
-                        "Remember: Every term MUST include the proper domain-specific context (e.g., '%s Hooks' not just 'Hooks') " +
-                        "and should be recognizable to most people with basic knowledge of the field.",
-                conceptTitle, moduleTitle, conceptTitle
-        );
+        String analysisPrompt = ModuleContentPrompts.analyzeTopicAndExtractKeyTermsPrompt(conceptTitle, moduleTitle);
 
         String analysisResult = callGeminiApi(analysisPrompt);
 
-        // Parse the JSON response to extract key terms and definitions
         Map<String, String> keyTerms = new HashMap<>();
         try {
-            // More robust cleanup of the response to ensure it's valid JSON
-            // First, remove any markdown code block indicators
             analysisResult = analysisResult.replaceAll("```json", "")
                     .replaceAll("```", "")
                     .trim();
 
-            // Find the first '{' and the last '}' to extract just the JSON object
             int firstBrace = analysisResult.indexOf('{');
             int lastBrace = analysisResult.lastIndexOf('}');
 
             if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
-                // Extract only the JSON part
                 analysisResult = analysisResult.substring(firstBrace, lastBrace + 1);
 
-                // Parse the JSON
                 JsonNode termsNode = objectMapper.readTree(analysisResult);
 
                 termsNode.fields().forEachRemaining(entry -> {
                     String term = entry.getKey();
                     String definition = entry.getValue().asText();
 
-                    // Additional check to ensure term has proper context
                     if (!term.toLowerCase().contains(conceptTitle.toLowerCase()) && !isFullyQualifiedTerm(term, conceptTitle)) {
-                        // Add domain context if missing
                         term = addDomainContext(term, conceptTitle);
                     }
 
@@ -499,10 +347,8 @@ public class ModuleContentService {
             }
         } catch (Exception e) {
             logger.error("Error parsing key terms JSON: {}", e.getMessage());
-            // Log the actual response for debugging
             logger.debug("Raw response from Gemini API: {}", analysisResult);
 
-            // Provide some default terms if parsing fails
             keyTerms.put(conceptTitle + " basics", "Fundamental concepts of " + conceptTitle);
             keyTerms.put(conceptTitle + " implementation", "How to implement " + conceptTitle + " in practice");
         }
@@ -511,14 +357,9 @@ public class ModuleContentService {
     }
 
     private boolean isFullyQualifiedTerm(String term, String domain) {
-        // Consider a term fully qualified if:
-        // 1. It includes any part of the domain name
-        // 2. It's a common technical term that doesn't need domain qualification
-
         String lowercaseTerm = term.toLowerCase();
         String lowercaseDomain = domain.toLowerCase();
 
-        // Split domain into words and check if any are in the term
         String[] domainWords = lowercaseDomain.split("\\s+");
         for (String word : domainWords) {
             if (word.length() > 3 && lowercaseTerm.contains(word)) {
@@ -526,7 +367,6 @@ public class ModuleContentService {
             }
         }
 
-        // List of common technical terms that don't need domain qualification
         List<String> commonTechnicalTerms = Arrays.asList(
                 "api", "rest", "json", "xml", "http", "tcp/ip", "database",
                 "algorithm", "interface", "framework", "architecture", "protocol"
@@ -541,19 +381,13 @@ public class ModuleContentService {
         return false;
     }
 
-    /**
-     * Adds domain context to terms that lack it
-     */
     private String addDomainContext(String term, String domain) {
-        // For multi-word domains, use the first word as prefix if appropriate
         String contextPrefix = domain.split("\\s+")[0];
 
-        // Check if term already starts with some context
         if (term.toLowerCase().startsWith(contextPrefix.toLowerCase())) {
             return term;
         }
 
-        // For certain terms, use the full domain
         if (term.toLowerCase().equals("basics") ||
                 term.toLowerCase().equals("fundamentals") ||
                 term.toLowerCase().equals("principles") ||
@@ -562,7 +396,6 @@ public class ModuleContentService {
             return domain + " " + term;
         }
 
-        // For other technical terms, use the domain as prefix
         return contextPrefix + " " + term;
     }
 
@@ -571,28 +404,10 @@ public class ModuleContentService {
 
         logger.info("Creating submodule for term: {} in context: {}", term, context);
 
-        String termPrompt = String.format(
-                "Create a focused educational article about '%s' in the context of %s. " +
-                        "The article should be approximately 400-500 words (5-7 minutes reading time). " +
-                        "Begin with this definition as your starting point: '%s' " +
-                        "Then structure the article as follows: " +
-                        "1. Start with 2-3 specific learning objectives in bullet points " +
-                        "2. Expand on the definition with more detail and context " +
-                        "3. Explain why this term/concept is important in understanding %s " +
-                        "4. Provide at least two clear, concrete examples of this term/concept in action " +
-                        "5. Describe how this term/concept relates to other key ideas in %s " +
-                        "6. Include a 'Visual Representation' section describing how this concept could be visualized " +
-                        "7. Add 2-3 practice exercises or reflection questions related to this term " +
-                        "8. Conclude with a 'Key Takeaways' section summarizing the most important points " +
-                        "Use clear, accessible language appropriate for beginners and intermediate learners. " +
-                        "Format with proper markdown using headings (##, ###), bullet points, emphasis (*italic*), " +
-                        "strong emphasis (**bold**), code blocks where appropriate, and blockquotes for important notes.",
-                term, context, definition, context, context
-        );
+        String termPrompt = ModuleContentPrompts.createTermSubModulePrompt(term, context, definition);
 
         String termArticle = callGeminiApi(termPrompt);
 
-        // Generate relevant tags and keywords
         List<String> tags = generateTags(term, context);
         List<String> keywords = generateKeywords(term, context);
 
@@ -605,20 +420,15 @@ public class ModuleContentService {
                 .build();
     }
 
-    /**
-     * Generate appropriate tags for a term submodule
-     */
     private List<String> generateTags(String term, String context) {
         List<String> tags = new ArrayList<>();
         tags.add("key-term");
         tags.add("definition");
 
-        // Add the context as a tag if available
         if (context != null && !context.isEmpty()) {
             tags.add(context.toLowerCase().replace(" ", "-"));
         }
 
-        // Add the primary domain as a tag
         String domain = term.split(" ")[0].toLowerCase();
         if (!tags.contains(domain)) {
             tags.add(domain);
@@ -627,28 +437,21 @@ public class ModuleContentService {
         return tags;
     }
 
-    /**
-     * Generate appropriate keywords for a term submodule
-     */
     private List<String> generateKeywords(String term, String context) {
         List<String> keywords = new ArrayList<>();
 
-        // Add the full term
         keywords.add(term.toLowerCase());
 
-        // Add individual words from the term
         for (String word : term.split(" ")) {
             if (word.length() > 3 && !keywords.contains(word.toLowerCase())) {
                 keywords.add(word.toLowerCase());
             }
         }
 
-        // Add the context
         if (context != null && !context.isEmpty()) {
             keywords.add(context.toLowerCase());
         }
 
-        // Add "definition" as a keyword
         keywords.add("definition");
 
         return keywords;
@@ -656,7 +459,6 @@ public class ModuleContentService {
 
     public List<String> findDefinitionVideos(String term, String definition) {
         logger.info("Searching for definition videos for term: {}", term);
-        // Search for definition-style videos for key terms
         String searchQuery = term + " " + definition;
         return findRelevantYouTubeVideos(searchQuery, 1);
     }
@@ -721,7 +523,6 @@ public class ModuleContentService {
             quiz.setModule(module);
         }
 
-        // Convert questions
         if (dto.getQuestions() != null) {
             List<QuizQuestion> questions = dto.getQuestions().stream().map(qdto -> {
                 QuizQuestion question = new QuizQuestion();
@@ -788,20 +589,16 @@ public class ModuleContentService {
         List<QuestionDto> questions = new ArrayList<>();
 
         try {
-            // Attempt to parse the JSON
             JsonNode root = objectMapper.readTree(quizJson);
             JsonNode questionsNode = root.has("questions") ? root.get("questions") : root;
 
-            // If questions is not an array, handle the error gracefully
             if (!questionsNode.isArray()) {
                 logger.warn("Questions node is not an array. Using fallback questions.");
                 return createFallbackQuestions();
             }
 
-            // Process each question
             for (JsonNode questionNode : questionsNode) {
                 try {
-                    // Extract required fields with careful null checks
                     String questionText = questionNode.has("question") ?
                             questionNode.get("question").asText() : null;
 
@@ -810,7 +607,6 @@ public class ModuleContentService {
                         continue;
                     }
 
-                    // Extract options with error handling
                     List<String> options = new ArrayList<>();
                     if (questionNode.has("options") && questionNode.get("options").isArray()) {
                         JsonNode optionsNode = questionNode.get("options");
@@ -819,38 +615,31 @@ public class ModuleContentService {
                         }
                     }
 
-                    // If no options were found, skip this question
                     if (options.isEmpty()) {
                         logger.warn("No options found for question: {}", questionText);
                         continue;
                     }
 
-                    // Extract correctAnswer with fallback to first option
-                    String correctAnswer = "A"; // Default to first option
+                    String correctAnswer = "A";
                     if (questionNode.has("correctAnswer")) {
                         correctAnswer = questionNode.get("correctAnswer").asText();
-                        // If correct answer is just a number, convert to letter
                         if (correctAnswer.matches("\\d+")) {
                             int index = Integer.parseInt(correctAnswer);
                             correctAnswer = String.valueOf((char)('A' + (index - 1)));
                         }
-                        // If it's just a letter without the A. format, ensure it's capitalized
                         if (correctAnswer.length() == 1) {
                             correctAnswer = correctAnswer.toUpperCase();
                         }
-                        // If it's in the "A. Answer" format, extract just the letter
                         if (correctAnswer.contains(".")) {
                             correctAnswer = correctAnswer.substring(0, 1).toUpperCase();
                         }
                     }
 
-                    // Extract explanation with fallback
                     String explanation = "Correct answer based on the term definition.";
                     if (questionNode.has("explanation")) {
                         explanation = questionNode.get("explanation").asText();
                     }
 
-                    // Create and add the question
                     QuestionDto question = QuestionDto.builder()
                             .question(questionText)
                             .options(options)
@@ -862,14 +651,12 @@ public class ModuleContentService {
 
                 } catch (Exception e) {
                     logger.warn("Error processing individual question: {}", e.getMessage());
-                    // Continue to the next question rather than failing the entire process
                 }
             }
         } catch (Exception e) {
             logger.error("Error parsing quiz JSON: {}", e.getMessage());
         }
 
-        // If no valid questions were created, use fallback questions
         if (questions.isEmpty()) {
             logger.warn("No valid questions were parsed. Using fallback questions.");
             return createFallbackQuestions();
@@ -946,22 +733,17 @@ public class ModuleContentService {
 
         String cleaned = rawJson.trim();
 
-        // Remove Markdown and code block markers
         cleaned = cleaned.replaceAll("(?s)```json\\s*(.*?)\\s*```", "$1")
                 .replaceAll("(?s)```\\s*(.*?)\\s*```", "$1");
 
-        // Normalize HTML entities and decode common ones
         cleaned = cleaned.replace("<", "<")
                 .replace(">", ">")
                 .replace("&", "&");
 
-        // Remove invalid control characters
         cleaned = cleaned.replaceAll("[\\p{Cntrl}&&[^\\r\\n\\t]]", "");
 
-        // Fix unescaped quotes in JSON values
         cleaned = cleaned.replaceAll("(?<!\\\\)(\")\\s*:\\s*\\1", "\" : \"");
 
-        // Remove leading/trailing non-JSON content
         int firstBrace = cleaned.indexOf('{');
         int lastBrace = cleaned.lastIndexOf('}');
         if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -972,12 +754,10 @@ public class ModuleContentService {
             return "{\"questions\":[]}";
         }
 
-        // Fix common JSON errors
         cleaned = cleaned.replaceAll(",\\s*([\\]}])", "$1") // Remove trailing commas
                 .replaceAll("(\\]|\\})\\s*([{])", "$1,$2") // Add missing commas between objects
                 .replaceAll("([a-zA-Z0-9_]+)\\s*:", "\"$1\":"); // Quote unquoted keys
 
-        // Ensure proper JSON structure
         if (!cleaned.startsWith("{")) {
             cleaned = "{\"questions\":" + (cleaned.startsWith("[") ? cleaned : "[" + cleaned + "]") + "}";
         }
@@ -1073,7 +853,6 @@ public class ModuleContentService {
         if (input == null) {
             return "";
         }
-        // Escape quotes to prevent JSON injection and normalize whitespace
         return input.replace("\"", "\\\"")
                 .replace("\n", " ")
                 .replace("\r", " ")
@@ -1097,7 +876,6 @@ public class ModuleContentService {
             """, prompt.replace("\"", "\\\""));
 
         try {
-            // Call Gemini API
             String rawResponse = geminiWebClient.post()
                     .uri("") // URL is already set in the WebClient bean
                     .bodyValue(payload)
@@ -1109,9 +887,7 @@ public class ModuleContentService {
                 logger.trace("Raw response from Gemini API: {}", rawResponse);
             }
 
-            // Parse the response to extract the content
             JsonNode root = objectMapper.readTree(rawResponse);
-            // Typically, the structure is "candidates" -> [0] -> "content" -> "parts" -> [0] -> "text"
             JsonNode textNode = root.path("candidates")
                     .path(0)
                     .path("content")
@@ -1126,7 +902,6 @@ public class ModuleContentService {
                 return "Content generation failed. Please try again.";
             }
 
-            // Clean up triple backticks if the LLM included them
             generatedText = generatedText.replaceAll("```markdown", "")
                     .replaceAll("```", "")
                     .trim();
@@ -1139,19 +914,12 @@ public class ModuleContentService {
         }
     }
 
-    // Add this method to your existing ModuleContentService class
-
-    /**
-     * Get detailed information about a term, including its resources and progress
-     */
     public TermDetailResponseDto getTermDetailsWithProgress(Long userId, Long moduleId, Integer termIndex) {
         log.info("Fetching term details for user {} module {} term {}", userId, moduleId, termIndex);
 
-        // 1. Get the module to access key terms and definitions
         Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module not found with id: " + moduleId));
 
-        // Validate term index
         if (module.getKeyTerms() == null || termIndex >= module.getKeyTerms().size()) {
             return TermDetailResponseDto.builder()
                     .success(false)
@@ -1159,39 +927,30 @@ public class ModuleContentService {
                     .build();
         }
 
-        // 2. Get the term and definition
         String term = module.getKeyTerms().get(termIndex);
         String definition = module.getDefinitions().get(termIndex);
 
-        // 3. Get module progress to check term status
         UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
 
         boolean isTermCompleted = progress.isTermCompleted(termIndex);
         boolean isLastTerm = (termIndex == module.getKeyTerms().size() - 1);
 
-        // Next term information
-        Integer nextTermIndex = termIndex + 1;
+        int nextTermIndex = termIndex + 1;
         boolean nextTermUnlocked = !isLastTerm && progress.isTermUnlocked(nextTermIndex);
 
-        // 4. Retrieve or initialize resource progress
         TermResourceProgressDto resourceProgress = getTermResourceProgress(userId, moduleId, termIndex);
 
-        // 5. If resources are not yet generated for this term, create them on-demand
         if (!resourceProgress.isArticleAvailable() || !resourceProgress.isQuizAvailable()) {
-            // Term resources only need to be generated once
             generateTermResourcesIfNeeded(userId, moduleId, termIndex, term, definition);
 
-            // Refresh progress after generation
             resourceProgress = getTermResourceProgress(userId, moduleId, termIndex);
         }
 
-        // 6. Fetch resource content
         SubModuleDto article = null;
         QuizDto quiz = null;
         String videoUrl = null;
 
-        // Fetch article (submodule) if available
         if (resourceProgress.isArticleAvailable() && resourceProgress.getArticleId() != null) {
             SubModule subModule = subModuleRepository.findById(resourceProgress.getArticleId())
                     .orElse(null);
@@ -1200,7 +959,6 @@ public class ModuleContentService {
             }
         }
 
-        // Fetch quiz if available
         if (resourceProgress.isQuizAvailable() && resourceProgress.getQuizId() != null) {
             Quiz quizEntity = quizRepository.findById(resourceProgress.getQuizId())
                     .orElse(null);
@@ -1209,9 +967,7 @@ public class ModuleContentService {
             }
         }
 
-        // Get video URL if available
         if (resourceProgress.isVideoAvailable() && resourceProgress.getVideoId() != null) {
-            // First try to find in module's videos
             if (module.getVideoUrls() != null) {
                 for (String url : module.getVideoUrls()) {
                     if (url.contains(resourceProgress.getVideoId())) {
@@ -1221,7 +977,6 @@ public class ModuleContentService {
                 }
             }
 
-            // If not found in module videos, it might be stored in term resources
             if (videoUrl == null) {
                 try {
                     if (progress.getTermResourcesData() != null) {
@@ -1243,7 +998,6 @@ public class ModuleContentService {
             }
         }
 
-        // 7. Build and return the response
         return TermDetailResponseDto.builder()
                 .success(true)
                 .term(term)
@@ -1260,14 +1014,9 @@ public class ModuleContentService {
                 .build();
     }
 
-    /**
-     * Retrieve resource progress for a term
-     */
     private TermResourceProgressDto getTermResourceProgress(Long userId, Long moduleId, Integer termIndex) {
-        // Initialize progress tracker
         TermResourceProgressDto progress = new TermResourceProgressDto();
 
-        // First check if we have any resources stored in term resources data
         UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
 
@@ -1280,7 +1029,6 @@ public class ModuleContentService {
                     Map<String, Object> termResources =
                             (Map<String, Object>) allTermResources.get(termIndex.toString());
 
-                    // Check for article
                     if (termResources.containsKey("subModuleId")) {
                         Long articleId = Long.valueOf(termResources.get("subModuleId").toString());
                         progress.setArticleAvailable(true);
@@ -1289,7 +1037,6 @@ public class ModuleContentService {
                         progress.setArticleStarted(progress.isArticleCompleted() ||
                                 Boolean.TRUE.equals(termResources.get("articleStarted")));
 
-                        // Get progress percentage if available
                         if (termResources.containsKey("articleProgress")) {
                             progress.setArticleProgress(
                                     Integer.valueOf(termResources.get("articleProgress").toString()));
@@ -1298,7 +1045,6 @@ public class ModuleContentService {
                         }
                     }
 
-                    // Check for quiz
                     if (termResources.containsKey("quizId")) {
                         Long quizId = Long.valueOf(termResources.get("quizId").toString());
                         progress.setQuizAvailable(true);
@@ -1307,14 +1053,12 @@ public class ModuleContentService {
                         progress.setQuizStarted(progress.isQuizCompleted() ||
                                 Boolean.TRUE.equals(termResources.get("quizStarted")));
 
-                        // Get best score if available
                         if (termResources.containsKey("quizScore")) {
                             progress.setQuizScore(
                                     Integer.valueOf(termResources.get("quizScore").toString()));
                         }
                     }
 
-                    // Check for video
                     if (termResources.containsKey("videoId")) {
                         String videoId = termResources.get("videoId").toString();
                         progress.setVideoAvailable(true);
@@ -1323,7 +1067,6 @@ public class ModuleContentService {
                         progress.setVideoStarted(progress.isVideoCompleted() ||
                                 Boolean.TRUE.equals(termResources.get("videoStarted")));
 
-                        // Get progress percentage if available
                         if (termResources.containsKey("videoProgress")) {
                             progress.setVideoProgress(
                                     Integer.valueOf(termResources.get("videoProgress").toString()));
@@ -1337,10 +1080,8 @@ public class ModuleContentService {
             log.error("Error retrieving term progress: {}", e.getMessage());
         }
 
-        // Also check step progress for more detailed status
         if (progress.isArticleAvailable() || progress.isQuizAvailable() || progress.isVideoAvailable()) {
             try {
-                // Check for article progress in step progress
                 if (progress.isArticleAvailable() && progress.getArticleId() != null) {
                     userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndSubModuleId(
                                     userId, moduleId, UserModuleStepProgress.StepType.ARTICLE, progress.getArticleId())
@@ -1355,7 +1096,6 @@ public class ModuleContentService {
                             });
                 }
 
-                // Check for quiz progress in step progress
                 if (progress.isQuizAvailable() && progress.getQuizId() != null) {
                     userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndQuizId(
                                     userId, moduleId, UserModuleStepProgress.StepType.QUIZ, progress.getQuizId())
@@ -1370,7 +1110,6 @@ public class ModuleContentService {
                             });
                 }
 
-                // Check for video progress in step progress
                 if (progress.isVideoAvailable() && progress.getVideoId() != null) {
                     userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndVideoId(
                                     userId, moduleId, UserModuleStepProgress.StepType.VIDEO, progress.getVideoId())
@@ -1392,9 +1131,6 @@ public class ModuleContentService {
         return progress;
     }
 
-    /**
-     * Generate resources for a term if they don't already exist
-     */
     @Transactional
     public void generateTermResourcesIfNeeded(Long userId, Long moduleId, Integer termIndex,
                                               String term, String definition) {
@@ -1403,7 +1139,6 @@ public class ModuleContentService {
         UserModuleProgress progress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
 
-        // Check if resources are already generated
         boolean resourcesExist = false;
 
         try {
@@ -1411,8 +1146,6 @@ public class ModuleContentService {
                 Map<String, Object> allTermResources = objectMapper.readValue(
                         progress.getTermResourcesData(), Map.class);
 
-                // If we have resources for this term and they include article and quiz,
-                // then we don't need to generate again
                 if (allTermResources.containsKey(termIndex.toString())) {
                     Map<String, Object> termResources =
                             (Map<String, Object>) allTermResources.get(termIndex.toString());
@@ -1426,17 +1159,14 @@ public class ModuleContentService {
             log.error("Error checking existing term resources: {}", e.getMessage());
         }
 
-        // Generate resources if needed
         if (!resourcesExist) {
             log.info("Generating resources for term {}: {}", termIndex, term);
 
             Module module = moduleRepository.findById(moduleId)
                     .orElseThrow(() -> new ResourceNotFoundException("Module not found"));
 
-            // Context title is used for better AI prompt construction
             String contextTitle = module.getTitle();
 
-            // Build request for term content generation
             TermContentRequestDto request = TermContentRequestDto.builder()
                     .term(term)
                     .definition(definition)
@@ -1445,13 +1175,10 @@ public class ModuleContentService {
                     .saveContent(true)
                     .build();
 
-            // Generate the content
             TermContentResponseDto response = generateTermContent(request);
 
-            // Store the generated resources in term progress data
             Map<String, Object> termResources = new HashMap<>();
 
-            // Store article info
             if (response.getSubModule() != null && response.getSubModuleId() != null) {
                 termResources.put("subModuleId", response.getSubModuleId());
                 termResources.put("articleStarted", false);
@@ -1459,7 +1186,6 @@ public class ModuleContentService {
                 termResources.put("articleProgress", 0);
             }
 
-            // Store quiz info
             if (response.getQuiz() != null && response.getQuizId() != null) {
                 termResources.put("quizId", response.getQuizId());
                 termResources.put("quizStarted", false);
@@ -1467,7 +1193,6 @@ public class ModuleContentService {
                 termResources.put("quizScore", 0);
             }
 
-            // Store video info
             if (response.getVideoUrl() != null) {
                 String videoId = extractVideoId(response.getVideoUrl());
                 termResources.put("videoId", videoId);
@@ -1477,17 +1202,12 @@ public class ModuleContentService {
                 termResources.put("videoProgress", 0);
             }
 
-            // Save the resources
             progressService.saveTermResources(userId, moduleId, termIndex, termResources);
 
-            // Create step progress entries for these resources
             createStepProgressForTermResources(userId, moduleId, termIndex, response);
         }
     }
 
-    /**
-     * Create step progress entries for newly generated term resources
-     */
     private void createStepProgressForTermResources(Long userId, Long moduleId, Integer termIndex,
                                                     TermContentResponseDto resources) {
         try {
@@ -1500,7 +1220,6 @@ public class ModuleContentService {
             UserModuleProgress moduleProgress = userModuleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
                     .orElseThrow(() -> new ResourceNotFoundException("Module progress not found"));
 
-            // Create parent key term step if needed
             userModuleStepProgressRepository.findByUserIdAndModuleIdAndStepTypeAndKeyTermIndex(
                             userId, moduleId, UserModuleStepProgress.StepType.KEY_TERM, termIndex)
                     .orElseGet(() -> {
@@ -1515,7 +1234,6 @@ public class ModuleContentService {
                         return userModuleStepProgressRepository.save(keyTermStep);
                     });
 
-            // Create article step if article was generated
             if (resources.getSubModuleId() != null) {
                 SubModule subModule = subModuleRepository.findById(resources.getSubModuleId())
                         .orElseThrow(() -> new ResourceNotFoundException("SubModule not found"));
@@ -1537,7 +1255,6 @@ public class ModuleContentService {
                         });
             }
 
-            // Create quiz step if quiz was generated
             if (resources.getQuizId() != null) {
                 Quiz quiz = quizRepository.findById(resources.getQuizId())
                         .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
@@ -1558,7 +1275,6 @@ public class ModuleContentService {
                         });
             }
 
-            // Create video step if video was found
             if (resources.getVideoUrl() != null) {
                 String videoId = extractVideoId(resources.getVideoUrl());
 
@@ -1583,9 +1299,6 @@ public class ModuleContentService {
         }
     }
 
-    /**
-     * Extract video ID from YouTube URL
-     */
     private String extractVideoId(String videoUrl) {
         if (videoUrl == null || videoUrl.isEmpty()) {
             return null;
@@ -1601,7 +1314,6 @@ public class ModuleContentService {
             log.warn("Could not extract video ID from URL: {}", videoUrl);
         }
 
-        // If not a recognizable YouTube URL format or extraction failed, return the URL itself
         return videoUrl;
     }
 }
