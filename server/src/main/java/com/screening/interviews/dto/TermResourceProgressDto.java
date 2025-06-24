@@ -1,5 +1,6 @@
 package com.screening.interviews.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,8 +8,9 @@ import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@NoArgsConstructor  // Required for Jackson deserialization
+@AllArgsConstructor // Required for @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TermResourceProgressDto {
     // Article progress
     private boolean articleAvailable;

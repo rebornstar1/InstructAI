@@ -1,20 +1,15 @@
 package com.screening.interviews.config;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CachingConfigurer;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.redis.cache.RedisCacheConfiguration;
-import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -25,12 +20,9 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 
 @Configuration
-@EnableCaching
-public class RedisConfig implements CachingConfigurer {
+public class RedisConfig {
 
     @Value("${spring.data.redis.host:localhost}")
     private String redisHost;
@@ -79,22 +71,23 @@ public class RedisConfig implements CachingConfigurer {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
 
-        // REMOVE polymorphic type handling - this is causing the issue
-        // objectMapper.activateDefaultTyping(
-        //     LaissezFaireSubTypeValidator.instance,
-        //     ObjectMapper.DefaultTyping.NON_FINAL,
-        //     JsonTypeInfo.As.PROPERTY
-        // );
-
         // Register JavaTimeModule for LocalDateTime support
         objectMapper.registerModule(new JavaTimeModule());
 
-        // Disable writing dates as timestamps
-        objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        // Configure for better JSON handling
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+        objectMapper.enable(SerializationFeature.INDENT_OUTPUT); // Pretty print for debugging
 
         // Configure to handle missing properties gracefully
-        objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, false);
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        objectMapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, false);
+        objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
+        objectMapper.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
+
+        // Additional configuration for better deserialization
+        objectMapper.configure(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS, true);
+        objectMapper.configure(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS, true);
 
         return objectMapper;
     }
@@ -119,43 +112,5 @@ public class RedisConfig implements CachingConfigurer {
         template.setDefaultSerializer(jackson2JsonRedisSerializer);
         template.afterPropertiesSet();
         return template;
-    }
-
-    @Bean
-    @Override
-    public CacheManager cacheManager() {
-        RedisCacheConfiguration defaultCacheConfiguration = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofHours(1)) // Default TTL of 1 hour
-                .serializeKeysWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper())));
-
-        // Configure different TTL for different cache names
-        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-
-        // Course cache - 2 hours TTL
-        cacheConfigurations.put("courses", defaultCacheConfiguration.entryTtl(Duration.ofHours(2)));
-
-        // Course list cache - 30 minutes TTL
-        cacheConfigurations.put("course-list", defaultCacheConfiguration.entryTtl(Duration.ofMinutes(30)));
-
-        // Module cache - 1 hour TTL
-        cacheConfigurations.put("modules", defaultCacheConfiguration.entryTtl(Duration.ofHours(1)));
-
-        // Thread cache - 15 minutes TTL
-        cacheConfigurations.put("threads", defaultCacheConfiguration.entryTtl(Duration.ofMinutes(15)));
-
-        // Message cache - 5 minutes TTL
-        cacheConfigurations.put("messages", defaultCacheConfiguration.entryTtl(Duration.ofMinutes(5)));
-
-        // Learning resources cache - 4 hours TTL (since AI generation is expensive)
-        cacheConfigurations.put("learning-resources", defaultCacheConfiguration.entryTtl(Duration.ofHours(4)));
-
-        // User cache - 30 minutes TTL
-        cacheConfigurations.put("users", defaultCacheConfiguration.entryTtl(Duration.ofMinutes(30)));
-
-        return RedisCacheManager.builder(redisConnectionFactory())
-                .cacheDefaults(defaultCacheConfiguration)
-                .withInitialCacheConfigurations(cacheConfigurations)
-                .build();
     }
 }

@@ -1,5 +1,6 @@
 package com.screening.interviews.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,9 +15,9 @@ import java.util.Map;
  */
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@NoArgsConstructor  // Required for Jackson deserialization
+@AllArgsConstructor // Required for @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TermDetailResponseDto {
     private boolean success;
     private String message;

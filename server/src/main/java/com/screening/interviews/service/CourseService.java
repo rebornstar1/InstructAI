@@ -1,6 +1,7 @@
 package com.screening.interviews.service;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,15 +17,13 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import com.screening.interviews.prompts.CoursePrompts;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +32,7 @@ import java.util.stream.Collectors;
 public class CourseService {
 
     private static final Logger logger = LoggerFactory.getLogger(CourseService.class);
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final @Qualifier("geminiWebClient") WebClient geminiWebClient;
     private final ObjectMapper objectMapper;
@@ -41,36 +41,32 @@ public class CourseService {
     private final InputSanitizer inputSanitizer;
     private final CacheService cacheService;
 
+    // Cache TTL configurations
+    private static final Duration GENERATED_COURSE_TTL = Duration.ofHours(2);
+    private static final Duration COURSE_TTL = Duration.ofHours(2);
+    private static final Duration COURSE_LIST_TTL = Duration.ofMinutes(30);
+
     public CourseResponseDto generateCourse(CourseRequestDto request) {
-        String cacheKey = "course:generated:" + request.getTopic() + ":" + request.getDifficultyLevel() + ":" + request.getModuleCount();
-
-        // Check cache first with error handling
-        try {
-            Object cachedResult = cacheService.get(cacheKey);
-            if (cachedResult instanceof CourseResponseDto) {
-                logger.info("Retrieved course from cache: {}", request.getTopic());
-                return (CourseResponseDto) cachedResult;
-            } else if (cachedResult != null) {
-                logger.warn("Cached object is not of expected type: {}", cachedResult.getClass());
-                // Clear the corrupted cache entry
-                cacheService.delete(cacheKey);
-            }
-        } catch (Exception e) {
-            logger.warn("Cache retrieval failed for key: {}, proceeding without cache: {}", cacheKey, e.getMessage());
-            // Clear the corrupted cache entry
-            cacheService.delete(cacheKey);
-        }
-
         String sanitizedTopic = inputSanitizer.sanitizeInput(request.getTopic());
         sanitizedTopic = inputSanitizer.handleSpecialSymbols(sanitizedTopic);
 
-        logger.info("Starting course generation for topic: {}", sanitizedTopic);
+        String cacheKey = generateCacheKey("course:generated", sanitizedTopic,
+                request.getDifficultyLevel(), String.valueOf(request.getModuleCount()));
+
+        // Check cache first with proper type handling and JSON validation
+        CourseResponseDto cachedResult = getCachedCourseResponse(cacheKey);
+        if (cachedResult != null) {
+            logger.info("Retrieved course from cache: {} (User: rebornstar1)", sanitizedTopic);
+            return validateAndEnrichResponse(cachedResult);
+        }
+
+        logger.info("Starting course generation for topic: {} (cache miss) (User: rebornstar1)", sanitizedTopic);
         String masterPrompt = CoursePrompts.generateCoursePrompt(sanitizedTopic, request.getDifficultyLevel());
 
         CourseResponseDto result = generateCourseViaGemini(masterPrompt);
 
         if (result == null || (result.getCourseMetadata() == null && result.getModules() == null)) {
-            logger.warn("Received empty or null course response from Gemini.");
+            logger.warn("Received empty or null course response from Gemini. (User: rebornstar1)");
             return null;
         }
 
@@ -80,40 +76,64 @@ public class CourseService {
         threadMatcherService.associateCourseWithThreads(savedCourse, relevantThreadIds);
 
         CourseResponseDto finalResult = mapEntityToCourseResponseDto(savedCourse);
+        finalResult = validateAndEnrichResponse(finalResult);
 
-        // Cache the result with error handling
-        try {
-            cacheService.set(cacheKey, finalResult, Duration.ofHours(2));
-            logger.debug("Successfully cached course result for key: {}", cacheKey);
-        } catch (Exception e) {
-            logger.warn("Failed to cache course result for key: {}: {}", cacheKey, e.getMessage());
-        }
+        // Cache the validated result
+        cacheCourseResponse(cacheKey, finalResult, GENERATED_COURSE_TTL);
 
         return finalResult;
     }
 
-    @Cacheable(value = "courses", key = "#id", unless = "#result == null")
     public CourseResponseDto getCourseById(Long id) {
-        logger.info("Fetching course by ID: {}", id);
+        logger.info("Fetching course by ID: {} (User: rebornstar1)", id);
+
+        String cacheKey = generateCacheKey("course:single", String.valueOf(id));
+
+        // Check cache first
+        CourseResponseDto cachedResult = getCachedCourseResponse(cacheKey);
+        if (cachedResult != null) {
+            logger.info("Retrieved course {} from cache (User: rebornstar1)", id);
+            return validateAndEnrichResponse(cachedResult);
+        }
 
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
-        return mapEntityToCourseResponseDto(course);
+
+        CourseResponseDto result = mapEntityToCourseResponseDto(course);
+        result = validateAndEnrichResponse(result);
+
+        // Cache the result
+        cacheCourseResponse(cacheKey, result, COURSE_TTL);
+
+        return result;
     }
 
-    @Cacheable(value = "course-list", key = "'all-courses'", unless = "#result == null || #result.isEmpty()")
     public List<CourseResponseDto> getAllCourses() {
-        logger.info("Fetching all courses");
+        logger.info("Fetching all courses (User: rebornstar1)");
+
+        String cacheKey = generateCacheKey("course:list", "all-courses");
+
+        // Check cache first
+        List<CourseResponseDto> cachedResult = getCachedCourseList(cacheKey);
+        if (cachedResult != null && !cachedResult.isEmpty()) {
+            logger.info("Retrieved {} courses from cache (User: rebornstar1)", cachedResult.size());
+            return cachedResult.stream()
+                    .map(this::validateAndEnrichResponse)
+                    .collect(Collectors.toList());
+        }
+
         List<Course> courses = courseRepository.findAll();
-        return courses.stream()
+        List<CourseResponseDto> result = courses.stream()
                 .map(this::mapEntityToCourseResponseDto)
+                .map(this::validateAndEnrichResponse)
                 .collect(Collectors.toList());
+
+        // Cache the result
+        cacheCourseList(cacheKey, result, COURSE_LIST_TTL);
+
+        return result;
     }
 
-    @Caching(
-            put = @CachePut(value = "courses", key = "#id"),
-            evict = @CacheEvict(value = "course-list", key = "'all-courses'")
-    )
     public CourseResponseDto updateCourse(Long id, CourseRequestDto request) {
         Course existingCourse = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
@@ -135,46 +155,271 @@ public class CourseService {
 
         Course updatedCourse = courseRepository.save(existingCourse);
 
-        // Clear related caches
-        cacheService.deletePattern("course:generated:*");
+        // Clear related caches manually
+        clearCourseRelatedCaches(id);
 
-        return mapEntityToCourseResponseDto(updatedCourse);
+        CourseResponseDto result = mapEntityToCourseResponseDto(updatedCourse);
+        result = validateAndEnrichResponse(result);
+
+        // Update cache with new data
+        String cacheKey = generateCacheKey("course:single", String.valueOf(id));
+        cacheCourseResponse(cacheKey, result, COURSE_TTL);
+
+        logger.info("Updated course {} and refreshed cache (User: rebornstar1)", id);
+
+        return result;
     }
 
-    @Caching(
-            evict = {
-                    @CacheEvict(value = "courses", key = "#id"),
-                    @CacheEvict(value = "course-list", key = "'all-courses'")
-            }
-    )
     public void deleteCourse(Long id) {
-        logger.info("Deleting course with ID: {}", id);
+        logger.info("Deleting course with ID: {} (User: rebornstar1)", id);
         courseRepository.deleteById(id);
 
-        // Clear related caches
-        cacheService.deletePattern("course:generated:*");
+        // Clear related caches manually
+        clearCourseRelatedCaches(id);
+
+        logger.info("Deleted course {} and cleared related caches (User: rebornstar1)", id);
+    }
+
+    // Manual caching helper methods
+    private String generateCacheKey(String prefix, String... parts) {
+        return prefix + ":" + String.join(":", parts);
+    }
+
+    private CourseResponseDto getCachedCourseResponse(String cacheKey) {
+        try {
+            Object cachedObject = cacheService.get(cacheKey);
+            if (cachedObject == null) {
+                return null;
+            }
+
+            // Handle different cached object types
+            if (cachedObject instanceof CourseResponseDto) {
+                logger.debug("Retrieved CourseResponseDto directly from cache: {}", cacheKey);
+                return (CourseResponseDto) cachedObject;
+            } else if (cachedObject instanceof String) {
+                // Try to deserialize from JSON string
+                logger.debug("Deserializing CourseResponseDto from JSON string: {}", cacheKey);
+                return objectMapper.readValue((String) cachedObject, CourseResponseDto.class);
+            } else if (cachedObject instanceof Map) {
+                // Convert Map to CourseResponseDto
+                logger.debug("Converting Map to CourseResponseDto: {}", cacheKey);
+                String jsonString = objectMapper.writeValueAsString(cachedObject);
+                return objectMapper.readValue(jsonString, CourseResponseDto.class);
+            } else {
+                logger.warn("Unexpected cached object type: {} for key: {}", cachedObject.getClass(), cacheKey);
+                cacheService.delete(cacheKey);
+                return null;
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to retrieve/deserialize cached course for key: {}, error: {}", cacheKey, e.getMessage());
+            cacheService.delete(cacheKey);
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<CourseResponseDto> getCachedCourseList(String cacheKey) {
+        try {
+            Object cachedObject = cacheService.get(cacheKey);
+            if (cachedObject == null) {
+                return null;
+            }
+
+            if (cachedObject instanceof List) {
+                List<?> cachedList = (List<?>) cachedObject;
+                return cachedList.stream()
+                        .map(item -> {
+                            try {
+                                if (item instanceof CourseResponseDto) {
+                                    return (CourseResponseDto) item;
+                                } else if (item instanceof Map) {
+                                    String jsonString = objectMapper.writeValueAsString(item);
+                                    return objectMapper.readValue(jsonString, CourseResponseDto.class);
+                                } else {
+                                    return null;
+                                }
+                            } catch (Exception e) {
+                                logger.warn("Failed to convert list item: {}", e.getMessage());
+                                return null;
+                            }
+                        })
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+            } else {
+                logger.warn("Unexpected cached list type: {} for key: {}", cachedObject.getClass(), cacheKey);
+                cacheService.delete(cacheKey);
+                return null;
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to retrieve/deserialize cached course list for key: {}, error: {}", cacheKey, e.getMessage());
+            cacheService.delete(cacheKey);
+            return null;
+        }
+    }
+
+    private void cacheCourseResponse(String cacheKey, CourseResponseDto response, Duration ttl) {
+        try {
+            // Validate the response before caching
+            String jsonString = objectMapper.writeValueAsString(response);
+
+            // Verify it can be deserialized back correctly
+            CourseResponseDto testDeserialize = objectMapper.readValue(jsonString, CourseResponseDto.class);
+
+            if (testDeserialize != null && testDeserialize.getCourseMetadata() != null) {
+                cacheService.set(cacheKey, response, ttl);
+                logger.debug("Successfully cached course response for key: {} (User: rebornstar1)", cacheKey);
+            } else {
+                logger.warn("Course response failed validation, not caching: {} (User: rebornstar1)", cacheKey);
+            }
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize course response for caching: {} (User: rebornstar1)", e.getMessage());
+        } catch (Exception e) {
+            logger.warn("Failed to cache course response for key: {}: {} (User: rebornstar1)", cacheKey, e.getMessage());
+        }
+    }
+
+    private void cacheCourseList(String cacheKey, List<CourseResponseDto> courseList, Duration ttl) {
+        try {
+            // Validate the list before caching
+            String jsonString = objectMapper.writeValueAsString(courseList);
+
+            // Verify it can be deserialized back correctly
+            List<?> testDeserialize = objectMapper.readValue(jsonString, List.class);
+
+            if (testDeserialize != null) {
+                cacheService.set(cacheKey, courseList, ttl);
+                logger.debug("Successfully cached course list with {} items for key: {} (User: rebornstar1)",
+                        courseList.size(), cacheKey);
+            } else {
+                logger.warn("Course list failed validation, not caching: {} (User: rebornstar1)", cacheKey);
+            }
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize course list for caching: {} (User: rebornstar1)", e.getMessage());
+        } catch (Exception e) {
+            logger.warn("Failed to cache course list for key: {}: {} (User: rebornstar1)", cacheKey, e.getMessage());
+        }
+    }
+
+    private void clearCourseRelatedCaches(Long courseId) {
+        try {
+            // Clear specific course cache
+            String specificCourseKey = generateCacheKey("course:single", String.valueOf(courseId));
+            cacheService.delete(specificCourseKey);
+
+            // Clear course list cache
+            String courseListKey = generateCacheKey("course:list", "all-courses");
+            cacheService.delete(courseListKey);
+
+            // Clear generated course caches
+            cacheService.deletePattern("course:generated:*");
+
+            logger.info("Cleared course-related caches for course {} (User: rebornstar1)", courseId);
+        } catch (Exception e) {
+            logger.error("Error clearing course-related caches for course {}: {} (User: rebornstar1)",
+                    courseId, e.getMessage());
+        }
     }
 
     // Clear all course-related caches
     public void clearAllCourseCaches() {
         try {
-            cacheService.deletePattern("courses:*");
-            cacheService.deletePattern("course-list:*");
-            cacheService.deletePattern("course:generated:*");
-            logger.info("Cleared all course caches successfully");
+            cacheService.deletePattern("course:*");
+            logger.info("Cleared all course caches successfully (User: rebornstar1)");
         } catch (Exception e) {
-            logger.error("Error clearing course caches: {}", e.getMessage());
+            logger.error("Error clearing all course caches: {} (User: rebornstar1)", e.getMessage());
         }
     }
 
-    // Rest of your private methods remain the same...
+    /**
+     * Validates and enriches the CourseResponseDto to ensure proper JSON format for frontend
+     */
+    private CourseResponseDto validateAndEnrichResponse(CourseResponseDto response) {
+        if (response == null) {
+            return null;
+        }
+
+        try {
+            // Add metadata enrichment
+            if (response.getCourseMetadata() != null) {
+                CourseMetadataDto metadata = response.getCourseMetadata();
+
+                // Ensure prerequisites is always a List
+                if (metadata.getPrerequisites() == null) {
+                    metadata.setPrerequisites(Collections.emptyList());
+                } else if (!(metadata.getPrerequisites() instanceof List)) {
+                    String prereqString = metadata.getPrerequisites().toString();
+                    List<String> prereqList = splitPrerequisitesString(prereqString);
+                    metadata.setPrerequisites(prereqList);
+                }
+            }
+
+            // Validate modules
+            if (response.getModules() != null) {
+                List<ModuleDto> validatedModules = response.getModules().stream()
+                        .map(this::validateModule)
+                        .collect(Collectors.toList());
+                response.setModules(validatedModules);
+            }
+
+            // Validate JSON serialization
+            String jsonString = objectMapper.writeValueAsString(response);
+            CourseResponseDto validated = objectMapper.readValue(jsonString, CourseResponseDto.class);
+
+            logger.debug("Response validation successful for course: {} at {} (User: rebornstar1)",
+                    response.getCourseMetadata() != null ? response.getCourseMetadata().getTitle() : "Unknown",
+                    LocalDateTime.now().format(TIMESTAMP_FORMATTER));
+
+            return validated;
+
+        } catch (Exception e) {
+            logger.error("Failed to validate/enrich response: {} (User: rebornstar1)", e.getMessage());
+            return response; // Return original if validation fails
+        }
+    }
+
+    private ModuleDto validateModule(ModuleDto module) {
+        if (module == null) {
+            return null;
+        }
+
+        // Ensure all list fields are never null
+        if (module.getLearningObjectives() == null) {
+            module.setLearningObjectives(Collections.emptyList());
+        }
+        if (module.getKeyTerms() == null) {
+            module.setKeyTerms(Collections.emptyList());
+        }
+        if (module.getDefinitions() == null) {
+            module.setDefinitions(Collections.emptyList());
+        }
+
+        // Ensure string fields are never null
+        if (module.getModuleId() == null) {
+            module.setModuleId("M" + System.currentTimeMillis() % 1000);
+        }
+        if (module.getTitle() == null) {
+            module.setTitle("Untitled Module");
+        }
+        if (module.getDescription() == null) {
+            module.setDescription("Module description not available");
+        }
+        if (module.getDuration() == null) {
+            module.setDuration("30 minutes");
+        }
+        if (module.getComplexityLevel() == null) {
+            module.setComplexityLevel("Basic");
+        }
+
+        return module;
+    }
+
+    // REST OF YOUR EXISTING METHODS REMAIN THE SAME...
     private CourseResponseDto mapEntityToCourseResponseDto(Course course) {
-        // Your existing implementation
         CourseMetadataDto courseMetadataDto = CourseMetadataDto.builder()
                 .title(course.getTitle())
                 .description(course.getDescription())
                 .difficultyLevel(course.getDifficultyLevel())
-                .prerequisites(course.getPrerequisites())
+                .prerequisites(course.getPrerequisites() != null ? course.getPrerequisites() : Collections.emptyList())
                 .build();
 
         List<ModuleDto> moduleDtos = course.getModules().stream()
@@ -184,10 +429,13 @@ public class CourseService {
                         .title(module.getTitle())
                         .description(module.getDescription())
                         .duration(module.getDuration())
-                        .learningObjectives(module.getLearningObjectives())
+                        .learningObjectives(module.getLearningObjectives() != null ?
+                                module.getLearningObjectives() : Collections.emptyList())
                         .complexityLevel(module.getComplexityLevel())
-                        .keyTerms(module.getKeyTerms())
-                        .definitions(module.getDefinitions())
+                        .keyTerms(module.getKeyTerms() != null ?
+                                module.getKeyTerms() : Collections.emptyList())
+                        .definitions(module.getDefinitions() != null ?
+                                module.getDefinitions() : Collections.emptyList())
                         .build())
                 .collect(Collectors.toList());
 
@@ -199,6 +447,7 @@ public class CourseService {
                 .build();
     }
 
+    // All your existing private methods remain the same...
     private CourseResponseDto generateCourseViaGemini(String masterPrompt) {
         String escapedPrompt;
         try {
@@ -210,7 +459,7 @@ public class CourseService {
         String payload = CoursePrompts.geminiApiPayload(escapedPrompt);
 
         try {
-            logger.info("Calling Gemini API for course generation...");
+            logger.info("Calling Gemini API for course generation... (User: rebornstar1)");
             String rawResponse = geminiWebClient.post()
                     .uri("") // Base URL set in application.properties.
                     .bodyValue(payload)
@@ -219,13 +468,14 @@ public class CourseService {
                     .block();
 
             if (rawResponse != null && rawResponse.length() > 500) {
-                logger.debug("Raw response from Gemini API (first 500 chars): {}", rawResponse.substring(0, 500) + "...");
+                logger.debug("Raw response from Gemini API (first 500 chars): {} (User: rebornstar1)",
+                        rawResponse.substring(0, 500) + "...");
             } else {
-                logger.debug("Raw response from Gemini API: {}", rawResponse);
+                logger.debug("Raw response from Gemini API: {} (User: rebornstar1)", rawResponse);
             }
 
             if (rawResponse == null || rawResponse.trim().isEmpty()) {
-                logger.error("Gemini API returned empty response");
+                logger.error("Gemini API returned empty response (User: rebornstar1)");
                 throw new RuntimeException("Empty response from Gemini API");
             }
 
@@ -250,7 +500,7 @@ public class CourseService {
 
             String embeddedJson = textNode.asText();
             if (embeddedJson == null || embeddedJson.trim().isEmpty()) {
-                logger.warn("Gemini's 'text' field is empty or missing.");
+                logger.warn("Gemini's 'text' field is empty or missing. (User: rebornstar1)");
                 return null;
             }
 
@@ -261,20 +511,20 @@ public class CourseService {
             try {
                 return objectMapper.readValue(embeddedJson, CourseResponseDto.class);
             } catch (JsonMappingException jme) {
-                logger.warn("Failed to parse Gemini response JSON. Attempting fixes: {}", jme.getMessage());
+                logger.warn("Failed to parse Gemini response JSON. Attempting fixes: {} (User: rebornstar1)", jme.getMessage());
 
                 try {
                     String fixedJson = fixTrailingCommas(embeddedJson);
                     fixedJson = ensureKeyTermsAndDefinitions(fixedJson);
                     return objectMapper.readValue(fixedJson, CourseResponseDto.class);
                 } catch (Exception e1) {
-                    logger.warn("Basic fixes failed. Attempting advanced bracket repair: {}", e1.getMessage());
+                    logger.warn("Basic fixes failed. Attempting advanced bracket repair: {} (User: rebornstar1)", e1.getMessage());
 
                     try {
                         String fixedJson = fixJsonBracketMismatches(embeddedJson);
                         return objectMapper.readValue(fixedJson, CourseResponseDto.class);
                     } catch (Exception e2) {
-                        logger.warn("Advanced fixes failed. Attempting last-resort fixes: {}", e2.getMessage());
+                        logger.warn("Advanced fixes failed. Attempting last-resort fixes: {} (User: rebornstar1)", e2.getMessage());
 
                         String fixedJson = fixTrailingCommas(embeddedJson);
                         fixedJson = fixJsonBracketMismatches(fixedJson);
@@ -284,20 +534,22 @@ public class CourseService {
                         try {
                             return objectMapper.readValue(fixedJson, CourseResponseDto.class);
                         } catch (Exception e3) {
-                            logger.error("All JSON repair attempts failed. Generating fallback course: {}", e3.getMessage());
+                            logger.error("All JSON repair attempts failed. Generating fallback course: {} (User: rebornstar1)", e3.getMessage());
                             return generateFallbackCourse();
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            logger.error("Error calling Gemini API or parsing response: {}", e.getMessage(), e);
+            logger.error("Error calling Gemini API or parsing response: {} (User: rebornstar1)", e.getMessage(), e);
             return generateFallbackCourse();
         }
     }
 
-
     private CourseResponseDto generateFallbackCourse() {
+        logger.info("Generating fallback course (User: rebornstar1, Time: {})",
+                LocalDateTime.now().format(TIMESTAMP_FORMATTER));
+
         CourseMetadataDto metadata = CourseMetadataDto.builder()
                 .title("General Educational Course")
                 .description("This is a fallback course generated when the original request couldn't be processed properly. It covers general educational topics.")
@@ -329,6 +581,9 @@ public class CourseService {
                 .modules(modules)
                 .build();
     }
+
+    // Include all your existing private helper methods here...
+    // (fixArrayClosingBrackets, fixTrailingCommas, ensureKeyTermsAndDefinitions, etc.)
 
     private String fixArrayClosingBrackets(String json) {
         if (json == null || json.isEmpty()) {
@@ -440,7 +695,7 @@ public class CourseService {
 
                 // If needs update, apply fixes
                 if (needsUpdate) {
-                    logger.info("Adding missing keyTerms and definitions fields to modules");
+                    logger.info("Adding missing keyTerms and definitions fields to modules (User: rebornstar1)");
 
                     // This is a simple string-based fix that adds empty arrays
                     // A more robust solution would modify the JsonNode directly and reserialize
@@ -451,7 +706,7 @@ public class CourseService {
 
             return json;
         } catch (Exception e) {
-            logger.warn("Error while ensuring keyTerms and definitions: {}", e.getMessage());
+            logger.warn("Error while ensuring keyTerms and definitions: {} (User: rebornstar1)", e.getMessage());
             return json; // Return original if we can't parse it
         }
     }
@@ -569,7 +824,7 @@ public class CourseService {
                             // Replace with the correct closing bracket
                             stack.remove(stack.size() - 1);
                             sb.append(']');
-                            logger.warn("Fixed mismatched bracket: replaced '}' with ']' at position {}", i);
+                            logger.warn("Fixed mismatched bracket: replaced '}' with ']' at position {} (User: rebornstar1)", i);
                         } else {
                             // Unexpected state
                             sb.append(c);
@@ -592,7 +847,7 @@ public class CourseService {
                             // Replace with the correct closing brace
                             stack.remove(stack.size() - 1);
                             sb.append('}');
-                            logger.warn("Fixed mismatched bracket: replaced ']' with '}' at position {}", i);
+                            logger.warn("Fixed mismatched bracket: replaced ']' with '}' at position {} (User: rebornstar1)", i);
                         } else {
                             // Unexpected state
                             sb.append(c);
@@ -609,7 +864,7 @@ public class CourseService {
 
         // Handle any remaining unclosed brackets/braces
         if (!stack.isEmpty()) {
-            logger.warn("Found {} unclosed brackets/braces", stack.size());
+            logger.warn("Found {} unclosed brackets/braces (User: rebornstar1)", stack.size());
 
             // Add appropriate closing characters in reverse order
             for (int i = stack.size() - 1; i >= 0; i--) {
@@ -621,7 +876,7 @@ public class CourseService {
                 }
             }
 
-            logger.info("Added missing closing brackets/braces");
+            logger.info("Added missing closing brackets/braces (User: rebornstar1)");
         }
 
         return sb.toString();
@@ -762,7 +1017,8 @@ public class CourseService {
         course.setModules(modules);
 
         Course saved = courseRepository.save(course);
-        logger.info("Course saved with {} modules. DB ID: {}", modules.size(), saved.getId());
+        logger.info("Course saved with {} modules. DB ID: {} (User: rebornstar1, Time: {})",
+                modules.size(), saved.getId(), LocalDateTime.now().format(TIMESTAMP_FORMATTER));
         return saved;
     }
 }
