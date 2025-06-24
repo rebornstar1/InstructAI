@@ -82,9 +82,9 @@ public class MessageController {
         return ResponseEntity.noContent().build();
     }
 
-    // Search messages
-    @GetMapping("/messages/search")
-    public ResponseEntity<List<MessageDTO>> searchMessages(@RequestParam String term) {
-        return ResponseEntity.ok(messageService.searchMessages(term));
-    }
+//    // Search messages
+//    @GetMapping("/messages/search")
+//    public ResponseEntity<List<MessageDTO>> searchMessages(@RequestParam String term) {
+//        return ResponseEntity.ok(messageService.searchMessages(term));
+//    }
 }

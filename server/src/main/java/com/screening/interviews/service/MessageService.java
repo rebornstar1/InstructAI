@@ -11,9 +11,14 @@ import com.screening.interviews.repo.ConversationRepository;
 import com.screening.interviews.repo.MessageRepository;
 import com.screening.interviews.repo.UserRepository;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,35 +26,39 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class MessageService {
 
-    @Autowired
-    private MessageRepository messageRepository;
+    private final MessageRepository messageRepository;
 
-    @Autowired
-    private ConversationRepository conversationRepository;
+    private final ConversationRepository conversationRepository;
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    private final CacheService cacheService;
 
     // Get all messages in a conversation
+    @Cacheable(value = "messages", key = "'conversation:' + #conversationId + ':all'",
+            unless = "#result == null || #result.isEmpty()")
     public List<MessageDTO> getMessagesByConversationId(Long conversationId) {
         return messageRepository.findByConversationIdOrderByTimestamp(conversationId).stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
 
-    // Get only top-level messages in a conversation
+
+    @Cacheable(value = "messages", key = "'conversation:' + #conversationId + ':top-level'",
+            unless = "#result == null || #result.isEmpty()")
     public List<MessageDTO> getTopLevelMessagesByConversationId(Long conversationId) {
         return messageRepository.findByConversationIdAndReplyToMessageIsNullOrderByTimestamp(conversationId).stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
 
-    // Get top-level messages with their replies
+    @Cacheable(value = "messages", key = "'conversation:' + #conversationId + ':threaded'",
+            unless = "#result == null || #result.isEmpty()")
     public List<MessageDTO> getThreadedMessagesByConversationId(Long conversationId) {
         // First, get all messages for the conversation
         List<Message> allMessages = messageRepository.findByConversationIdOrderByTimestamp(conversationId);
@@ -70,7 +79,83 @@ public class MessageService {
                 .collect(Collectors.toList());
     }
 
-    // Helper method to convert a message to DTO with its replies
+
+    @Cacheable(value = "messages", key = "#id", unless = "#result == null")
+    public MessageDTO getMessageById(Long id) {
+        Message message = messageRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
+        return convertToDTO(message);
+    }
+
+    // Create a new message
+    @Transactional
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "messages", key = "'conversation:' + #messageDTO.conversationId + ':all'"),
+                    @CacheEvict(value = "messages", key = "'conversation:' + #messageDTO.conversationId + ':top-level'"),
+                    @CacheEvict(value = "messages", key = "'conversation:' + #messageDTO.conversationId + ':threaded'")
+            }
+    )
+    public MessageDTO createMessage(MessageDTO messageDTO) {
+        // Validate required fields
+        if (messageDTO.getMessageType() == null) {
+            throw new IllegalArgumentException("Message type must not be null");
+        }
+
+        Message message = convertToEntity(messageDTO);
+        Message savedMessage = messageRepository.save(message);
+        MessageDTO result = convertToDTO(savedMessage);
+
+        // Cache the individual message
+        String messageKey = "messages:" + savedMessage.getId();
+        cacheService.set(messageKey, result, Duration.ofMinutes(5));
+
+        return result;
+    }
+
+    // Update a message
+    @Transactional
+    @Caching(
+            put = @CachePut(value = "messages", key = "#id"),
+            evict = {
+                    @CacheEvict(value = "messages", key = "'conversation:*'", allEntries = true)
+            }
+    )
+    public MessageDTO updateMessage(Long id, MessageDTO messageDTO) {
+        Message existingMessage = messageRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
+
+        // Update fields
+        existingMessage.setContent(messageDTO.getContent());
+        existingMessage.setConceptTags(messageDTO.getConceptTags());
+
+        Message updatedMessage = messageRepository.save(existingMessage);
+        return convertToDTO(updatedMessage);
+    }
+
+
+    @Transactional
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "messages", key = "#id"),
+                    @CacheEvict(value = "messages", key = "'conversation:*'", allEntries = true)
+            }
+    )
+    public void deleteMessage(Long id) {
+        messageRepository.deleteById(id);
+    }
+
+
+    public void clearMessageCaches(Long conversationId) {
+        cacheService.delete("messages:conversation:" + conversationId + ":all");
+        cacheService.delete("messages:conversation:" + conversationId + ":top-level");
+        cacheService.delete("messages:conversation:" + conversationId + ":threaded");
+    }
+
+    public void clearAllMessageCaches() {
+        cacheService.deletePattern("messages:*");
+    }
+
     private MessageDTO convertToDTOWithReplies(Message message, Map<Long, List<Message>> repliesMap) {
         MessageDTO dto = convertToDTO(message);
 
@@ -85,92 +170,6 @@ public class MessageService {
         return dto;
     }
 
-    // Get message by ID
-    public MessageDTO getMessageById(Long id) {
-        Message message = messageRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
-        return convertToDTO(message);
-    }
-
-    // Create a new message
-    @Transactional
-    public MessageDTO createMessage(MessageDTO messageDTO) {
-        // Validate required fields
-        if (messageDTO.getMessageType() == null) {
-            throw new IllegalArgumentException("Message type must not be null");
-        }
-
-        if (messageDTO.getContent() == null) {
-            throw new IllegalArgumentException("Content must not be null");
-        }
-
-        // Convert any JSON objects to string if needed
-        if (!(messageDTO.getContent() instanceof String)) {
-            try {
-                messageDTO.setContent(objectMapper.writeValueAsString(messageDTO.getContent()));
-            } catch (JsonProcessingException e) {
-                throw new IllegalArgumentException("Failed to convert content to string: " + e.getMessage());
-            }
-        }
-
-        Message message = convertToEntity(messageDTO);
-
-        // Update conversation's last activity time
-        Conversation conversation = message.getConversation();
-        conversation.updateLastActivity();
-        conversationRepository.save(conversation);
-
-        // Add sender as participant if not already
-        User sender = message.getUser();
-        if (!conversation.getParticipants().contains(sender)) {
-            conversation.addParticipant(sender);
-        }
-
-        Message savedMessage = messageRepository.save(message);
-        return convertToDTO(savedMessage);
-    }
-
-    // Update a message
-    @Transactional
-    public MessageDTO updateMessage(Long id, MessageDTO messageDTO) {
-        Message existingMessage = messageRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
-
-        // Convert any JSON objects to string if needed
-        if (messageDTO.getContent() != null) {
-            if (!(messageDTO.getContent() instanceof String)) {
-                try {
-                    messageDTO.setContent(objectMapper.writeValueAsString(messageDTO.getContent()));
-                } catch (JsonProcessingException e) {
-                    throw new IllegalArgumentException("Failed to convert content to string: " + e.getMessage());
-                }
-            }
-            existingMessage.setContent(messageDTO.getContent());
-        }
-
-        // Update concept tags if provided
-        if (messageDTO.getConceptTags() != null) {
-            existingMessage.setConceptTags(messageDTO.getConceptTags());
-        }
-
-        Message updatedMessage = messageRepository.save(existingMessage);
-        return convertToDTO(updatedMessage);
-    }
-
-    // Delete a message
-    @Transactional
-    public void deleteMessage(Long id) {
-        Message message = messageRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
-        messageRepository.delete(message);
-    }
-
-    // Search messages by content or tags
-    public List<MessageDTO> searchMessages(String searchTerm) {
-        return messageRepository.searchMessages(searchTerm).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
 
     // Helper methods for DTO conversion
     private MessageDTO convertToDTO(Message message) {

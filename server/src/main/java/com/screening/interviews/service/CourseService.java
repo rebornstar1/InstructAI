@@ -16,10 +16,15 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import com.screening.interviews.prompts.CoursePrompts;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -34,8 +39,28 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final ThreadMatcherService threadMatcherService;
     private final InputSanitizer inputSanitizer;
+    private final CacheService cacheService;
 
     public CourseResponseDto generateCourse(CourseRequestDto request) {
+        String cacheKey = "course:generated:" + request.getTopic() + ":" + request.getDifficultyLevel() + ":" + request.getModuleCount();
+
+        // Check cache first with error handling
+        try {
+            Object cachedResult = cacheService.get(cacheKey);
+            if (cachedResult instanceof CourseResponseDto) {
+                logger.info("Retrieved course from cache: {}", request.getTopic());
+                return (CourseResponseDto) cachedResult;
+            } else if (cachedResult != null) {
+                logger.warn("Cached object is not of expected type: {}", cachedResult.getClass());
+                // Clear the corrupted cache entry
+                cacheService.delete(cacheKey);
+            }
+        } catch (Exception e) {
+            logger.warn("Cache retrieval failed for key: {}, proceeding without cache: {}", cacheKey, e.getMessage());
+            // Clear the corrupted cache entry
+            cacheService.delete(cacheKey);
+        }
+
         String sanitizedTopic = inputSanitizer.sanitizeInput(request.getTopic());
         sanitizedTopic = inputSanitizer.handleSpecialSymbols(sanitizedTopic);
 
@@ -53,15 +78,30 @@ public class CourseService {
 
         List<Long> relevantThreadIds = threadMatcherService.findRelevantThreads(result);
         threadMatcherService.associateCourseWithThreads(savedCourse, relevantThreadIds);
-        return mapEntityToCourseResponseDto(savedCourse);
+
+        CourseResponseDto finalResult = mapEntityToCourseResponseDto(savedCourse);
+
+        // Cache the result with error handling
+        try {
+            cacheService.set(cacheKey, finalResult, Duration.ofHours(2));
+            logger.debug("Successfully cached course result for key: {}", cacheKey);
+        } catch (Exception e) {
+            logger.warn("Failed to cache course result for key: {}: {}", cacheKey, e.getMessage());
+        }
+
+        return finalResult;
     }
 
+    @Cacheable(value = "courses", key = "#id", unless = "#result == null")
     public CourseResponseDto getCourseById(Long id) {
+        logger.info("Fetching course by ID: {}", id);
+
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
         return mapEntityToCourseResponseDto(course);
     }
 
+    @Cacheable(value = "course-list", key = "'all-courses'", unless = "#result == null || #result.isEmpty()")
     public List<CourseResponseDto> getAllCourses() {
         logger.info("Fetching all courses");
         List<Course> courses = courseRepository.findAll();
@@ -70,7 +110,10 @@ public class CourseService {
                 .collect(Collectors.toList());
     }
 
-
+    @Caching(
+            put = @CachePut(value = "courses", key = "#id"),
+            evict = @CacheEvict(value = "course-list", key = "'all-courses'")
+    )
     public CourseResponseDto updateCourse(Long id, CourseRequestDto request) {
         Course existingCourse = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found with ID: " + id));
@@ -90,78 +133,43 @@ public class CourseService {
         existingCourse.setDescription(meta.getDescription());
         existingCourse.setDifficultyLevel(meta.getDifficultyLevel());
 
-        if (meta.getPrerequisites() instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<String> prereqList = (List<String>) meta.getPrerequisites();
-            existingCourse.setPrerequisites(prereqList);
-        } else if (meta.getPrerequisites() != null) {
-            String prereqString = meta.getPrerequisites().toString();
-            prereqString = inputSanitizer.sanitizeInput(prereqString);
-            List<String> prereqList = splitPrerequisitesString(prereqString);
-            existingCourse.setPrerequisites(prereqList);
-        } else {
-            existingCourse.setPrerequisites(new ArrayList<>());
-        }
+        Course updatedCourse = courseRepository.save(existingCourse);
 
-        existingCourse.getModules().clear();
+        // Clear related caches
+        cacheService.deletePattern("course:generated:*");
 
-        List<Module> newModules = updatedDto.getModules().stream()
-                .map(moduleDto -> {
-                    Module module = new Module();
-                    module.setModuleId(moduleDto.getModuleId());
-                    module.setTitle(inputSanitizer.sanitizeInput(moduleDto.getTitle()));
-                    module.setDescription(inputSanitizer.sanitizeInput(moduleDto.getDescription()));
-                    module.setDuration(moduleDto.getDuration());
-
-                    if (moduleDto.getLearningObjectives() != null) {
-                        List<String> sanitizedObjectives = moduleDto.getLearningObjectives().stream()
-                                .map(inputSanitizer::sanitizeInput)
-                                .collect(Collectors.toList());
-                        module.setLearningObjectives(sanitizedObjectives);
-                    } else {
-                        module.setLearningObjectives(new ArrayList<>());
-                    }
-
-                    module.setComplexityLevel(inputSanitizer.sanitizeInput(moduleDto.getComplexityLevel()));
-
-                    if (moduleDto.getKeyTerms() != null) {
-                        List<String> sanitizedTerms = moduleDto.getKeyTerms().stream()
-                                .map(inputSanitizer::sanitizeInput)
-                                .collect(Collectors.toList());
-                        module.setKeyTerms(sanitizedTerms);
-                    } else {
-                        module.setKeyTerms(new ArrayList<>());
-                    }
-
-                    if (moduleDto.getDefinitions() != null) {
-                        List<String> sanitizedDefinitions = moduleDto.getDefinitions().stream()
-                                .map(inputSanitizer::sanitizeInput)
-                                .collect(Collectors.toList());
-                        module.setDefinitions(sanitizedDefinitions);
-                    } else {
-                        module.setDefinitions(new ArrayList<>());
-                    }
-
-                    module.setCourse(existingCourse);
-                    return module;
-                })
-                .toList();
-        existingCourse.getModules().addAll(newModules);
-
-        Course saved = courseRepository.save(existingCourse);
-        return mapEntityToCourseResponseDto(saved);
+        return mapEntityToCourseResponseDto(updatedCourse);
     }
 
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "courses", key = "#id"),
+                    @CacheEvict(value = "course-list", key = "'all-courses'")
+            }
+    )
     public void deleteCourse(Long id) {
-        Optional<Course> optional = courseRepository.findById(id);
-        if (optional.isEmpty()) {
-            throw new RuntimeException("Course not found with ID: " + id);
-        }
-        courseRepository.delete(optional.get());
-        logger.info("Course deleted with ID: {}", id);
+        logger.info("Deleting course with ID: {}", id);
+        courseRepository.deleteById(id);
+
+        // Clear related caches
+        cacheService.deletePattern("course:generated:*");
     }
 
+    // Clear all course-related caches
+    public void clearAllCourseCaches() {
+        try {
+            cacheService.deletePattern("courses:*");
+            cacheService.deletePattern("course-list:*");
+            cacheService.deletePattern("course:generated:*");
+            logger.info("Cleared all course caches successfully");
+        } catch (Exception e) {
+            logger.error("Error clearing course caches: {}", e.getMessage());
+        }
+    }
+
+    // Rest of your private methods remain the same...
     private CourseResponseDto mapEntityToCourseResponseDto(Course course) {
+        // Your existing implementation
         CourseMetadataDto courseMetadataDto = CourseMetadataDto.builder()
                 .title(course.getTitle())
                 .description(course.getDescription())
