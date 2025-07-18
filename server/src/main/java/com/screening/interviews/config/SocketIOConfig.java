@@ -53,7 +53,7 @@ public class SocketIOConfig {
     }
 
     @Bean
-    public SpringAnnotationScanner springAnnotationScanner(SocketIOServer socketServer) {
+    public static SpringAnnotationScanner springAnnotationScanner(SocketIOServer socketServer) {
         return new SpringAnnotationScanner(socketServer);
     }
 }
