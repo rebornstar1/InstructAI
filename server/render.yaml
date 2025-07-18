@@ -5,12 +5,13 @@ services:
     plan: starter
     healthCheckPath: /actuator/health
     envVars:
-      - key: SERVER_PORT
-        value: 8007
-      - key: SOCKETIO_HOST
-        value: 0.0.0.0
-      - key: SOCKETIO_PORT
-        value: 9092
+      # Database Configuration
+      - key: DATABASE_URL
+        fromDatabase:
+          name: instructai-db
+          property: connectionString
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: instructai-db
@@ -25,6 +26,10 @@ services:
           property: password
       - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
         value: org.postgresql.Driver
+      
+      # JPA/Hibernate Configuration
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: update
       - key: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
         value: org.hibernate.dialect.PostgreSQLDialect
       - key: SPRING_JPA_DATABASE_PLATFORM
@@ -39,29 +44,41 @@ services:
         value: false
       - key: SPRING_JPA_PROPERTIES_HIBERNATE_TRANSACTION_JTA_PLATFORM
         value: ""
+      
+      # Socket.IO Configuration
+      - key: SOCKETIO_HOST
+        value: 0.0.0.0
+      - key: SOCKETIO_PORT
+        value: 9092
+      
+      # Redis Configuration - Fixed to use SPRING_REDIS_*
+      - key: SPRING_REDIS_HOST
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: host
+      - key: SPRING_REDIS_PORT
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: port
+      - key: SPRING_REDIS_PASSWORD
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: password
+      - key: SPRING_REDIS_DATABASE
+        value: 0
+      
+      # Application Configuration
       - key: SPRING_JACKSON_SERIALIZATION_FAIL_ON_EMPTY_BEANS
         value: false
       - key: SPRING_JACKSON_SERIALIZATION_WRITE_DATES_AS_TIMESTAMPS
         value: false
       - key: FRONTEND_CLIENT
         value: https://instruct-ai-oher.vercel.app
-      - key: REDIS_HOST
-        fromService:
-          type: redis
-          name: instructai-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: redis
-          name: instructai-redis
-          property: port
-      - key: REDIS_PASSWORD
-        fromService:
-          type: redis
-          name: instructai-redis
-          property: password
-      - key: REDIS_DATABASE
-        value: 0
+      
+      # Security Configuration
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRATION
@@ -70,18 +87,23 @@ services:
         value: admin
       - key: SPRING_SECURITY_USER_PASSWORD
         generateValue: true
+      
+      # API Keys
       - key: GEMINI_API_KEY
         value: AIzaSyAsyukBPOYO39DgAyFiHIS_0up_KC8eJaY
-    ports:
-      - port: 8007
-        protocol: http
-      - port: 9092
-        protocol: tcp
+    
+    # Remove fixed ports - let Render assign PORT automatically
+    buildFilter:
+      paths:
+        - server/**
 
 databases:
+  # Fixed to match your actual database configuration
   - name: instructai-db
-    databaseName: instructai_db
-    user: instructai_user
+    databaseName: instruct_ai
+    user: instruct_ai_user
+    plan: free
 
   - name: instructai-redis
     type: redis
+    plan: free
