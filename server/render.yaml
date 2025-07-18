@@ -12,38 +12,18 @@ services:
           property: connectionString
       - key: SPRING_PROFILES_ACTIVE
         value: prod
-      - key: SPRING_DATASOURCE_URL
-        fromDatabase:
-          name: instructai-db
-          property: connectionString
-      - key: SPRING_DATASOURCE_USERNAME
-        fromDatabase:
-          name: instructai-db
-          property: user
-      - key: SPRING_DATASOURCE_PASSWORD
-        fromDatabase:
-          name: instructai-db
-          property: password
-      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
-        value: org.postgresql.Driver
       
       # JPA/Hibernate Configuration
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: update
-      - key: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
-        value: org.hibernate.dialect.PostgreSQLDialect
-      - key: SPRING_JPA_DATABASE_PLATFORM
-        value: org.hibernate.dialect.PostgreSQLDialect
       - key: SPRING_JPA_SHOW_SQL
         value: false
       - key: SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
         value: false
       - key: SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION
         value: true
-      - key: SPRING_JPA_PROPERTIES_HIBERNATE_GLOBALLY_QUOTED_IDENTIFIERS
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_BOOT_ALLOW_JDBC_METADATA_ACCESS
         value: false
-      - key: SPRING_JPA_PROPERTIES_HIBERNATE_TRANSACTION_JTA_PLATFORM
-        value: ""
       
       # Socket.IO Configuration
       - key: SOCKETIO_HOST
@@ -51,7 +31,7 @@ services:
       - key: SOCKETIO_PORT
         value: 9092
       
-      # Redis Configuration - Fixed to use SPRING_REDIS_*
+      # Redis Configuration
       - key: SPRING_REDIS_HOST
         fromService:
           type: redis
@@ -92,13 +72,11 @@ services:
       - key: GEMINI_API_KEY
         value: AIzaSyAsyukBPOYO39DgAyFiHIS_0up_KC8eJaY
     
-    # Remove fixed ports - let Render assign PORT automatically
     buildFilter:
       paths:
         - server/**
 
 databases:
-  # Fixed to match your actual database configuration
   - name: instructai-db
     databaseName: instruct_ai
     user: instruct_ai_user
