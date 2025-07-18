@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: instructai-postgres
+    environment:
+      POSTGRES_DB: instructai_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - instructai-network
+    restart: unless-stopped
+
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: instructai-redis
@@ -12,7 +29,10 @@ services:
     restart: unless-stopped
     environment:
       - REDIS_PASSWORD=yourredispassword
+    networks:
+      - instructai-network
 
+  # Redis Commander (Optional - for Redis management)
   redis-commander:
     image: rediscommander/redis-commander:latest
     container_name: redis-commander
@@ -23,6 +43,69 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    networks:
+      - instructai-network
+
+  # InstructAI Application
+  app:
+    build: .
+    container_name: instructai-app
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/instructai_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      
+      # JPA Configuration
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_SHOW_SQL: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_GLOBALLY_QUOTED_IDENTIFIERS: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_TRANSACTION_JTA_PLATFORM: ""
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: yourredispassword
+      REDIS_DATABASE: 0
+      
+      # Application Configuration
+      SERVER_PORT: 8007
+      SOCKETIO_HOST: 0.0.0.0
+      SOCKETIO_PORT: 9092
+      FRONTEND_CLIENT: http://localhost:3000
+      
+      # Security Configuration
+      JWT_SECRET: yourSecretKeyHereShouldBeVeryLongAndSecureForDevelopment
+      JWT_EXPIRATION: 86400000
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: admin
+      
+      # API Configuration
+      GEMINI_API_KEY: AIzaSyAsyukBPOYO39DgAyFiHIS_0up_KC8eJaY
+      
+      # Jackson Configuration
+      SPRING_JACKSON_SERIALIZATION_FAIL_ON_EMPTY_BEANS: "false"
+      SPRING_JACKSON_SERIALIZATION_WRITE_DATES_AS_TIMESTAMPS: "false"
+    ports:
+      - "8007:8007"
+      - "9092:9092"
+    networks:
+      - instructai-network
+    restart: unless-stopped
 
 volumes:
+  postgres_data:
+    driver: local
   redis_data:
+    driver: local
+
+networks:
+  instructai-network:
+    driver: bridge

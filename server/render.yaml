@@ -5,10 +5,83 @@ services:
     plan: starter
     healthCheckPath: /actuator/health
     envVars:
-      - key: PORT
+      - key: SERVER_PORT
         value: 8007
+      - key: SOCKETIO_HOST
+        value: 0.0.0.0
+      - key: SOCKETIO_PORT
+        value: 9092
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: instructai-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: instructai-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: instructai-db
+          property: password
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: org.postgresql.Driver
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
+        value: org.hibernate.dialect.PostgreSQLDialect
+      - key: SPRING_JPA_DATABASE_PLATFORM
+        value: org.hibernate.dialect.PostgreSQLDialect
+      - key: SPRING_JPA_SHOW_SQL
+        value: false
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
+        value: false
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION
+        value: true
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_GLOBALLY_QUOTED_IDENTIFIERS
+        value: false
+      - key: SPRING_JPA_PROPERTIES_HIBERNATE_TRANSACTION_JTA_PLATFORM
+        value: ""
+      - key: SPRING_JACKSON_SERIALIZATION_FAIL_ON_EMPTY_BEANS
+        value: false
+      - key: SPRING_JACKSON_SERIALIZATION_WRITE_DATES_AS_TIMESTAMPS
+        value: false
+      - key: FRONTEND_CLIENT
+        value: https://instruct-ai-oher.vercel.app
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: port
+      - key: REDIS_PASSWORD
+        fromService:
+          type: redis
+          name: instructai-redis
+          property: password
+      - key: REDIS_DATABASE
+        value: 0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 86400000
+      - key: SPRING_SECURITY_USER_NAME
+        value: admin
+      - key: SPRING_SECURITY_USER_PASSWORD
+        generateValue: true
+      - key: GEMINI_API_KEY
+        value: AIzaSyAsyukBPOYO39DgAyFiHIS_0up_KC8eJaY
     ports:
       - port: 8007
         protocol: http
       - port: 9092
         protocol: tcp
+
+databases:
+  - name: instructai-db
+    databaseName: instructai_db
+    user: instructai_user
+
+  - name: instructai-redis
+    type: redis

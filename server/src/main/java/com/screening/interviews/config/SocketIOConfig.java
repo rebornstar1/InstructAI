@@ -1,12 +1,16 @@
 // SocketIOConfig.java
 package com.screening.interviews.config;
 
-import com.corundumstudio.socketio.SocketIOServer;
-import com.corundumstudio.socketio.SocketConfig;
-import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Role;
+
+import com.corundumstudio.socketio.SocketConfig;
+import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 
 @Configuration
 public class SocketIOConfig {
@@ -18,6 +22,8 @@ public class SocketIOConfig {
     private Integer port;
 
     @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    @Lazy
     public SocketIOServer socketIOServer() {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
         config.setHostname(host);
@@ -53,6 +59,8 @@ public class SocketIOConfig {
     }
 
     @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    @Lazy
     public static SpringAnnotationScanner springAnnotationScanner(SocketIOServer socketServer) {
         return new SpringAnnotationScanner(socketServer);
     }
