@@ -1,263 +1,467 @@
-# Instruct AI
+# InstructAI
 
-**AI Tutor** is an interactive educational platform that combines an AI-driven chat interface with multimedia visual aids, real-time speech recognition, and interactive quizzes. It is designed to provide a comprehensive learning experience by dynamically adjusting content based on user feedback and confusion levels.
+**InstructAI** is a comprehensive AI-powered educational platform that revolutionizes learning through personalized course generation, interactive content delivery, and intelligent progress tracking. The platform combines a modern React/Next.js frontend with a robust Spring Boot backend to deliver adaptive learning experiences.
 
 ---
 
 ## Video Preview
 
-[![Instruct AI]](https://drive.google.com/file/d/1pIp4iR7n02-KN9YoGW53ZsLEmNVUHs7b/view)
-
+[![InstructAI Demo](thumbnail.png)](https://www.loom.com/share/9a87f9f1cd2d479f8b34151b90fbcbde)
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Installation & Setup](#installation--setup)
+- [Configuration](#configuration)
+- [API Documentation](#api-documentation)
 - [Usage](#usage)
-  - [AITutor Component](#aitutor-component)
-  - [Learn Component](#learn-component)
-  - [Chat Interface](#chat-interface)
-  - [Interactive Question Modals](#interactive-question-modals)
-  - [YouTube Integration](#youtube-integration)
-  - [Speech Recognition & Synthesis](#speech-recognition--synthesis)
-- [Dependencies](#dependencies)
+- [Technologies Used](#technologies-used)
+- [Deployment](#deployment)
+- [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
-- [Acknowledgements](#acknowledgements)
-- [Contact](#contact)
+- [Support](#support)
 
 ---
 
 ## Overview
 
-The **AI Tutor** project is built with React and Next.js, and it integrates several key functionalities:
-- **AI Chat Interface:** Users interact with an AI tutor that can respond both in text and via audio.
-- **Visual Aids:** Dynamic video content (using YouTube embeds) supplements the learning process.
-- **Interactive Quizzes:** Users are periodically presented with questions (MCQ, fill-in-the-blank, or subjective) to test their knowledge.
-- **Voice Control:** The project leverages custom hooks for speech recognition and speech synthesis to allow voice-based interaction.
-- **Modern UI & Animations:** Built using UI components (cards, buttons, dialogs) with smooth animations powered by Framer Motion.
+**InstructAI** is an intelligent educational platform that leverages AI to create personalized learning experiences. The platform automatically generates courses, tracks student progress, and adapts content delivery based on individual learning patterns.
+
+### Core Capabilities:
+- **AI-Powered Course Generation:** Automatically creates comprehensive courses using Google Gemini AI
+- **Interactive Learning:** Real-time chat interface with voice recognition and synthesis
+- **Progress Tracking:** Detailed analytics and achievement systems
+- **Multimedia Content:** Integrated video content, quizzes, and interactive exercises
+- **Personalized Learning Paths:** Adaptive content based on user preferences and performance
+- **Real-time Communication:** Socket.IO powered chat and collaboration features
 
 ---
 
-## Features
+## Key Features
 
-- **AI-Powered Chatbot:** Provides personalized responses and explanations.
-- **Dynamic Visual Content:** Fetches and displays relevant video content based on user interaction and confusion levels.
-- **Interactive Quizzes:** Engages users with questions to assess and reinforce learning.
-- **Voice Interactions:** Supports both voice-to-text and text-to-speech for an immersive experience.
-- **YouTube Integration:** Offers a dedicated interface for video playback, timed questions, and video previews.
-- **Responsive Design:** Fully responsive and dark mode ready.
+### 🤖 AI-Powered Education
+- **Dynamic Course Creation:** Generate courses on any topic using advanced AI prompts
+- **Interactive Course Builder:** Multi-stage questionnaire for personalized course customization
+- **Content Generation:** Automatic creation of modules, quizzes, and learning resources
+- **Smart Content Adaptation:** AI adjusts content based on learning preferences
+
+### 📚 Learning Management
+- **Module-based Learning:** Structured content delivery with prerequisites
+- **Progress Tracking:** Real-time progress monitoring with detailed analytics
+- **Achievement System:** Gamified learning with achievements and milestones
+- **Content Completion:** Track articles, videos, and quiz completions
+
+### 🎥 Multimedia Integration
+- **Video Learning:** YouTube integration with timed quizzes
+- **Interactive Quizzes:** Multiple choice, fill-in-the-blank, and subjective questions
+- **Visual Aids:** Dynamic content adjustment based on confusion levels
+- **Speech Integration:** Voice-to-text and text-to-speech capabilities
+
+### 👥 Social Learning
+- **Real-time Chat:** Socket.IO powered messaging system
+- **Community Features:** Discussion threads and collaborative learning
+- **User Profiles:** Comprehensive user management with preferences
+
+---
+
+## Architecture
+
+### System Overview
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │    │   External      │
+│   (Next.js)     │◄──►│  (Spring Boot)  │◄──►│   Services      │
+│                 │    │                 │    │                 │
+│ • React 18      │    │ • REST APIs     │    │ • Google Gemini │
+│ • Context API   │    │ • WebSockets    │    │ • YouTube API   │
+│ • Tailwind CSS  │    │ • Spring Data   │    │ • PostgreSQL    │
+│ • Framer Motion │    │ • Spring Cache  │    │ • Redis         │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Backend Architecture
+- **Spring Boot 3.x** - Main application framework
+- **Spring Data JPA** - Database access and ORM
+- **Spring Security** - JWT-based authentication
+- **Spring Cache** - Redis-based caching strategy
+- **Socket.IO** - Real-time communication
+- **PostgreSQL** - Primary database
+- **Redis** - Caching and session storage
+
+### Frontend Architecture
+- **Next.js 14** - React framework with SSR support
+- **React Context** - State management for progress tracking
+- **Tailwind CSS** - Utility-first styling
+- **Framer Motion** - Animation and transitions
+- **Axios** - HTTP client for API communication
 
 ---
 
 ## Project Structure
 
 ```
-ai-tutor/
-├── components/
-│   ├── AITutor.js               # Main component integrating header, chat interface, visual aid, and question modal.
-│   ├── ChatInterface.js         # Chat UI component handling user-AI conversation.
-│   ├── QuestionDialog.js        # Modal component for interactive quizzes.
-│   ├── Learn.js                 # Learning interface with integrated video, chat, and interactive questions.
-│   ├── YoutubeGenerator.js      # Component for YouTube video playback with timed quizzes.
-│   ├── YouTubePreviewDialog.js  # Component to fetch and display YouTube video previews.
-│   ├── Header.js                # Header component.
-│   ├── Footer.js                # Footer component.
-│   └── VisualAidSection.js      # Displays video content and confusion level.
+InstructAI/
+├── client/                          # Frontend Next.js Application
+│   ├── app/                         # Next.js 14 App Router
+│   ├── components/                  # Reusable UI components
+│   │   ├── AITutor.js              # Main AI tutor interface
+│   │   ├── ChatInterface.js        # Real-time chat component
+│   │   ├── Learn.js                # Learning interface
+│   │   ├── QuestionDialog.js       # Interactive quiz modals
+│   │   └── YoutubeGenerator.js     # Video integration
+│   ├── context/                     # React Context providers
+│   │   └── ProgressContext.jsx     # Progress tracking state
+│   ├── hooks/                       # Custom React hooks
+│   │   ├── useSpeechRecognition.js # Voice input handling
+│   │   └── useSpeechSynthesis.js   # Text-to-speech
+│   ├── lib/                        # Utility libraries
+│   ├── services/                   # API service layers
+│   └── public/                     # Static assets
 │
-├── hooks/
-│   ├── useSpeechRecognition.js  # Custom hook for managing speech recognition.
-│   └── useSpeechSynthesis.js      # Custom hook for managing text-to-speech.
+├── server/                         # Backend Spring Boot Application
+│   ├── src/main/java/              # Java source code
+│   │   └── com/screening/interviews/
+│   │       ├── config/             # Configuration classes
+│   │       ├── controller/         # REST API controllers
+│   │       ├── dto/               # Data Transfer Objects
+│   │       ├── model/             # JPA Entity models
+│   │       ├── prompts/           # AI prompt templates
+│   │       ├── repo/              # Repository interfaces
+│   │       ├── security/          # Security configuration
+│   │       └── service/           # Business logic services
+│   ├── src/main/resources/        # Configuration files
+│   │   ├── application.properties
+│   │   └── application-prod.properties
+│   ├── docker-compose.yml         # Local development setup
+│   ├── Dockerfile                 # Container configuration
+│   ├── pom.xml                    # Maven dependencies
+│   └── render.yaml                # Deployment configuration
 │
-├── pages/
-│   ├── index.js                 # Application entry point.
-│   └── learn.js                 # Route for the Learn interface.
-│
-├── public/
-│   └── assets/                  # Static assets (images, icons, etc.).
-│
-├── package.json                 # Project metadata and dependencies.
-└── README.md                    # This documentation.
+├── Documentation.md               # API and service documentation
+├── DEPLOYMENT_GUIDE.md           # Deployment instructions
+└── README.md                     # This file
 ```
 
 ---
 
 ## Installation & Setup
 
-1. **Clone the repository:**
+### Prerequisites
+- **Node.js** (v18 or higher)
+- **Java** (17 or higher)
+- **Maven** (3.6 or higher)
+- **PostgreSQL** (12 or higher)
+- **Redis** (6 or higher)
 
+### Backend Setup
+
+1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/ai-tutor.git
-   cd ai-tutor
+   git clone https://github.com/your-username/InstructAI.git
+   cd InstructAI
    ```
 
-2. **Install Dependencies:**
-
-   Using npm:
-
+2. **Database Setup:**
    ```bash
+   # Create PostgreSQL database
+   createdb instructai_db
+   ```
+
+3. **Configure Environment Variables:**
+   ```bash
+   # Create .env file in server directory
+   cp server/.env.example server/.env
+   ```
+
+4. **Install and Run Backend:**
+   ```bash
+   cd server
+   ./mvnw spring-boot:run
+   ```
+
+### Frontend Setup
+
+1. **Install Dependencies:**
+   ```bash
+   cd client
    npm install
    ```
 
-   Or with yarn:
-
+2. **Configure Environment:**
    ```bash
-   yarn install
+   # Create .env.local file
+   cp .env.example .env.local
    ```
 
-3. **Run the Development Server:**
-
+3. **Run Development Server:**
    ```bash
    npm run dev
    ```
-   or
-   ```bash
-   yarn dev
-   ```
 
-   Visit [http://localhost:3000](http://localhost:3000) to view the project.
+### Docker Setup (Alternative)
+
+```bash
+# Run complete stack with Docker
+cd server
+docker-compose up -d
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+#### Backend (.env)
+```env
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/instructai_db
+SPRING_DATASOURCE_USERNAME=postgres
+SPRING_DATASOURCE_PASSWORD=your_password
+SPRING_DATA_REDIS_HOST=localhost
+SPRING_DATA_REDIS_PORT=6379
+GEMINI_API_KEY=your_gemini_api_key
+JWT_SECRET=your_jwt_secret
+```
+
+#### Frontend (.env.local)
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8007
+NEXT_PUBLIC_SOCKET_URL=http://localhost:9092
+```
+
+### Key Configuration Files
+- [`server/application.properties`](server/src/main/resources/application.properties) - Spring Boot configuration
+- [`client/next.config.mjs`](client/next.config.mjs) - Next.js configuration
+- [`server/docker-compose.yml`](server/docker-compose.yml) - Local development setup
+
+---
+
+## API Documentation
+
+### Core Endpoints
+
+#### Course Management
+- `POST /api/courses` - Generate new course
+- `GET /api/courses/{id}` - Get course details
+- `PUT /api/courses/{id}` - Update course
+- `GET /api/courses/user/{userId}` - Get user courses
+
+#### Learning Resources
+- `POST /api/learning-resources/generate` - Generate learning content
+- `GET /api/modules/{id}/content` - Get module content
+- `POST /api/modules/{id}/quiz` - Generate quiz for module
+
+#### Progress Tracking
+- `POST /api/progress/start-module` - Start module progress
+- `POST /api/progress/complete-content` - Mark content as completed
+- `GET /api/progress/user/{userId}` - Get user progress summary
+
+#### Interactive Course Creation
+- `POST /api/interactive-courses/stage1` - First customization stage
+- `POST /api/interactive-courses/stage2` - Second customization stage
+- `POST /api/interactive-courses/stage3` - Final customization stage
+- `POST /api/interactive-courses/generate` - Generate final course
+
+For detailed API documentation, see [`Documentation.md`](server/Documentation.md).
 
 ---
 
 ## Usage
 
-### AITutor Component
+### Creating a Course
 
-- **Description:**  
-  The `AITutor` component is the heart of the application. It integrates:
-  - A header and footer for consistent navigation.
-  - A **Chat Interface** where the user can send messages and receive responses from the AI.
-  - A **Visual Aid Section** that displays videos related to the subject matter and adjusts content based on a computed confusion level.
-  - A **Question Modal** that pops up for interactive quizzes.
+1. **Interactive Course Builder:**
+   - Navigate to course creation
+   - Answer personalization questions
+   - AI generates customized course structure
 
-- **Key Functionalities:**
-  - **State Management:** Utilizes React’s `useState` to manage messages, video URLs, confusion levels, and modal states.
-  - **Speech Hooks:** Integrates custom hooks (`useSpeechRecognition` and `useSpeechSynthesis`) to support voice commands and audio responses.
-  - **Dynamic Video Loading:** When the system detects a high confusion level (simulated with a random threshold), it fetches a relevant video to aid learning.
+2. **Direct Course Generation:**
+   ```javascript
+   const courseData = {
+     topic: "Machine Learning",
+     difficultyLevel: "Intermediate",
+     preferences: {...}
+   };
+   ```
 
-### Learn Component
+### Learning with Progress Tracking
 
-- **Description:**  
-  The `Learn` component is an enhanced learning interface that combines:
-  - A dynamic chat interface with voice recognition.
-  - A video player with play/pause controls and real-time progress tracking.
-  - An integrated question generator that presents interactive quizzes to test knowledge.
+```jsx
+// Using ModuleProgress component
+import { ModuleProgress } from './context/ProgressContext';
 
-- **Key Functionalities:**
-  - **Voice Controls:** Buttons to toggle listening (for speech recognition) and mute/unmute audio responses.
-  - **Video Controls:** Embedded video player (YouTube) with overlaid control buttons.
-  - **Quiz Integration:** Randomized questions are generated to test user understanding and provide instant feedback.
+<ModuleProgress 
+  moduleId="M1" 
+  moduleData={moduleData}
+  onProgressUpdate={handleProgress}
+  onModuleCompleted={handleCompletion}
+>
+  {/* Your learning content */}
+</ModuleProgress>
+```
 
-### Chat Interface
+### Real-time Features
 
-- **Description:**  
-  The `ChatInterface` component handles the conversation between the user and the AI. It features:
-  - Smooth animations for new messages using Framer Motion.
-  - User-friendly input fields for both text and voice.
-  - Icons to distinguish between user messages and AI responses.
-
-- **Highlights:**
-  - **Message Animation:** Each new message animates into view.
-  - **Speech Synthesis:** Highlights key parts of AI messages during audio playback.
-
-### Interactive Question Modals
-
-- **Description:**  
-  The project includes components like `QuestionDialog` (or `QuestionModal`) that display quiz questions in a modal dialog.
-  
-- **Question Types:**
-  - **Multiple Choice (MCQ):** Presents several options for the user to choose from.
-  - **Subjective / Fill-in-the-Blank:** Requires the user to type an answer.
-  
-- **Feedback:**  
-  After submission, the modal provides instant feedback, indicating whether the answer was correct. The modal automatically closes after a brief delay.
-
-### YouTube Integration
-
-#### YoutubeGenerator
-
-- **Description:**  
-  This component embeds a YouTube video and integrates a time-based quiz system. As the video plays, the system:
-  - Monitors the current playback time.
-  - Pauses the video and triggers a quiz when a predefined timestamp is reached.
-  - Resumes playback after the user answers correctly.
-
-- **Key Features:**
-  - **Timed Questions:** Questions are linked to specific timestamps.
-  - **Progress Indicator:** A progress bar shows the current playback status.
-  - **Responsive Controls:** Includes play/pause buttons with real-time feedback.
-
-#### YouTubePreviewDialog
-
-- **Description:**  
-  This component fetches video previews from a backend API and displays them in a dialog.
-  
-- **Key Features:**
-  - **API Integration:** Uses Axios to fetch video data from a specified backend endpoint.
-  - **Animated Previews:** Video thumbnails are presented with hover animations.
-  - **Error & Loading States:** Gracefully handles loading and error scenarios.
-
-### Speech Recognition & Synthesis
-
-- **useSpeechRecognition:**  
-  A custom hook that:
-  - Listens continuously for voice input.
-  - Transcribes speech to text and updates the input field accordingly.
-
-- **useSpeechSynthesis:**  
-  A custom hook that:
-  - Converts text responses into audio.
-  - Provides options to toggle mute/unmute, and highlights text during playback.
+- **Chat Interface:** Real-time messaging with AI tutors
+- **Voice Integration:** Speech-to-text and text-to-speech
+- **Video Learning:** YouTube integration with timed quizzes
+- **Progress Sync:** Real-time progress updates across devices
 
 ---
 
-## Dependencies
+## Technologies Used
 
-- **React & Next.js:** For building the user interface and routing.
-- **axios:** For making HTTP requests to fetch YouTube previews and other data.
-- **Framer Motion:** For smooth animations and transitions.
-- **react-youtube:** For embedding and controlling YouTube videos.
-- **lucide-react:** Icon library for modern, scalable icons.
-- **Custom UI Components:** (Button, Input, Card, Dialog, etc.)—these may be sourced from a UI library like ShadCN/UI or a similar system.
+### Frontend
+- **Framework:** Next.js 14 with App Router
+- **UI Library:** Custom components with Tailwind CSS
+- **State Management:** React Context API
+- **Animations:** Framer Motion
+- **HTTP Client:** Axios
+- **Real-time:** Socket.IO Client
+- **Speech:** Web Speech API integration
+
+### Backend
+- **Framework:** Spring Boot 3.x
+- **Database:** PostgreSQL with Spring Data JPA
+- **Caching:** Redis with Spring Cache
+- **Security:** Spring Security with JWT
+- **AI Integration:** Google Gemini API
+- **Real-time:** Socket.IO Java
+- **Build Tool:** Maven
+
+### Infrastructure
+- **Containerization:** Docker & Docker Compose
+- **Deployment:** Render.com ready
+- **Monitoring:** Spring Actuator with health checks
+- **Testing:** JUnit 5, MockMvc
+
+---
+
+## Deployment
+
+### Production Deployment
+
+1. **Using Render.com:**
+   ```bash
+   # Configure render.yaml
+   # Push to GitHub
+   # Connect to Render.com
+   ```
+
+2. **Docker Deployment:**
+   ```bash
+   # Build and deploy with Docker
+   docker build -t instructai-server .
+   docker run -p 8007:8007 instructai-server
+   ```
+
+3. **Manual Deployment:**
+   ```bash
+   # Backend
+   ./mvnw clean package
+   java -jar target/instructai-server.jar
+   
+   # Frontend
+   npm run build
+   npm start
+   ```
+
+For detailed deployment instructions, see [`DEPLOYMENT_GUIDE.md`](server/DEPLOYMENT_GUIDE.md).
+
+---
+
+## Testing
+
+### Backend Testing
+```bash
+cd server
+
+# Unit tests
+./mvnw test
+
+# Integration tests
+./mvnw integration-test
+
+# All tests with coverage
+./mvnw verify
+```
+
+### Test Coverage
+- Unit tests for service layer
+- Integration tests for repositories
+- Controller tests with MockMvc
+- Security and authentication tests
 
 ---
 
 ## Contributing
 
-Contributions are very welcome! If you’d like to improve the project, please follow these steps:
+We welcome contributions! Please follow these guidelines:
 
-1. **Fork the Repository**
-2. **Create a Feature Branch:**
+### Development Process
+1. **Fork the repository**
+2. **Create a feature branch:**
    ```bash
-   git checkout -b feature/my-feature
+   git checkout -b feature/amazing-feature
    ```
-3. **Commit Your Changes:**
+3. **Make your changes**
+4. **Add tests for new functionality**
+5. **Commit your changes:**
    ```bash
-   git commit -am "Add some feature"
+   git commit -m "Add amazing feature"
    ```
-4. **Push to Your Branch:**
+6. **Push to your branch:**
    ```bash
-   git push origin feature/my-feature
+   git push origin feature/amazing-feature
    ```
-5. **Open a Pull Request**
+7. **Open a Pull Request**
+
+### Code Standards
+- Follow Spring Boot best practices for backend
+- Use React/Next.js conventions for frontend
+- Write comprehensive tests
+- Document API changes
+- Use meaningful commit messages
 
 ---
 
-## Acknowledgements
+## License
 
-- **Open Source Tools:** Special thanks to the communities behind [React](https://reactjs.org/), [Next.js](https://nextjs.org/), [Framer Motion](https://www.framer.com/motion/), [react-youtube](https://github.com/troybetz/react-youtube), and [lucide-react](https://github.com/lucide-icons/lucide).
-- **Contributors:** A big thank you to all contributors who helped build and improve this project.
-
----
-
-## Contact
-
-For questions, suggestions, or collaboration, please contact:  
-**Email:** [paulsanjaym@gmail.com]  
-**GitHub:** [https://github.com/rebornstar1](https://github.com/rebornstar1)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-*This documentation is intended to help developers understand the architecture and functionalities of the AI Tutor project. Feel free to reach out with any suggestions or improvements!*
+## Support
+
+### Documentation
+- **API Documentation:** [`Documentation.md`](server/Documentation.md)
+- **Deployment Guide:** [`DEPLOYMENT_GUIDE.md`](server/DEPLOYMENT_GUIDE.md)
+- **Server README:** [`server/README.md`](server/README.md)
+
+### Contact & Support
+- **Email:** [paulsanjaym@gmail.com](mailto:paulsanjaym@gmail.com)
+- **GitHub:** [https://github.com/rebornstar1](https://github.com/rebornstar1)
+- **Issues:** [Create an issue](https://github.com/your-username/InstructAI/issues)
+
+### Health Monitoring
+- **Health Check:** `GET /actuator/health`
+- **Metrics:** `GET /actuator/metrics`
+- **Info:** `GET /actuator/info`
+
+---
+
+## Acknowledgments
+
+- **AI Integration:** Google Gemini API for intelligent content generation
+- **Frameworks:** Spring Boot and Next.js communities
+- **UI Components:** Tailwind CSS and Framer Motion
+- **Real-time Communication:** Socket.IO team
+- **Contributors:** All contributors who helped build this platform
+
+---
+
+*InstructAI - Revolutionizing education through AI-powered personalized learning experiences.*
